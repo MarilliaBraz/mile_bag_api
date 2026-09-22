@@ -49,3 +49,14 @@ milebag:
     usuario: ${MILEBAG_IMAP_USUARIO:}
     senha: ${MILEBAG_IMAP_SENHA:}
     intervalo-consulta-ms: ${MILEBAG_IMAP_INTERVALO_MS:60000}
+  rotas:
+    # Motor de rotas/geocodificacao open source (HU03) - ver research.md da
+    # feature 001, secao 5.
+    valhalla:
+      base-url: ${MILEBAG_VALHALLA_URL:http://localhost:8002}
+    nominatim:
+      base-url: ${MILEBAG_NOMINATIM_URL:https://nominatim.openstreetmap.org}
+      # Identifica a aplicacao ao Nominatim publico - trocar para um contato
+      # real antes de qualquer uso fora de desenvolvimento (politica de uso
+      # do servico).
+      user-agent: ${MILEBAG_NOMINATIM_USER_AGENT:milebag-api/0.1 (dev@milebag.local)}

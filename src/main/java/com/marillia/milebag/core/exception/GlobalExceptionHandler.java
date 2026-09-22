@@ -48,6 +48,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.BAD_REQUEST, "regra-de-negocio", ex.getMessage());
     }
 
+    @ExceptionHandler(EnderecoNaoGeocodificavelException.class)
+    public ProblemDetail handleEnderecoNaoGeocodificavel(EnderecoNaoGeocodificavelException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, "endereco-nao-geocodificavel", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
