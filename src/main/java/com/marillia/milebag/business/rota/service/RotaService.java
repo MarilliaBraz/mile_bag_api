@@ -24,6 +24,7 @@ import com.marillia.milebag.business.rota.model.SelecionarRotaRequest;
 import com.marillia.milebag.business.rota.model.SelecionarRotaResponse;
 import com.marillia.milebag.business.rota.model.TipoSelecao;
 import com.marillia.milebag.business.rota.repository.PropostaRotaRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.EnderecoNaoGeocodificavelException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -43,6 +44,7 @@ public class RotaService {
     private final PropostaRotaRepository propostaRotaRepository;
     private final GeocodingClient geocodingClient;
     private final RoutingClient routingClient;
+    private final ViagemService viagemService;
     private final ObjectMapper objectMapper;
 
     public RotaService(
@@ -51,12 +53,14 @@ public class RotaService {
             PropostaRotaRepository propostaRotaRepository,
             GeocodingClient geocodingClient,
             RoutingClient routingClient,
+            ViagemService viagemService,
             ObjectMapper objectMapper) {
         this.entregaRepository = entregaRepository;
         this.bdoRepository = bdoRepository;
         this.propostaRotaRepository = propostaRotaRepository;
         this.geocodingClient = geocodingClient;
         this.routingClient = routingClient;
+        this.viagemService = viagemService;
         this.objectMapper = objectMapper;
     }
 
@@ -87,6 +91,7 @@ public class RotaService {
         proposta.setAlternativas(escrever(alternativas));
         proposta.setTipoSelecao(null);
         proposta.setJustificativa(null);
+        proposta.setRotaEscolhida(null);
         propostaRotaRepository.save(proposta);
 
         log.info("Rota calculada para a entrega {} ({} alternativa(s))", entregaId, alternativas.size());
@@ -104,14 +109,16 @@ public class RotaService {
                 ? construirRotaPropria(request)
                 : localizarAlternativa(proposta, request.alternativaId());
 
-        // T013a (HU04, adiada por tasks.md desta HU): com o trajeto ja em
-        // execucao, esta selecao deveria acionar
-        // ViagemService.registrarCalculoRota em vez de apenas atualizar a
-        // proposta corrente, e recusar com 409 se o trajeto ja estiver
-        // encerrado. HU04 ainda nao existe, entao toda selecao hoje segue o
-        // caminho de pre-viagem.
-        proposta.setTipoSelecao(request.tipoSelecao());
-        proposta.setJustificativa(request.justificativa());
+        // T013a: com o trajeto ja em execucao, a selecao vira um novo
+        // CalculoRota no historico (HU04) em vez de so atualizar a proposta
+        // corrente; ViagemService recusa com 409 se o trajeto ja estiver
+        // encerrado (contracts/rota-api.md).
+        boolean viagemEmExecucao = viagemService.registrarCalculoRotaSeTrajetoExistir(entregaId, rotaEscolhida, request.tipoSelecao());
+        if (!viagemEmExecucao) {
+            proposta.setTipoSelecao(request.tipoSelecao());
+            proposta.setJustificativa(request.justificativa());
+        }
+        proposta.setRotaEscolhida(escrever(rotaEscolhida));
         propostaRotaRepository.save(proposta);
 
         log.info("Rota selecionada ({}) para a entrega {}", request.tipoSelecao(), entregaId);

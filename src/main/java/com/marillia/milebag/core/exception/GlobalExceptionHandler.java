@@ -53,6 +53,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.UNPROCESSABLE_ENTITY, "endereco-nao-geocodificavel", ex.getMessage());
     }
 
+    @ExceptionHandler(RotaNaoSelecionadaException.class)
+    public ProblemDetail handleRotaNaoSelecionada(RotaNaoSelecionadaException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, "rota-nao-selecionada", ex.getMessage());
+    }
+
+    @ExceptionHandler(DivergenciaSemJustificativaException.class)
+    public ProblemDetail handleDivergenciaSemJustificativa(DivergenciaSemJustificativaException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, "divergencia-trajeto-sem-justificativa", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {

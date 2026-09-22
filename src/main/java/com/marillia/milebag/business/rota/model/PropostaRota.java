@@ -60,6 +60,16 @@ public class PropostaRota {
 
     private String justificativa;
 
+    /**
+     * Alternativa efetivamente escolhida em {@code POST .../rotas/selecionar}
+     * (id, distancia, tempo, indicador de pedagio), serializada como JSON -
+     * consumida por {@code ViagemService.iniciarViagem} (HU04) para criar o
+     * {@code CalculoRota} inicial do trajeto.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "rota_escolhida", columnDefinition = "jsonb")
+    private String rotaEscolhida;
+
     @UpdateTimestamp
     @Column(name = "atualizado_em", nullable = false)
     private Instant atualizadoEm;
