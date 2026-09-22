@@ -65,6 +65,11 @@ public class SecurityConfig {
                         // HU12: "perfil exigido: administrador do tenant"
                         // sem excecao de leitura para o motorista.
                         .requestMatchers("/api/v1/fechamentos/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU13: "restritos ao perfil de administrador do
+                        // proprio tenant" (contracts/identidade-visual-api.md)
+                        // - inclui o endpoint de leitura do logotipo, que
+                        // nao tem contrato proprio mas segue a mesma regra.
+                        .requestMatchers("/api/v1/identidade-visual/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();

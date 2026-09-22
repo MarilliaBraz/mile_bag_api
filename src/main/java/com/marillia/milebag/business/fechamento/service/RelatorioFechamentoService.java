@@ -14,25 +14,43 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.configuracao.service.IdentidadeVisualTenantService;
+import com.marillia.milebag.business.configuracao.service.IdentidadeVisualTenantService.ParaRelatorio;
 import com.marillia.milebag.business.fechamento.model.Fechamento;
 import com.marillia.milebag.business.fechamento.model.ItemFechamento;
 import com.marillia.milebag.business.fechamento.model.StatusItemFechamento;
 
 /**
- * Gera os dois relatorios em PDF do fechamento (FR-003/RN08, T015 desta
- * HU) - layout minimo e sem identidade visual (responsabilidade de HU13,
- * fora desta HU - ver contracts/fechamento-api.md, "Nota").
+ * Gera os dois relatorios em PDF do fechamento (FR-003/RN08, T015 de HU12)
+ * aplicando a identidade visual do tenant por cima do layout base (HU13,
+ * FR-002) - logotipo e cabecalho sao lidos em tempo de geracao (nunca
+ * cacheados no Fechamento), entao uma alteracao posterior da identidade
+ * nao reprocessa relatorios ja emitidos (FR-005) e so afeta os proximos.
+ *
+ * <p>{@code plan.md} desta HU registra JasperReports como preferivel "para
+ * templates visuais parametrizaveis por tenant". Decisao desta
+ * implementacao: manter PDFBox (ja usado por HU12) em vez de introduzir uma
+ * segunda biblioteca de relatorio so para desenhar uma imagem e uma linha
+ * de texto no topo da pagina - PDFBox ja faz isso nativamente
+ * ({@link PDImageXObject}), e adotar JasperReports exigiria templates
+ * .jrxml e um motor de compilacao que nada aqui precisa. Reavaliar se uma
+ * HU futura pedir templates visuais de fato parametrizaveis (cores, layout
+ * arbitrario por tenant) alem de logotipo/cabecalho.</p>
  */
 @Service
 public class RelatorioFechamentoService {
 
     private final FechamentoService fechamentoService;
+    private final IdentidadeVisualTenantService identidadeVisualTenantService;
 
-    public RelatorioFechamentoService(FechamentoService fechamentoService) {
+    public RelatorioFechamentoService(
+            FechamentoService fechamentoService, IdentidadeVisualTenantService identidadeVisualTenantService) {
         this.fechamentoService = fechamentoService;
+        this.identidadeVisualTenantService = identidadeVisualTenantService;
     }
 
     @Transactional(readOnly = true)
@@ -57,6 +75,7 @@ public class RelatorioFechamentoService {
             totalPorMotorista.merge(item.getMotoristaId(), extrator.apply(item), BigDecimal::add);
         }
         long pendentes = itens.stream().filter(item -> item.getStatusItem() == StatusItemFechamento.PENDENTE).count();
+        ParaRelatorio identidade = identidadeVisualTenantService.carregarParaRelatorio();
 
         try (PDDocument documento = new PDDocument()) {
             PDPage pagina = new PDPage();
@@ -64,6 +83,7 @@ public class RelatorioFechamentoService {
 
             try (PDPageContentStream conteudo = new PDPageContentStream(documento, pagina)) {
                 float y = 750;
+                y = aplicarIdentidadeVisual(documento, conteudo, identidade, y);
                 y = escreverLinha(conteudo, titulo, PDType1Font.HELVETICA_BOLD, 14, y);
                 y = escreverLinha(
                         conteudo,
@@ -98,6 +118,28 @@ public class RelatorioFechamentoService {
         } catch (IOException e) {
             throw new IllegalStateException("Falha ao gerar o relatorio em PDF.", e);
         }
+    }
+
+    /**
+     * Desenha logotipo (se presente) e cabecalho (se presente) no topo da
+     * pagina, antes do titulo do relatorio; sem nenhum dos dois, a pagina
+     * segue exatamente como antes desta HU (aparencia padrao neutra, FR-004).
+     */
+    private float aplicarIdentidadeVisual(PDDocument documento, PDPageContentStream conteudo, ParaRelatorio identidade, float y) throws IOException {
+        if (identidade.logotipo().isPresent()) {
+            PDImageXObject imagem = PDImageXObject.createFromByteArray(documento, identidade.logotipo().get(), "logotipo");
+            float alturaMaxima = 50;
+            float escala = Math.min(1f, alturaMaxima / imagem.getHeight());
+            float largura = imagem.getWidth() * escala;
+            float altura = imagem.getHeight() * escala;
+            conteudo.drawImage(imagem, 50, y - altura, largura, altura);
+            y -= altura + 10;
+        }
+        if (identidade.cabecalho() != null && !identidade.cabecalho().isBlank()) {
+            y = escreverLinha(conteudo, identidade.cabecalho(), PDType1Font.HELVETICA_BOLD, 12, y);
+            y -= 10;
+        }
+        return y;
     }
 
     private float escreverLinha(PDPageContentStream conteudo, String texto, PDType1Font fonte, float tamanho, float y) throws IOException {
