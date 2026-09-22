@@ -37,6 +37,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api-docs/**", "/docs/**", "/docs").permitAll()
+                        // HU09: "perfil exigido: administrador do tenant"
+                        // (contracts/tarifas-api.md) - primeiro endpoint
+                        // deste projeto restrito por perfil, nao so por
+                        // autenticacao.
+                        .requestMatchers("/api/v1/tarifas/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();
