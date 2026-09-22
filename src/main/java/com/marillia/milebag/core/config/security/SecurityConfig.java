@@ -38,6 +38,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api-docs/**", "/docs/**", "/docs").permitAll()
+                        // HU15: tela de ativacao do convite roda antes de
+                        // qualquer login (contracts/convite-api.md) - sem
+                        // JWT a apresentar, entao publico por definicao.
+                        .requestMatchers("/api/v1/convites/**").permitAll()
                         // HU09: "perfil exigido: administrador do tenant"
                         // (contracts/tarifas-api.md) - primeiro endpoint
                         // deste projeto restrito por perfil, nao so por
@@ -70,6 +74,11 @@ public class SecurityConfig {
                         // - inclui o endpoint de leitura do logotipo, que
                         // nao tem contrato proprio mas segue a mesma regra.
                         .requestMatchers("/api/v1/identidade-visual/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU14: "restritos ao perfil de administrador da
+                        // plataforma (provedor)" (contracts/tenants-api.md)
+                        // - perfil distinto de ADMINISTRADOR_TENANT, cujo
+                        // token nao carrega claim de tenant (Tenant.java).
+                        .requestMatchers("/api/v1/plataforma/**").hasRole(Papeis.ADMINISTRADOR_PLATAFORMA)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();

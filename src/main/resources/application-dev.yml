@@ -26,3 +26,6 @@ milebag:
     # tabelas, senao a politica de Row Level Security e ignorada por padrao
     # do PostgreSQL (ver migracao V1, FORCE ROW LEVEL SECURITY).
     secret: ${MILEBAG_JWT_SECRET:dev-only-secret-nao-usar-em-producao-0123456789abcdef}
+  convite:
+    # Front-end de dev (Vite, porta padrao) - ver CORS acima.
+    url-base: ${MILEBAG_CONVITE_URL_BASE:http://localhost:5173}

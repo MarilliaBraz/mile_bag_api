@@ -73,6 +73,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.UNPROCESSABLE_ENTITY, "arquivo-invalido", ex.getMessage());
     }
 
+    @ExceptionHandler(ConviteExpiradoException.class)
+    public ProblemDetail handleConviteExpirado(ConviteExpiradoException ex) {
+        return problema(HttpStatus.GONE, "convite-expirado", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {

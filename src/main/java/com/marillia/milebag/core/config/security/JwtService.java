@@ -38,16 +38,22 @@ public class JwtService {
         this.chave = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * {@code tenantId} nulo (HU14): token do administrador da plataforma,
+     * que nao e escopado a nenhum tenant - a claim simplesmente nao e
+     * incluida, em vez de gravar um UUID sentinela.
+     */
     public String gerarToken(UUID userId, UUID tenantId, String papel) {
         Instant agora = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(userId.toString())
-                .claim(CLAIM_TENANT_ID, tenantId.toString())
                 .claim(CLAIM_PAPEL, papel)
                 .issuedAt(Date.from(agora))
-                .expiration(Date.from(agora.plus(properties.expirationMinutes(), ChronoUnit.MINUTES)))
-                .signWith(chave)
-                .compact();
+                .expiration(Date.from(agora.plus(properties.expirationMinutes(), ChronoUnit.MINUTES)));
+        if (tenantId != null) {
+            builder.claim(CLAIM_TENANT_ID, tenantId.toString());
+        }
+        return builder.signWith(chave).compact();
     }
 
     /**
@@ -62,7 +68,8 @@ public class JwtService {
                 .getPayload();
 
         UUID userId = UUID.fromString(claims.getSubject());
-        UUID tenantId = UUID.fromString(claims.get(CLAIM_TENANT_ID, String.class));
+        String tenantIdClaim = claims.get(CLAIM_TENANT_ID, String.class);
+        UUID tenantId = tenantIdClaim != null ? UUID.fromString(tenantIdClaim) : null;
         String papel = claims.get(CLAIM_PAPEL, String.class);
         return new AuthenticatedUser(userId, tenantId, papel);
     }

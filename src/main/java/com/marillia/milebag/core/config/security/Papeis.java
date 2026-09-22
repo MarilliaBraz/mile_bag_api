@@ -12,6 +12,10 @@ public final class Papeis {
 
     public static final String MOTORISTA = "MOTORISTA";
     public static final String ADMINISTRADOR_TENANT = "ADMINISTRADOR_TENANT";
+    // HU14: perfil do provedor da plataforma (administra tenants - nao
+    // confundir com ADMINISTRADOR_TENANT, que administra UM tenant). Token
+    // deste perfil nao carrega claim de tenant (JwtService) - ver Tenant.java.
+    public static final String ADMINISTRADOR_PLATAFORMA = "ADMINISTRADOR_PLATAFORMA";
 
     private Papeis() {
     }

@@ -44,6 +44,22 @@ milebag:
     # Dados de treino do Tesseract (pacote de idioma) - ver research.md da
     # feature 001, secao 4.
     tessdata-path: ${MILEBAG_TESSDATA_PATH:./tessdata}
+  convite:
+    # Prazo de validade e URL base do link de ativacao do convite de
+    # administrador (HU15) - ver ConviteProperties. urlBase aponta para o
+    # front-end (mile_bag_app), nao para esta API.
+    prazo-validade-horas: ${MILEBAG_CONVITE_PRAZO_VALIDADE_HORAS:72}
+    url-base: ${MILEBAG_CONVITE_URL_BASE}
+  smtp:
+    # Envio do e-mail de convite (HU15) - mesmo padrao de habilitado/
+    # desabilitado do IMAP abaixo, ate a infraestrutura de e-mail
+    # self-hosted (HU18) estar provisionada.
+    habilitado: ${MILEBAG_SMTP_HABILITADO:false}
+    host: ${MILEBAG_SMTP_HOST:}
+    port: ${MILEBAG_SMTP_PORT:587}
+    usuario: ${MILEBAG_SMTP_USUARIO:}
+    senha: ${MILEBAG_SMTP_SENHA:}
+    remetente: ${MILEBAG_SMTP_REMETENTE:}
   imap:
     # Caixa de entrada compartilhada de recebimento automatico do BDO (HU02,
     # RF21) - servidor self-hosted de HU18. Desabilitado por padrao ate essa
