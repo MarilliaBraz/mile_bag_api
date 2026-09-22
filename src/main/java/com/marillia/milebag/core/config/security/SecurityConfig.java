@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -42,6 +43,14 @@ public class SecurityConfig {
                         // deste projeto restrito por perfil, nao so por
                         // autenticacao.
                         .requestMatchers("/api/v1/tarifas/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU10: leitura tambem liberada ao motorista (para
+                        // exibir pedagios na escolha de rota, HU03), mas
+                        // escrita (POST) continua restrita ao administrador
+                        // do tenant - por isso o matcher de GET vem antes do
+                        // matcher geral do mesmo caminho.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pracas-pedagio/**")
+                        .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
+                        .requestMatchers("/api/v1/pracas-pedagio/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();
