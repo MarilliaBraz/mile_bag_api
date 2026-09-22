@@ -62,6 +62,9 @@ public class SecurityConfig {
                                 "/api/v1/configuracoes/campos-baixa")
                         .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
                         .requestMatchers("/api/v1/configuracoes/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU12: "perfil exigido: administrador do tenant"
+                        // sem excecao de leitura para o motorista.
+                        .requestMatchers("/api/v1/fechamentos/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();

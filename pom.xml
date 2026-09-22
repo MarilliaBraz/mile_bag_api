@@ -22,6 +22,7 @@
     <tess4j.version>5.11.0</tess4j.version>
     <springdoc.version>2.6.0</springdoc.version>
     <jjwt.version>0.12.6</jjwt.version>
+    <pdfbox.version>2.0.30</pdfbox.version>
   </properties>
 
   <dependencies>
@@ -86,6 +87,13 @@
       <groupId>net.sourceforge.tess4j</groupId>
       <artifactId>tess4j</artifactId>
       <version>${tess4j.version}</version>
+    </dependency>
+
+    <!-- Geracao de PDF dos relatorios de fechamento (HU12) -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
     </dependency>
 
     <!-- Cliente IMAP para o recebimento automatico do BDO por e-mail (HU02, RF21) -->
