@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${MILEBAG_DB_URL}
+    username: ${MILEBAG_DB_USER}
+    password: ${MILEBAG_DB_PASSWORD}
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.marillia.milebag: INFO
+
+# Em producao, MILEBAG_JWT_SECRET e as credenciais de banco sao sempre
+# fornecidas pelo ambiente (variaveis de ambiente do container) - nunca
+# ficam neste arquivo nem em qualquer outro versionado (3 pilares, CONVENTIONS.md).

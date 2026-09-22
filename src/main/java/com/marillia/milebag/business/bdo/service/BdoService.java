@@ -1,0 +1,146 @@
+package com.marillia.milebag.business.bdo.service;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.marillia.milebag.business.bdo.mapper.BdoMapper;
+import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoOrigem;
+import com.marillia.milebag.business.bdo.model.BdoResponse;
+import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
+import com.marillia.milebag.business.bdo.model.StatusConferencia;
+import com.marillia.milebag.business.bdo.repository.BdoRepository;
+import com.marillia.milebag.business.bdo.repository.ImagemBdoRepository;
+import com.marillia.milebag.core.config.security.TenantContext;
+import com.marillia.milebag.core.exception.ConflitoException;
+import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
+import com.marillia.milebag.core.exception.RegraNegocioException;
+
+/**
+ * Orquestra a captura do BDO por fotografia (US1 desta HU): upload da
+ * imagem, extracao via OCR e persistencia com {@code origem = FOTO_MANUAL}
+ * e {@code statusConferencia = pendente} (FR-002/FR-003/FR-006).
+ */
+@Service
+public class BdoService {
+
+    private static final Logger log = LoggerFactory.getLogger(BdoService.class);
+
+    private final BdoRepository bdoRepository;
+    private final ImagemBdoRepository imagemBdoRepository;
+    private final BdoOcrService bdoOcrService;
+    private final BdoMapper bdoMapper;
+
+    public BdoService(
+            BdoRepository bdoRepository,
+            ImagemBdoRepository imagemBdoRepository,
+            BdoOcrService bdoOcrService,
+            BdoMapper bdoMapper) {
+        this.bdoRepository = bdoRepository;
+        this.imagemBdoRepository = imagemBdoRepository;
+        this.bdoOcrService = bdoOcrService;
+        this.bdoMapper = bdoMapper;
+    }
+
+    @Transactional
+    public BdoResponse capturar(MultipartFile imagem) {
+        if (imagem == null || imagem.isEmpty()) {
+            throw new RegraNegocioException("A fotografia do BDO e obrigatoria.");
+        }
+
+        CamposExtraidosBdo camposExtraidos = bdoOcrService.extrair(imagem);
+        UUID tenantId = TenantContext.get();
+
+        Bdo bdo = new Bdo();
+        bdo.setOrigem(BdoOrigem.FOTO_MANUAL);
+        bdo.setStatusConferencia(StatusConferencia.PENDENTE);
+        bdo.setDataCaptura(Instant.now());
+        bdo.setImagemOriginal(salvarImagem(tenantId, imagem));
+        aplicarCamposExtraidos(bdo, camposExtraidos);
+
+        Bdo salvo = bdoRepository.save(bdo);
+        log.info("BDO {} capturado por fotografia (tenant {})", salvo.getId(), tenantId);
+        return bdoMapper.toResponse(salvo);
+    }
+
+    @Transactional
+    public BdoResponse confirmarConferencia(UUID id, CamposExtraidosBdo camposConfirmados) {
+        Bdo bdo = buscarOuFalhar(id);
+        if (bdo.getStatusConferencia() == StatusConferencia.CONFIRMADO) {
+            throw new ConflitoException("Este BDO ja foi confirmado anteriormente.");
+        }
+
+        validarCamposObrigatorios(camposConfirmados);
+        aplicarCamposExtraidos(bdo, camposConfirmados);
+        bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
+
+        Bdo salvo = bdoRepository.save(bdo);
+        log.info("BDO {} confirmado na conferencia", salvo.getId());
+        return bdoMapper.toResponse(salvo);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BdoResponse> buscarPossivelDuplicidade(String campoChave) {
+        return bdoRepository.findByNumero(campoChave).stream()
+                .map(bdoMapper::toResponse)
+                .toList();
+    }
+
+    private Bdo buscarOuFalhar(UUID id) {
+        return bdoRepository.findById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
+    }
+
+    private String salvarImagem(UUID tenantId, MultipartFile imagem) {
+        try {
+            return imagemBdoRepository.salvar(tenantId, imagem);
+        } catch (IOException e) {
+            throw new IllegalStateException("Falha ao gravar a imagem original do BDO.", e);
+        }
+    }
+
+    private void aplicarCamposExtraidos(Bdo bdo, CamposExtraidosBdo campos) {
+        bdo.setNumero(campos.numero());
+        bdo.setPassageiroNome(campos.passageiroNome());
+        bdo.setEnderecoEntrega(campos.enderecoEntrega());
+        bdo.setCompanhiaAerea(campos.companhiaAerea());
+        bdo.setTelefonePassageiro(campos.telefonePassageiro());
+        bdo.setEmailPassageiro(campos.emailPassageiro());
+        bdo.setEtiquetaBagagem(campos.etiquetaBagagem());
+    }
+
+    /**
+     * FR-005/T014: exige na confirmacao os campos minimos para viabilizar a
+     * entrega - numero do documento, passageiro e endereco. Os demais
+     * (voo/cia aerea, contato, etiqueta) permanecem opcionais mesmo apos a
+     * confirmacao, pois nem todo BDO real os preenche.
+     */
+    private void validarCamposObrigatorios(CamposExtraidosBdo campos) {
+        List<String> ausentes = new ArrayList<>();
+        if (vazio(campos.numero())) {
+            ausentes.add("numero");
+        }
+        if (vazio(campos.passageiroNome())) {
+            ausentes.add("passageiroNome");
+        }
+        if (vazio(campos.enderecoEntrega())) {
+            ausentes.add("enderecoEntrega");
+        }
+        if (!ausentes.isEmpty()) {
+            throw new RegraNegocioException("Campos obrigatorios ausentes: " + String.join(", ", ausentes));
+        }
+    }
+
+    private boolean vazio(String valor) {
+        return valor == null || valor.isBlank();
+    }
+}

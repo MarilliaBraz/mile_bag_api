@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${MILEBAG_DB_URL:jdbc:postgresql://localhost:5432/milebag}
+    username: ${MILEBAG_DB_USER:milebag_app}
+    password: ${MILEBAG_DB_PASSWORD:milebag_app}
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.marillia.milebag: DEBUG
+    org.hibernate.SQL: DEBUG
+
+milebag:
+  jwt:
+    # Segredo de desenvolvimento apenas - nunca usar em producao.
+    # IMPORTANTE (RLS): MILEBAG_DB_USER nao pode ser o dono/superusuario das
+    # tabelas, senao a politica de Row Level Security e ignorada por padrao
+    # do PostgreSQL (ver migracao V1, FORCE ROW LEVEL SECURITY).
+    secret: ${MILEBAG_JWT_SECRET:dev-only-secret-nao-usar-em-producao-0123456789abcdef}
