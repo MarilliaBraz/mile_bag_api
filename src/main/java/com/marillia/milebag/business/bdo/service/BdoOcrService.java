@@ -2,8 +2,6 @@ package com.marillia.milebag.business.bdo.service;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
@@ -13,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.core.config.OcrProperties;
 import com.marillia.milebag.core.exception.RegraNegocioException;
+import com.marillia.milebag.core.util.CampoRotuladoExtractor;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -47,13 +46,13 @@ public class BdoOcrService {
         String textoBruto = reconhecerTexto(imagemDecodificada);
 
         return new CamposExtraidosBdo(
-                extrairCampo(textoBruto, "BDO", "NUMERO", "NUMBER", "NBR"),
-                extrairCampo(textoBruto, "PAX", "PASSAGEIRO", "NAME"),
-                extrairCampo(textoBruto, "ADDR", "ENDERECO", "ADDRESS", "DELIVERY ADDRESS"),
-                extrairCampo(textoBruto, "FLT", "VOO", "AIRLINE", "CIA", "CARRIER"),
-                extrairCampo(textoBruto, "TEL", "TELEFONE", "PHONE"),
-                extrairCampo(textoBruto, "EMAIL", "E-MAIL"),
-                extrairCampo(textoBruto, "TAG", "ETIQUETA", "BAGGAGE", "BAG TAG"));
+                CampoRotuladoExtractor.extrair(textoBruto, "BDO", "NUMERO", "NUMBER", "NBR"),
+                CampoRotuladoExtractor.extrair(textoBruto, "PAX", "PASSAGEIRO", "NAME"),
+                CampoRotuladoExtractor.extrair(textoBruto, "ADDR", "ENDERECO", "ADDRESS", "DELIVERY ADDRESS"),
+                CampoRotuladoExtractor.extrair(textoBruto, "FLT", "VOO", "AIRLINE", "CIA", "CARRIER"),
+                CampoRotuladoExtractor.extrair(textoBruto, "TEL", "TELEFONE", "PHONE"),
+                CampoRotuladoExtractor.extrair(textoBruto, "EMAIL", "E-MAIL"),
+                CampoRotuladoExtractor.extrair(textoBruto, "TAG", "ETIQUETA", "BAGGAGE", "BAG TAG"));
     }
 
     private BufferedImage decodificar(MultipartFile imagem) {
@@ -74,19 +73,5 @@ public class BdoOcrService {
         } catch (TesseractException e) {
             throw new IllegalStateException("Falha ao processar o OCR da fotografia do BDO.", e);
         }
-    }
-
-    private String extrairCampo(String textoBruto, String... rotulos) {
-        for (String rotulo : rotulos) {
-            Pattern padrao = Pattern.compile("(?im)^\\s*" + Pattern.quote(rotulo) + "\\s*[:/-]\\s*(.+)$");
-            Matcher correspondencia = padrao.matcher(textoBruto);
-            if (correspondencia.find()) {
-                String valor = correspondencia.group(1).trim();
-                if (!valor.isEmpty()) {
-                    return valor;
-                }
-            }
-        }
-        return null;
     }
 }

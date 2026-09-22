@@ -72,6 +72,26 @@ public class BdoService {
         return bdoMapper.toResponse(salvo);
     }
 
+    /**
+     * Segundo caminho de criacao do BDO (RF21, HU02): a partir de um telex
+     * WorldTracer ja reconhecido pelo {@code BdoTelexParser} no corpo de um
+     * e-mail - nasce direto {@code CONFIRMADO}, sem imagem nem conferencia
+     * (RN01/RI01 nao se aplicam a esta via). Pressupoe que o chamador ja
+     * definiu o tenant da requisicao em {@link TenantContext} (ver
+     * {@code BdoEmailListener}, que nao tem um JWT de onde resolve-lo).
+     */
+    @Transactional
+    public void criarAutomatico(CamposExtraidosBdo camposExtraidos) {
+        Bdo bdo = new Bdo();
+        bdo.setOrigem(BdoOrigem.EMAIL_AUTOMATICO);
+        bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
+        bdo.setDataCaptura(Instant.now());
+        aplicarCamposExtraidos(bdo, camposExtraidos);
+
+        Bdo salvo = bdoRepository.save(bdo);
+        log.info("BDO {} criado automaticamente por e-mail (tenant {})", salvo.getId(), TenantContext.get());
+    }
+
     @Transactional
     public BdoResponse confirmarConferencia(UUID id, CamposExtraidosBdo camposConfirmados) {
         Bdo bdo = buscarOuFalhar(id);

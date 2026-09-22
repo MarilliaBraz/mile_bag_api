@@ -88,6 +88,12 @@
       <version>${tess4j.version}</version>
     </dependency>
 
+    <!-- Cliente IMAP para o recebimento automatico do BDO por e-mail (HU02, RF21) -->
+    <dependency>
+      <groupId>org.eclipse.angus</groupId>
+      <artifactId>jakarta.mail</artifactId>
+    </dependency>
+
     <!-- Documentacao da API -->
     <dependency>
       <groupId>org.springdoc</groupId>

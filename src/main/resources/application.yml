@@ -39,3 +39,13 @@ milebag:
     # Dados de treino do Tesseract (pacote de idioma) - ver research.md da
     # feature 001, secao 4.
     tessdata-path: ${MILEBAG_TESSDATA_PATH:./tessdata}
+  imap:
+    # Caixa de entrada compartilhada de recebimento automatico do BDO (HU02,
+    # RF21) - servidor self-hosted de HU18. Desabilitado por padrao ate essa
+    # infraestrutura estar provisionada (ver research.md desta HU).
+    habilitado: ${MILEBAG_IMAP_HABILITADO:false}
+    host: ${MILEBAG_IMAP_HOST:}
+    port: ${MILEBAG_IMAP_PORT:993}
+    usuario: ${MILEBAG_IMAP_USUARIO:}
+    senha: ${MILEBAG_IMAP_SENHA:}
+    intervalo-consulta-ms: ${MILEBAG_IMAP_INTERVALO_MS:60000}
