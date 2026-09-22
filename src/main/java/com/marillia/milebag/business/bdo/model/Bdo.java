@@ -59,7 +59,7 @@ public class Bdo extends BaseEntity {
 
     /**
      * Referencia (caminho relativo) para a imagem original, gravada por
-     * {@code ImagemBdoRepository} em volume com prefixo por tenant.
+     * {@code ArmazenamentoImagemService} em volume com prefixo por tenant.
      * Obrigatoria apenas para {@code origem = FOTO_MANUAL} (FR-006) -
      * imutavel apos a criacao do registro (data-model.md).
      */

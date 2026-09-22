@@ -19,11 +19,11 @@ import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
-import com.marillia.milebag.business.bdo.repository.ImagemBdoRepository;
 import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
+import com.marillia.milebag.core.storage.ArmazenamentoImagemService;
 
 /**
  * Orquestra a captura do BDO por fotografia (US1 desta HU): upload da
@@ -36,17 +36,17 @@ public class BdoService {
     private static final Logger log = LoggerFactory.getLogger(BdoService.class);
 
     private final BdoRepository bdoRepository;
-    private final ImagemBdoRepository imagemBdoRepository;
+    private final ArmazenamentoImagemService armazenamentoImagemService;
     private final BdoOcrService bdoOcrService;
     private final BdoMapper bdoMapper;
 
     public BdoService(
             BdoRepository bdoRepository,
-            ImagemBdoRepository imagemBdoRepository,
+            ArmazenamentoImagemService armazenamentoImagemService,
             BdoOcrService bdoOcrService,
             BdoMapper bdoMapper) {
         this.bdoRepository = bdoRepository;
-        this.imagemBdoRepository = imagemBdoRepository;
+        this.armazenamentoImagemService = armazenamentoImagemService;
         this.bdoOcrService = bdoOcrService;
         this.bdoMapper = bdoMapper;
     }
@@ -122,7 +122,7 @@ public class BdoService {
 
     private String salvarImagem(UUID tenantId, MultipartFile imagem) {
         try {
-            return imagemBdoRepository.salvar(tenantId, imagem);
+            return armazenamentoImagemService.salvar(tenantId, imagem);
         } catch (IOException e) {
             throw new IllegalStateException("Falha ao gravar a imagem original do BDO.", e);
         }

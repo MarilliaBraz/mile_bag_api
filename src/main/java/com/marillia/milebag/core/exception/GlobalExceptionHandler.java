@@ -63,6 +63,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.UNPROCESSABLE_ENTITY, "divergencia-trajeto-sem-justificativa", ex.getMessage());
     }
 
+    @ExceptionHandler(ComprovanteIncompletoException.class)
+    public ProblemDetail handleComprovanteIncompleto(ComprovanteIncompletoException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, "comprovante-incompleto", ex.getMessage());
+    }
+
+    @ExceptionHandler(ArquivoInvalidoException.class)
+    public ProblemDetail handleArquivoInvalido(ArquivoInvalidoException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_ENTITY, "arquivo-invalido", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
