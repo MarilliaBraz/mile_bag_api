@@ -13,6 +13,7 @@ target/
 .DS_Store
 Thumbs.db
 
-# Ambiente local
-storage/
+# Ambiente local (diretorio de upload em runtime, nao o pacote core/storage/)
+/storage/
 tessdata/
+*.log

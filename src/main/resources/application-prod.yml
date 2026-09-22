@@ -10,6 +10,15 @@ logging:
   level:
     com.marillia.milebag: INFO
 
+# A documentacao da API (SecurityConfig permite /docs e /api-docs sem
+# autenticacao, para uso em dev/homologacao) fica desligada em producao -
+# nao expor o mapa completo de endpoints/schemas publicamente.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 # Em producao, MILEBAG_JWT_SECRET e as credenciais de banco sao sempre
 # fornecidas pelo ambiente (variaveis de ambiente do container) - nunca
 # ficam neste arquivo nem em qualquer outro versionado (3 pilares, CONVENTIONS.md).
