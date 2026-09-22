@@ -51,6 +51,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/pracas-pedagio/**")
                         .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
                         .requestMatchers("/api/v1/pracas-pedagio/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU11: das 5 categorias de configuracao, so
+                        // motivos de ocorrencia e campos de baixa tem
+                        // leitura liberada ao motorista - as outras 3
+                        // (bases, companhias, periodicidade) ficam restritas
+                        // ao administrador do tenant mesmo para GET.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/configuracoes/motivos-ocorrencia",
+                                "/api/v1/configuracoes/campos-baixa")
+                        .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
+                        .requestMatchers("/api/v1/configuracoes/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();
