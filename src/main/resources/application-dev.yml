@@ -15,6 +15,11 @@ logging:
     org.hibernate.SQL: DEBUG
 
 milebag:
+  cors:
+    # Vite muda de porta quando a padrao (5173) ja esta ocupada (comum numa
+    # mesma maquina de dev) - liberar qualquer porta localhost evita ter que
+    # reconfigurar isso a cada reinicio do front-end.
+    allowed-origin-patterns: ${MILEBAG_CORS_ALLOWED_ORIGINS:http://localhost:*}
   jwt:
     # Segredo de desenvolvimento apenas - nunca usar em producao.
     # IMPORTANTE (RLS): MILEBAG_DB_USER nao pode ser o dono/superusuario das

@@ -28,6 +28,11 @@ springdoc:
     path: /docs
 
 milebag:
+  cors:
+    # Origens do front-end autorizadas a chamar a API (CORS) - sempre
+    # explicito por ambiente, nunca hardcoded. Valor de dev fica em
+    # application-dev.yml.
+    allowed-origin-patterns: ${MILEBAG_CORS_ALLOWED_ORIGINS}
   jwt:
     # Segredo e expiracao sempre vindos de variavel de ambiente (nunca hardcoded) -
     # ver core/config/security/JwtProperties. Valores de dev ficam em application-dev.yml.
