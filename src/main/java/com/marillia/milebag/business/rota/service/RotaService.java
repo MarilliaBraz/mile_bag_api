@@ -101,9 +101,23 @@ public class RotaService {
     @Transactional
     public SelecionarRotaResponse selecionar(UUID entregaId, SelecionarRotaRequest request) {
         buscarEntregaOuFalhar(entregaId);
-        PropostaRota proposta = propostaRotaRepository.findById(entregaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException(
-                        "Nenhuma proposta de rota calculada para esta entrega."));
+        PropostaRota proposta = propostaRotaRepository.findById(entregaId).orElseGet(() -> {
+            // Rota propria sem um /calcular previo (ex.: sincronizacao offline,
+            // HU08 - nunca houve rede para chamar Valhalla/Nominatim antes da
+            // selecao): o tracado manual/justificativa abaixo nao dependem de
+            // uma PropostaRota preexistente, entao criamos uma vazia em vez de
+            // recusar. Selecao sugerida continua exigindo o calculo previo -
+            // nao ha alternativas para escolher sem ele.
+            if (request.tipoSelecao() != TipoSelecao.PROPRIA) {
+                throw new RecursoNaoEncontradoException("Nenhuma proposta de rota calculada para esta entrega.");
+            }
+            PropostaRota novaProposta = new PropostaRota();
+            novaProposta.setEntregaId(entregaId);
+            novaProposta.setOrigem(escrever(null));
+            novaProposta.setDestino(escrever(null));
+            novaProposta.setAlternativas(escrever(List.of()));
+            return novaProposta;
+        });
 
         RotaAlternativa rotaEscolhida = request.tipoSelecao() == TipoSelecao.PROPRIA
                 ? construirRotaPropria(request)
