@@ -1,7 +1,11 @@
 package com.marillia.milebag.business.tenant.model;
 
+import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.CreationTimestamp;
+
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,12 +16,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * Entidade MINIMA (id, nome, ativo) - HU16 (gerenciar planos de assinatura)
- * ainda nao foi implementada nesta base de codigo. tasks.md desta HU
- * autoriza explicitamente este stub so para satisfazer a referencia
- * obrigatoria de {@code Tenant.planoId} (FR-002), sem as regras completas
- * de HU16 (limites por plano, precificacao, upgrade/downgrade). Substituir
- * quando HU16 for implementada - nao adicionar regra de negocio aqui.
+ * Plano comercial da plataforma (HU16, RD11) - limites operacionais de
+ * motoristas ativos e volume mensal de BDOs, associados a um tenant via
+ * {@link HistoricoPlanoTenant} (nunca um campo direto em {@code Tenant} -
+ * ver comentario da migracao V24). Sem faturamento/cobranca nesta HU
+ * (spec.md, Assumptions).
  */
 @Entity
 @Table(name = "plano_assinatura")
@@ -31,10 +34,19 @@ public class PlanoAssinatura {
 
     private String nome;
 
-    private boolean ativo;
+    @Column(name = "limite_motoristas_ativos")
+    private int limiteMotoristasAtivos;
 
-    public PlanoAssinatura(String nome) {
+    @Column(name = "limite_volume_mensal_bdos")
+    private int limiteVolumeMensalBdos;
+
+    @CreationTimestamp
+    @Column(name = "criado_em", updatable = false)
+    private Instant criadoEm;
+
+    public PlanoAssinatura(String nome, int limiteMotoristasAtivos, int limiteVolumeMensalBdos) {
         this.nome = nome;
-        this.ativo = true;
+        this.limiteMotoristasAtivos = limiteMotoristasAtivos;
+        this.limiteVolumeMensalBdos = limiteVolumeMensalBdos;
     }
 }

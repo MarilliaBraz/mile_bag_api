@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.marillia.milebag.business.tenant.model.PlanoAssinatura;
 import com.marillia.milebag.business.tenant.model.Tenant;
 import com.marillia.milebag.business.tenant.repository.PlanoAssinaturaRepository;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
@@ -23,14 +22,17 @@ public class TenantService {
 
     private final TenantRepository tenantRepository;
     private final PlanoAssinaturaRepository planoAssinaturaRepository;
+    private final TenantPlanoService tenantPlanoService;
     private final ConviteAdministradorService conviteAdministradorService;
 
     public TenantService(
             TenantRepository tenantRepository,
             PlanoAssinaturaRepository planoAssinaturaRepository,
+            TenantPlanoService tenantPlanoService,
             ConviteAdministradorService conviteAdministradorService) {
         this.tenantRepository = tenantRepository;
         this.planoAssinaturaRepository = planoAssinaturaRepository;
+        this.tenantPlanoService = tenantPlanoService;
         this.conviteAdministradorService = conviteAdministradorService;
     }
 
@@ -49,21 +51,24 @@ public class TenantService {
         if (nome == null || nome.isBlank()) {
             throw new RegraNegocioException("nome e obrigatorio.");
         }
-        if (planoId == null) {
-            throw new RegraNegocioException("planoId e obrigatorio.");
+        if (planoId == null || !planoAssinaturaRepository.existsById(planoId)) {
+            // 400 (RegraNegocioException), nao 404: contracts/tenants-api.md exige
+            // "planoId ausente ou invalido" como Response 400 (FR-002) - diferente
+            // de PlanoAssinaturaService.buscarOuFalhar (404), usado noutros fluxos.
+            throw new RegraNegocioException("planoId invalido ou inexistente.");
         }
-        PlanoAssinatura plano = planoAssinaturaRepository.findById(planoId)
-                .filter(PlanoAssinatura::isAtivo)
-                .orElseThrow(() -> new RegraNegocioException("planoId invalido ou inexistente."));
 
         if (tenantRepository.findByIdentificadorEmpresa(identificadorEmpresa).isPresent()) {
             // Mensagem nao expoe nome/id do tenant conflitante (T019 desta HU).
             throw new ConflitoException("Ja existe uma empresa cadastrada com este identificador.");
         }
 
-        Tenant tenant = tenantRepository.save(new Tenant(identificadorEmpresa, nome, plano.getId()));
+        Tenant tenant = tenantRepository.save(new Tenant(identificadorEmpresa, nome));
+        // HU16 (T016): a associacao ao plano vive exclusivamente em
+        // HistoricoPlanoTenant, nunca num campo direto em Tenant.
+        tenantPlanoService.associarInicial(tenant.getId(), planoId);
         conviteAdministradorService.criarEEnviar(tenant.getId(), emailAdministrador);
-        log.info("Tenant {} cadastrado (plano {})", tenant.getId(), plano.getId());
+        log.info("Tenant {} cadastrado (plano {})", tenant.getId(), planoId);
         return tenant;
     }
 

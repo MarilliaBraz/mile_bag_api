@@ -34,6 +34,10 @@ public class EntregaService {
 
     private static final Logger log = LoggerFactory.getLogger(EntregaService.class);
 
+    /** Mesmo conjunto de status "em aberto" usado pelo painel do motorista (HU19). */
+    private static final List<EntregaStatus> STATUS_PENDENTES =
+            List.of(EntregaStatus.ATRIBUIDA, EntregaStatus.EM_ANDAMENTO, EntregaStatus.REABERTA);
+
     private final EntregaRepository entregaRepository;
     private final BdoService bdoService;
     private final EntregaMapper entregaMapper;
@@ -47,6 +51,18 @@ public class EntregaService {
     @Transactional(readOnly = true)
     public Optional<Entrega> buscarPorId(UUID id) {
         return entregaRepository.findById(id);
+    }
+
+    /**
+     * "Motoristas ativos" do tenant ambiente (HU16, uso atual contra o
+     * limite do plano) - ver javadoc de
+     * {@code EntregaRepository.countDistinctMotoristaResponsavelByStatusIn}
+     * para a interpretacao adotada (sem cadastro de motorista ainda nesta
+     * base de codigo).
+     */
+    @Transactional(readOnly = true)
+    public long contarMotoristasAtivos() {
+        return entregaRepository.countDistinctMotoristaResponsavelByStatusIn(STATUS_PENDENTES);
     }
 
     @Transactional

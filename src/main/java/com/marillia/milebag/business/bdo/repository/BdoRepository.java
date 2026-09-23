@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.bdo.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,4 +42,7 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
             ORDER BY b.data_captura ASC
             """, nativeQuery = true)
     List<Bdo> findConfirmadosSemEntrega();
+
+    /** "Volume mensal de BDOs" do tenant (HU16, uso atual contra o limite do plano) - contagem por data de captura, mes corrente. */
+    long countByDataCapturaBetween(Instant inicio, Instant fim);
 }

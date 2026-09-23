@@ -24,6 +24,11 @@ import lombok.NoArgsConstructor;
  * as outras tabelas, nao uma referencia a ele - nao faz sentido esta linha
  * ter, ela mesma, um {@code tenantId} apontando para si. Ver V21 (migracao)
  * para a decisao de nao ter Row Level Security nesta tabela.
+ *
+ * <p>Nao guarda {@code planoId} (removido na migracao V24, HU16): o plano
+ * vigente de um tenant vive exclusivamente em {@link HistoricoPlanoTenant},
+ * unica fonte de verdade (tasks.md de HU16, T016) - permite trocar de
+ * plano (FR-004) sem um campo redundante aqui.</p>
  */
 @Entity
 @Table(name = "tenant")
@@ -41,9 +46,6 @@ public class Tenant {
     @Column(length = 200)
     private String nome;
 
-    @Column(name = "plano_id", updatable = false)
-    private UUID planoId;
-
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private StatusTenant status;
@@ -52,10 +54,9 @@ public class Tenant {
     @Column(name = "criado_em", updatable = false)
     private Instant criadoEm;
 
-    public Tenant(String identificadorEmpresa, String nome, UUID planoId) {
+    public Tenant(String identificadorEmpresa, String nome) {
         this.identificadorEmpresa = identificadorEmpresa;
         this.nome = nome;
-        this.planoId = planoId;
         this.status = StatusTenant.ATIVO;
     }
 }

@@ -79,6 +79,12 @@ public class SecurityConfig {
                         // - perfil distinto de ADMINISTRADOR_TENANT, cujo
                         // token nao carrega claim de tenant (Tenant.java).
                         .requestMatchers("/api/v1/plataforma/**").hasRole(Papeis.ADMINISTRADOR_PLATAFORMA)
+                        // HU16: "consulta de plano vigente tambem acessivel
+                        // ao administrador do proprio tenant" - unico
+                        // endpoint desta HU fora de /plataforma/**, ja que os
+                        // demais (CRUD de plano, troca de plano) sao
+                        // exclusivos do administrador da plataforma.
+                        .requestMatchers("/api/v1/plano").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
                 .build();

@@ -2,6 +2,7 @@ package com.marillia.milebag.business.bdo.service;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +57,14 @@ public class BdoService {
     @Transactional(readOnly = true)
     public Optional<Bdo> buscarPorId(UUID id) {
         return bdoRepository.findById(id);
+    }
+
+    /** Volume de BDOs capturados no mes corrente do tenant ambiente (HU16, uso atual contra o limite do plano). */
+    @Transactional(readOnly = true)
+    public long contarNoMesCorrente() {
+        Instant agora = Instant.now();
+        Instant inicioDoMes = agora.atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        return bdoRepository.countByDataCapturaBetween(inicioDoMes, agora);
     }
 
     @Transactional
