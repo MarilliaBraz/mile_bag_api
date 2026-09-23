@@ -60,6 +60,10 @@ public class ViagemService {
     private static final BigDecimal DIVERGENCIA_PERCENTUAL_PADRAO = new BigDecimal("0.20");
     private static final BigDecimal DIVERGENCIA_KM_MINIMO_PADRAO = new BigDecimal("3");
 
+    // HU20, FR-006: unicos tipos de CheckpointGps que contam como "marco de
+    // progresso" no painel - PARTIDA/COMPROVANTE/OCORRENCIA nao sao marcos.
+    private static final List<TipoCheckpoint> TIPOS_MARCO_PROGRESSO = List.of(TipoCheckpoint.A_CAMINHO, TipoCheckpoint.CHEGADA);
+
     private final EntregaService entregaService;
     private final SelecaoRotaProvider selecaoRotaProvider;
     private final TrajetoRepository trajetoRepository;
@@ -67,6 +71,7 @@ public class ViagemService {
     private final CheckpointGpsRepository checkpointGpsRepository;
     private final TrajetoMapper trajetoMapper;
     private final ObjectMapper objectMapper;
+    private final MensagemService mensagemService;
 
     public ViagemService(
             EntregaService entregaService,
@@ -75,7 +80,8 @@ public class ViagemService {
             CalculoRotaRepository calculoRotaRepository,
             CheckpointGpsRepository checkpointGpsRepository,
             TrajetoMapper trajetoMapper,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            MensagemService mensagemService) {
         this.entregaService = entregaService;
         this.selecaoRotaProvider = selecaoRotaProvider;
         this.trajetoRepository = trajetoRepository;
@@ -83,6 +89,7 @@ public class ViagemService {
         this.checkpointGpsRepository = checkpointGpsRepository;
         this.trajetoMapper = trajetoMapper;
         this.objectMapper = objectMapper;
+        this.mensagemService = mensagemService;
     }
 
     /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1). */
@@ -173,7 +180,33 @@ public class ViagemService {
                 semCoordenadas));
 
         log.info("Checkpoint {} registrado no trajeto {}", request.tipo(), trajeto.getId());
+        if (TIPOS_MARCO_PROGRESSO.contains(request.tipo())) {
+            notificarAutomaticaComSeguranca(entregaId, request.tipo());
+        }
         return trajetoMapper.toResponse(checkpoint);
+    }
+
+    /** HU20, FR-006: o marco (a_caminho/chegada) mais recente da entrega, para o painel (HU19) - null quando nenhum foi registrado ainda. */
+    @Transactional(readOnly = true)
+    public Optional<String> marcoMaisRecente(UUID entregaId) {
+        return trajetoRepository.findByEntregaId(entregaId)
+                .flatMap(trajeto -> checkpointGpsRepository.findFirstByTrajetoIdAndTipoInOrderByDataHoraDesc(
+                        trajeto.getId(), TIPOS_MARCO_PROGRESSO))
+                .map(checkpoint -> checkpoint.getTipo().name());
+    }
+
+    /**
+     * FR-005: a notificacao nunca bloqueia nem falha o registro do marco
+     * (contracts/marcos-api.md desta HU) - vale tanto para o no-op atual
+     * quanto para a implementacao real de HU18, entao a protecao fica aqui,
+     * nao em cada implementacao de {@link MensagemService}.
+     */
+    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoCheckpoint tipoEvento) {
+        try {
+            mensagemService.notificarAutomatica(entregaId, tipoEvento);
+        } catch (RuntimeException e) {
+            log.warn("Falha ao notificar automaticamente a entrega {} do marco {} - checkpoint ja registrado, seguindo.", entregaId, tipoEvento, e);
+        }
     }
 
     @Transactional

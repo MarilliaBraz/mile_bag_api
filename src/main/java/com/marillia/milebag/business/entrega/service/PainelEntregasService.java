@@ -19,6 +19,7 @@ import com.marillia.milebag.business.entrega.model.ItemPainelDetalheResponse;
 import com.marillia.milebag.business.entrega.model.ItemPainelResponse;
 import com.marillia.milebag.business.entrega.model.PainelEntregasResponse;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.AcessoNegadoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
@@ -39,16 +40,19 @@ public class PainelEntregasService {
     private final EntregaRepository entregaRepository;
     private final BdoService bdoService;
     private final BagagemCaronaService bagagemCaronaService;
+    private final ViagemService viagemService;
     private final PainelEntregasMapper mapper;
 
     public PainelEntregasService(
             EntregaRepository entregaRepository,
             BdoService bdoService,
             BagagemCaronaService bagagemCaronaService,
+            ViagemService viagemService,
             PainelEntregasMapper mapper) {
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.bagagemCaronaService = bagagemCaronaService;
+        this.viagemService = viagemService;
         this.mapper = mapper;
     }
 
@@ -74,13 +78,14 @@ public class PainelEntregasService {
 
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entregaId);
-        return mapper.toDetalhe(entrega, bdo, bagagensCarona, this::etiquetaDoBdo);
+        return mapper.toDetalhe(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null));
     }
 
     private ItemPainelResponse montarItem(Entrega entrega) {
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entrega.getId());
-        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::etiquetaDoBdo);
+        String marcoMaisRecente = viagemService.marcoMaisRecente(entrega.getId()).orElse(null);
+        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, marcoMaisRecente);
     }
 
     /** Bagagem carona referencia o proprio BDO (nao o da entrega principal) para a etiqueta exibida no resumo. */

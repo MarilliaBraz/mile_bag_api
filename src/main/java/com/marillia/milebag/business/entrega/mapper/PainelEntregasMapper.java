@@ -19,15 +19,9 @@ import com.marillia.milebag.business.entrega.model.ItemPainelResponse;
 @Component
 public class PainelEntregasMapper {
 
-    /**
-     * {@code marcoMaisRecente}: sempre {@code null} ate HU20 existir - o
-     * campo ja esta no contrato (data-model.md), mas o checkpoint de
-     * progresso ({@code CheckpointGps} de tipo {@code a_caminho}/{@code
-     * chegada}) so passa a ser registrado por aquela HU (tasks.md desta HU,
-     * T014: "dependencia cruzada com HU20, nao bloqueante").
-     */
+    /** {@code marcoMaisRecente}: resolvido por {@code ViagemService.marcoMaisRecente} (HU20, FR-006) - nunca calculado aqui. */
     public ItemPainelResponse toItemPainel(
-            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo) {
+            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente) {
         return new ItemPainelResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -38,11 +32,11 @@ public class PainelEntregasMapper {
                 toBagagensResumo(bagagensCarona, etiquetaDoBdo),
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
-                null);
+                marcoMaisRecente);
     }
 
     public ItemPainelDetalheResponse toDetalhe(
-            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo) {
+            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente) {
         return new ItemPainelDetalheResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -55,7 +49,7 @@ public class PainelEntregasMapper {
                 toBagagensResumo(bagagensCarona, etiquetaDoBdo),
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
-                null);
+                marcoMaisRecente);
     }
 
     public ItemBdoDisponivelResponse toItemDisponivel(Bdo bdo) {

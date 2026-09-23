@@ -25,6 +25,7 @@ import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.model.ItemPainelDetalheResponse;
 import com.marillia.milebag.business.entrega.model.PainelEntregasResponse;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.AcessoNegadoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
@@ -38,6 +39,8 @@ class PainelEntregasServiceTest {
     private BdoService bdoService;
     @Mock
     private BagagemCaronaService bagagemCaronaService;
+    @Mock
+    private ViagemService viagemService;
 
     private PainelEntregasService painelEntregasService;
 
@@ -45,7 +48,10 @@ class PainelEntregasServiceTest {
     void setUp() {
         // PainelEntregasMapper real (nao mock): so mapeia campos, sem
         // dependencias - um mock devolveria null em todo metodo.
-        painelEntregasService = new PainelEntregasService(entregaRepository, bdoService, bagagemCaronaService, new PainelEntregasMapper());
+        painelEntregasService =
+                new PainelEntregasService(entregaRepository, bdoService, bagagemCaronaService, viagemService, new PainelEntregasMapper());
+        // lenient: nem todo teste chega a montar um item (ex.: consultarPainelVazioNaoQuebra).
+        org.mockito.Mockito.lenient().when(viagemService.marcoMaisRecente(any())).thenReturn(Optional.empty());
     }
 
     private Entrega entrega(UUID id, UUID bdoId, UUID motoristaId, EntregaStatus status) {
@@ -79,6 +85,7 @@ class PainelEntregasServiceTest {
                 .thenReturn(List.of(entrega));
         when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo(bdoId)));
         when(bagagemCaronaService.listarPorEntrega(entregaId)).thenReturn(List.of());
+        when(viagemService.marcoMaisRecente(entregaId)).thenReturn(Optional.of("A_CAMINHO"));
 
         PainelEntregasResponse resposta = painelEntregasService.consultarPainel(motoristaId);
 
@@ -88,7 +95,8 @@ class PainelEntregasServiceTest {
         assertThat(item.entregaId()).isEqualTo(entregaId);
         assertThat(item.bdoNumero()).isEqualTo("BDO-123");
         assertThat(item.temTrajetoIniciado()).isTrue();
-        assertThat(item.marcoMaisRecente()).isNull();
+        // HU20: marcoMaisRecente e resolvido via ViagemService, nao calculado aqui.
+        assertThat(item.marcoMaisRecente()).isEqualTo("A_CAMINHO");
     }
 
     @Test

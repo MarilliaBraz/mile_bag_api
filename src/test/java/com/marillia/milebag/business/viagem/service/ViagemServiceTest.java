@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,7 +24,10 @@ import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
+import com.marillia.milebag.business.viagem.model.CheckpointResponse;
 import com.marillia.milebag.business.viagem.model.IniciarViagemRequest;
+import com.marillia.milebag.business.viagem.model.RegistrarCheckpointRequest;
+import com.marillia.milebag.business.viagem.model.TipoCheckpoint;
 import com.marillia.milebag.business.viagem.model.Trajeto;
 import com.marillia.milebag.business.viagem.model.TrajetoIniciadoResponse;
 import com.marillia.milebag.business.viagem.model.TrajetoStatus;
@@ -57,6 +61,8 @@ class ViagemServiceTest {
     private CheckpointGpsRepository checkpointGpsRepository;
     @Mock
     private TrajetoMapper trajetoMapper;
+    @Mock
+    private MensagemService mensagemService;
 
     private ViagemService viagemService;
 
@@ -64,7 +70,7 @@ class ViagemServiceTest {
     void setUp() {
         viagemService = new ViagemService(
                 entregaService, selecaoRotaProvider, trajetoRepository, calculoRotaRepository,
-                checkpointGpsRepository, trajetoMapper, new ObjectMapper());
+                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService);
         // lenient: nem todo teste chega a exercitar os tres saves (ex.: os
         // testes de erro em iniciarViagem retornam antes deles).
         org.mockito.Mockito.lenient().when(trajetoRepository.save(any(Trajeto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -156,5 +162,63 @@ class ViagemServiceTest {
         assertThatThrownBy(() -> viagemService.registrarCalculoRotaSeTrajetoExistir(
                 entregaId, new RotaAlternativa("x", 100, 10, false), TipoSelecao.SUGERIDA))
                 .isInstanceOf(ConflitoException.class);
+    }
+
+    @Test
+    void registrarCheckpointNotificaQuandoTipoEhMarcoDeProgresso() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.A_CAMINHO, null, null, Instant.now(), false));
+
+        viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, -23.5, -46.6));
+
+        verify(mensagemService).notificarAutomatica(entregaId, TipoCheckpoint.A_CAMINHO);
+    }
+
+    @Test
+    void registrarCheckpointNaoNotificaParaTiposQueNaoSaoMarcoDeProgresso() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.PARTIDA, null, null, Instant.now(), false));
+
+        viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.PARTIDA, -23.5, -46.6));
+
+        verify(mensagemService, never()).notificarAutomatica(any(), any());
+    }
+
+    /** HU20, FR-005: a notificacao nunca bloqueia nem falha o registro do checkpoint. */
+    @Test
+    void registrarCheckpointNaoFalhaQuandoNotificacaoLancaExcecao() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.CHEGADA, null, null, Instant.now(), false));
+        org.mockito.Mockito.doThrow(new RuntimeException("falha simulada"))
+                .when(mensagemService).notificarAutomatica(any(), any());
+
+        assertThat(viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.CHEGADA, null, null))).isNotNull();
+    }
+
+    @Test
+    void marcoMaisRecenteRetornaTipoDoCheckpointMaisRecente() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        CheckpointGps chegada = new CheckpointGps(trajeto.getId(), TipoCheckpoint.CHEGADA, null, null, Instant.now(), true);
+        when(checkpointGpsRepository.findFirstByTrajetoIdAndTipoInOrderByDataHoraDesc(
+                trajeto.getId(), List.of(TipoCheckpoint.A_CAMINHO, TipoCheckpoint.CHEGADA)))
+                .thenReturn(Optional.of(chegada));
+
+        assertThat(viagemService.marcoMaisRecente(entregaId)).contains("CHEGADA");
+    }
+
+    @Test
+    void marcoMaisRecenteVazioQuandoEntregaSemTrajeto() {
+        UUID entregaId = UUID.randomUUID();
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
+
+        assertThat(viagemService.marcoMaisRecente(entregaId)).isEmpty();
     }
 }
