@@ -11,8 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.marillia.milebag.business.tenant.dto.ConviteConsultaResponse;
 import com.marillia.milebag.business.tenant.model.ConviteAdministrador;
+import com.marillia.milebag.business.tenant.model.ConviteConsultaResponse;
 import com.marillia.milebag.business.tenant.model.ConviteStatus;
 import com.marillia.milebag.business.tenant.model.Tenant;
 import com.marillia.milebag.business.tenant.model.Usuario;

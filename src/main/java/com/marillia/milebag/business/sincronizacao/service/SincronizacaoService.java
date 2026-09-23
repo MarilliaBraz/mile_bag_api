@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.sincronizacao;
+package com.marillia.milebag.business.sincronizacao.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -18,6 +18,7 @@ import com.marillia.milebag.business.sincronizacao.model.ResultadoEventoResponse
 import com.marillia.milebag.business.sincronizacao.model.ResultadoSincronizacao;
 import com.marillia.milebag.business.sincronizacao.model.SincronizarLoteResponse;
 import com.marillia.milebag.business.sincronizacao.model.StatusEventoResponse;
+import com.marillia.milebag.business.sincronizacao.repository.EventoSincronizadoRepository;
 
 /**
  * Processa o lote de eventos offline (US1 desta HU) - ver

@@ -1,9 +1,7 @@
-package com.marillia.milebag.business.tenant.dto;
+package com.marillia.milebag.business.tenant.model;
 
 import java.time.Instant;
 import java.util.UUID;
-
-import com.marillia.milebag.business.tenant.model.Tenant;
 
 /** Formato de resposta do POST e do GET (contracts/tenants-api.md). */
 public record TenantResponse(UUID id, String identificadorEmpresa, String nome, UUID planoId, String status, Instant criadoEm) {

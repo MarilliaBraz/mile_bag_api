@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.sincronizacao;
+package com.marillia.milebag.business.sincronizacao.repository;
 
 import java.util.UUID;
 

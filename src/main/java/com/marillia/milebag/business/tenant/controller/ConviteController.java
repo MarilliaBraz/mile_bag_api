@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.marillia.milebag.business.tenant.dto.AtivarConviteRequest;
-import com.marillia.milebag.business.tenant.dto.ConviteConsultaResponse;
+import com.marillia.milebag.business.tenant.model.AtivarConviteRequest;
+import com.marillia.milebag.business.tenant.model.ConviteConsultaResponse;
 import com.marillia.milebag.business.tenant.service.ConviteAdministradorService;
 
 /**

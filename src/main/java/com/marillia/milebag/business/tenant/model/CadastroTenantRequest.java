@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.tenant.dto;
+package com.marillia.milebag.business.tenant.model;
 
 import java.util.UUID;
 

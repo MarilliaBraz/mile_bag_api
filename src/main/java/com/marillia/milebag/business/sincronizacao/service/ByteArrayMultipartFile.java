@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.sincronizacao;
+package com.marillia.milebag.business.sincronizacao.service;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;

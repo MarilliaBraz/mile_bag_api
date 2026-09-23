@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.marillia.milebag.business.tenant.dto.CadastroTenantRequest;
-import com.marillia.milebag.business.tenant.dto.TenantResponse;
+import com.marillia.milebag.business.tenant.model.CadastroTenantRequest;
+import com.marillia.milebag.business.tenant.model.TenantResponse;
 import com.marillia.milebag.business.tenant.service.ConviteAdministradorService;
 import com.marillia.milebag.business.tenant.service.TenantService;
 

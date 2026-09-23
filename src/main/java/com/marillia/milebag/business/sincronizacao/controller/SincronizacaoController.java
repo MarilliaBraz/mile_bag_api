@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.sincronizacao;
+package com.marillia.milebag.business.sincronizacao.controller;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +15,7 @@ import com.marillia.milebag.business.sincronizacao.model.EventoSincronizacaoRequ
 import com.marillia.milebag.business.sincronizacao.model.SincronizarLoteRequest;
 import com.marillia.milebag.business.sincronizacao.model.SincronizarLoteResponse;
 import com.marillia.milebag.business.sincronizacao.model.StatusEventoResponse;
+import com.marillia.milebag.business.sincronizacao.service.SincronizacaoService;
 import com.marillia.milebag.core.config.security.AuthenticatedUser;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 

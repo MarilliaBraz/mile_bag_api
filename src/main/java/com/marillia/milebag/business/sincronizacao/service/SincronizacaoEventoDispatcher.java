@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.sincronizacao;
+package com.marillia.milebag.business.sincronizacao.service;
 
 import java.util.Base64;
 import java.util.Map;
@@ -28,6 +28,7 @@ import com.marillia.milebag.business.sincronizacao.model.EventoSincronizado;
 import com.marillia.milebag.business.sincronizacao.model.PayloadBagagemCaronaVinculada;
 import com.marillia.milebag.business.sincronizacao.model.PayloadBdoCapturado;
 import com.marillia.milebag.business.sincronizacao.model.PayloadComprovanteRegistrado;
+import com.marillia.milebag.business.sincronizacao.repository.EventoSincronizadoRepository;
 import com.marillia.milebag.business.sincronizacao.model.PayloadEntregaAutoatribuida;
 import com.marillia.milebag.business.sincronizacao.model.PayloadOcorrenciaRegistrada;
 import com.marillia.milebag.business.sincronizacao.model.PayloadRotaEscolhida;
