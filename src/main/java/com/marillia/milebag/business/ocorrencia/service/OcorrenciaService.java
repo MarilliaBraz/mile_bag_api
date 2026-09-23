@@ -12,9 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
-import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
-import com.marillia.milebag.business.configuracao.repository.MotivoOcorrenciaRepository;
+import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.ocorrencia.model.Ocorrencia;
 import com.marillia.milebag.business.ocorrencia.model.OcorrenciaResponse;
 import com.marillia.milebag.business.ocorrencia.repository.OcorrenciaRepository;
@@ -31,16 +31,16 @@ public class OcorrenciaService {
     private static final Logger log = LoggerFactory.getLogger(OcorrenciaService.class);
 
     private final OcorrenciaRepository ocorrenciaRepository;
-    private final MotivoOcorrenciaRepository motivoOcorrenciaRepository;
-    private final EntregaRepository entregaRepository;
+    private final MotivoOcorrenciaService motivoOcorrenciaService;
+    private final EntregaService entregaService;
 
     public OcorrenciaService(
             OcorrenciaRepository ocorrenciaRepository,
-            MotivoOcorrenciaRepository motivoOcorrenciaRepository,
-            EntregaRepository entregaRepository) {
+            MotivoOcorrenciaService motivoOcorrenciaService,
+            EntregaService entregaService) {
         this.ocorrenciaRepository = ocorrenciaRepository;
-        this.motivoOcorrenciaRepository = motivoOcorrenciaRepository;
-        this.entregaRepository = entregaRepository;
+        this.motivoOcorrenciaService = motivoOcorrenciaService;
+        this.entregaService = entregaService;
     }
 
     @Transactional
@@ -60,19 +60,15 @@ public class OcorrenciaService {
         }
 
         // RLS (motivo_ocorrencia) ja garante que um motivo de outro tenant e
-        // invisivel aqui - findById retorna vazio tanto para "nao existe"
-        // quanto para "existe, mas e de outro tenant" (nunca revelado como
-        // tal, mesma convencao do resto da API).
-        MotivoOcorrencia motivo = motivoOcorrenciaRepository.findById(motivoOcorrenciaId)
-                .filter(MotivoOcorrencia::isAtivo)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Motivo de ocorrencia nao encontrado."));
+        // invisivel aqui - buscarAtivoOuFalhar retorna 404 tanto para "nao
+        // existe" quanto para "existe, mas e de outro tenant" (nunca
+        // revelado como tal, mesma convencao do resto da API).
+        MotivoOcorrencia motivo = motivoOcorrenciaService.buscarAtivoOuFalhar(motivoOcorrenciaId);
 
         Ocorrencia ocorrencia = ocorrenciaRepository.save(
                 new Ocorrencia(entregaId, motivo.getId(), descricaoAdicional, Instant.now(), temIdLocal, idLocal));
 
-        entrega.setStatus(EntregaStatus.REABERTA);
-        entrega.setMotoristaResponsavel(null);
-        entregaRepository.save(entrega);
+        entregaService.reabrirParaNovaTentativa(entregaId);
 
         log.info(
                 "Ocorrencia {} registrada para a entrega {} (motivo {}); entrega reaberta para nova tentativa.",
@@ -89,7 +85,7 @@ public class OcorrenciaService {
     }
 
     private Entrega buscarEntregaOuFalhar(UUID entregaId) {
-        return entregaRepository.findById(entregaId)
+        return entregaService.buscarPorId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 

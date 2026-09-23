@@ -7,8 +7,8 @@ import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.marillia.milebag.business.rota.model.TipoSelecao;
 import com.marillia.milebag.core.base.BaseEntity;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

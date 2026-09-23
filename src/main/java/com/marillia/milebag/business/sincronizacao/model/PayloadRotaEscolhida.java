@@ -3,8 +3,8 @@ package com.marillia.milebag.business.sincronizacao.model;
 import java.util.List;
 import java.util.UUID;
 
-import com.marillia.milebag.business.rota.model.Coordenada;
-import com.marillia.milebag.business.rota.model.TipoSelecao;
+import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 /**
  * Adaptacao de {@code POST /rotas/selecionar} (HU03): {@code entregaId} era

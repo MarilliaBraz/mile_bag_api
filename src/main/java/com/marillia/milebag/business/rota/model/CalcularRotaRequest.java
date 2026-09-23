@@ -1,5 +1,7 @@
 package com.marillia.milebag.business.rota.model;
 
+import com.marillia.milebag.core.geo.Coordenada;
+
 /**
  * {@code origemAtual}: posicao atual do motorista (GPS do dispositivo),
  * sempre enviada pelo cliente - nao ha, ainda, um endereco-base do tenant

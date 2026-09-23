@@ -20,12 +20,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
-import com.marillia.milebag.business.comprovante.repository.ComprovanteEntregaRepository;
+import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
-import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.fechamento.model.Fechamento;
 import com.marillia.milebag.business.fechamento.model.FechamentoDetalheResponse;
 import com.marillia.milebag.business.fechamento.model.FechamentoResponse;
@@ -40,7 +40,7 @@ import com.marillia.milebag.business.tarifa.model.TabelaTarifa;
 import com.marillia.milebag.business.tarifa.service.TabelaTarifaService;
 import com.marillia.milebag.business.viagem.model.Trajeto;
 import com.marillia.milebag.business.viagem.model.TrechoPedagio;
-import com.marillia.milebag.business.viagem.repository.TrajetoRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -58,9 +58,9 @@ public class FechamentoService {
 
     private final FechamentoRepository fechamentoRepository;
     private final ItemFechamentoRepository itemFechamentoRepository;
-    private final ComprovanteEntregaRepository comprovanteEntregaRepository;
-    private final EntregaRepository entregaRepository;
-    private final TrajetoRepository trajetoRepository;
+    private final ComprovanteEntregaService comprovanteEntregaService;
+    private final EntregaService entregaService;
+    private final ViagemService viagemService;
     private final TabelaTarifaService tabelaTarifaService;
     private final BagagemCaronaService bagagemCaronaService;
     private final ObjectMapper objectMapper;
@@ -68,17 +68,17 @@ public class FechamentoService {
     public FechamentoService(
             FechamentoRepository fechamentoRepository,
             ItemFechamentoRepository itemFechamentoRepository,
-            ComprovanteEntregaRepository comprovanteEntregaRepository,
-            EntregaRepository entregaRepository,
-            TrajetoRepository trajetoRepository,
+            ComprovanteEntregaService comprovanteEntregaService,
+            EntregaService entregaService,
+            ViagemService viagemService,
             TabelaTarifaService tabelaTarifaService,
             BagagemCaronaService bagagemCaronaService,
             ObjectMapper objectMapper) {
         this.fechamentoRepository = fechamentoRepository;
         this.itemFechamentoRepository = itemFechamentoRepository;
-        this.comprovanteEntregaRepository = comprovanteEntregaRepository;
-        this.entregaRepository = entregaRepository;
-        this.trajetoRepository = trajetoRepository;
+        this.comprovanteEntregaService = comprovanteEntregaService;
+        this.entregaService = entregaService;
+        this.viagemService = viagemService;
         this.tabelaTarifaService = tabelaTarifaService;
         this.bagagemCaronaService = bagagemCaronaService;
         this.objectMapper = objectMapper;
@@ -155,9 +155,9 @@ public class FechamentoService {
         Instant inicioInstant = periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant fimInstant = periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-        return comprovanteEntregaRepository.findByDataHoraBetween(inicioInstant, fimInstant).stream()
+        return comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
                 .map(ComprovanteEntrega::getEntregaId)
-                .map(entregaRepository::findById)
+                .map(entregaService::buscarPorId)
                 .flatMap(Optional::stream)
                 .filter(entrega -> entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO)
                 .toList();
@@ -178,7 +178,7 @@ public class FechamentoService {
         List<String> problemas = new ArrayList<>();
         UUID motoristaId = entrega.getMotoristaResponsavel();
 
-        Trajeto trajeto = trajetoRepository.findByEntregaId(entrega.getId()).orElse(null);
+        Trajeto trajeto = viagemService.buscarTrajetoPorEntrega(entrega.getId()).orElse(null);
         if (trajeto == null || trajeto.getKmIdaFinal() == null || trajeto.getKmVoltaFinal() == null) {
             problemas.add("trajeto da viagem nao consolidado");
         }

@@ -44,6 +44,14 @@ public class MotivoOcorrenciaService {
         return motivoOcorrenciaRepository.findByAtivoTrue();
     }
 
+    /** Ponto de leitura publico para outros dominios (ocorrencia) - nunca {@code MotivoOcorrenciaRepository} direto (CONVENTIONS.md 2.1). */
+    @Transactional(readOnly = true)
+    public MotivoOcorrencia buscarAtivoOuFalhar(UUID id) {
+        return motivoOcorrenciaRepository.findById(id)
+                .filter(MotivoOcorrencia::isAtivo)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Motivo de ocorrencia nao encontrado."));
+    }
+
     @Transactional
     public MotivoOcorrencia atualizarAtivo(UUID id, boolean ativo) {
         MotivoOcorrencia motivo = motivoOcorrenciaRepository.findById(id)

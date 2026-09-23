@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -13,13 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.marillia.milebag.business.entrega.model.Entrega;
-import com.marillia.milebag.business.entrega.model.EntregaStatus;
-import com.marillia.milebag.business.entrega.repository.EntregaRepository;
-import com.marillia.milebag.business.rota.model.PropostaRota;
-import com.marillia.milebag.business.rota.model.RotaAlternativa;
-import com.marillia.milebag.business.rota.model.TipoSelecao;
-import com.marillia.milebag.business.rota.repository.PropostaRotaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
@@ -40,11 +35,20 @@ import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.DivergenciaSemJustificativaException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RotaNaoSelecionadaException;
+import com.marillia.milebag.core.geo.RotaAlternativa;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 /**
  * Registra o trajeto real da viagem - inicio, recalculos (acionados por
  * {@code RotaService}, HU03), checkpoints de GPS e consolidacao no
  * encerramento (RN14). Ver contracts/viagem-api.md.
+ *
+ * <p>Le a rota selecionada via {@link SelecaoRotaProvider} (implementada por
+ * {@code RotaService}), nunca de {@code PropostaRotaRepository} direto -
+ * essa porta e definida aqui (nao em {@code business.rota}) exatamente para
+ * este pacote nao precisar importar nada de {@code business.rota}, o que
+ * criaria uma dependencia circular (rota ja depende de viagem para
+ * {@link #registrarCalculoRotaSeTrajetoExistir}).</p>
  */
 @Service
 public class ViagemService {
@@ -56,8 +60,8 @@ public class ViagemService {
     private static final BigDecimal DIVERGENCIA_PERCENTUAL_PADRAO = new BigDecimal("0.20");
     private static final BigDecimal DIVERGENCIA_KM_MINIMO_PADRAO = new BigDecimal("3");
 
-    private final EntregaRepository entregaRepository;
-    private final PropostaRotaRepository propostaRotaRepository;
+    private final EntregaService entregaService;
+    private final SelecaoRotaProvider selecaoRotaProvider;
     private final TrajetoRepository trajetoRepository;
     private final CalculoRotaRepository calculoRotaRepository;
     private final CheckpointGpsRepository checkpointGpsRepository;
@@ -65,15 +69,15 @@ public class ViagemService {
     private final ObjectMapper objectMapper;
 
     public ViagemService(
-            EntregaRepository entregaRepository,
-            PropostaRotaRepository propostaRotaRepository,
+            EntregaService entregaService,
+            SelecaoRotaProvider selecaoRotaProvider,
             TrajetoRepository trajetoRepository,
             CalculoRotaRepository calculoRotaRepository,
             CheckpointGpsRepository checkpointGpsRepository,
             TrajetoMapper trajetoMapper,
             ObjectMapper objectMapper) {
-        this.entregaRepository = entregaRepository;
-        this.propostaRotaRepository = propostaRotaRepository;
+        this.entregaService = entregaService;
+        this.selecaoRotaProvider = selecaoRotaProvider;
         this.trajetoRepository = trajetoRepository;
         this.calculoRotaRepository = calculoRotaRepository;
         this.checkpointGpsRepository = checkpointGpsRepository;
@@ -81,26 +85,32 @@ public class ViagemService {
         this.objectMapper = objectMapper;
     }
 
+    /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1). */
+    @Transactional(readOnly = true)
+    public Optional<Trajeto> buscarTrajetoPorEntrega(UUID entregaId) {
+        return trajetoRepository.findByEntregaId(entregaId);
+    }
+
     @Transactional
     public TrajetoIniciadoResponse iniciarViagem(UUID entregaId, IniciarViagemRequest request) {
-        Entrega entrega = buscarEntregaOuFalhar(entregaId);
+        if (entregaService.buscarPorId(entregaId).isEmpty()) {
+            throw new RecursoNaoEncontradoException("Entrega nao encontrada.");
+        }
 
         if (trajetoRepository.findByEntregaId(entregaId).isPresent()) {
             throw new ConflitoException("Esta entrega ja possui um trajeto iniciado.");
         }
 
-        PropostaRota proposta = propostaRotaRepository.findById(entregaId)
-                .filter(p -> p.getTipoSelecao() != null && p.getRotaEscolhida() != null)
+        SelecaoRotaProvider.RotaSelecionada selecionada = selecaoRotaProvider.buscarSelecionada(entregaId)
                 .orElseThrow(() -> new RotaNaoSelecionadaException(
                         "Nenhuma rota foi selecionada para esta entrega; selecione uma rota antes de iniciar a viagem."));
 
-        RotaAlternativa rotaEscolhida = ler(proposta.getRotaEscolhida());
         Instant agora = Instant.now();
 
         Trajeto trajeto = trajetoRepository.save(new Trajeto(entregaId, agora));
 
         CalculoRota calculoInicial = calculoRotaRepository.save(
-                criarCalculoRota(trajeto.getId(), rotaEscolhida, proposta.getTipoSelecao(), agora, true));
+                criarCalculoRota(trajeto.getId(), selecionada.rotaEscolhida(), selecionada.tipoSelecao(), agora, true));
 
         boolean semCoordenadas = request == null || request.lat() == null || request.lng() == null;
         CheckpointGps checkpointPartida = checkpointGpsRepository.save(new CheckpointGps(
@@ -111,8 +121,7 @@ public class ViagemService {
                 agora,
                 semCoordenadas));
 
-        entrega.setStatus(EntregaStatus.EM_ANDAMENTO);
-        entregaRepository.save(entrega);
+        entregaService.marcarEmAndamento(entregaId);
 
         log.info("Viagem iniciada: trajeto {} para a entrega {}", trajeto.getId(), entregaId);
         return trajetoMapper.toIniciadoResponse(trajeto, calculoInicial, checkpointPartida);
@@ -245,11 +254,6 @@ public class ViagemService {
                 : List.of();
     }
 
-    private Entrega buscarEntregaOuFalhar(UUID entregaId) {
-        return entregaRepository.findById(entregaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
-    }
-
     private Trajeto buscarTrajetoOuFalhar(UUID entregaId) {
         return trajetoRepository.findByEntregaId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Esta entrega nao tem um trajeto iniciado."));
@@ -260,14 +264,6 @@ public class ViagemService {
             return objectMapper.writeValueAsString(valor);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Falha ao serializar dados do trajeto.", e);
-        }
-    }
-
-    private RotaAlternativa ler(String json) {
-        try {
-            return objectMapper.readValue(json, RotaAlternativa.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Falha ao ler a rota escolhida persistida.", e);
         }
     }
 }

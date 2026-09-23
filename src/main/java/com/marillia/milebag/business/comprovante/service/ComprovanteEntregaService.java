@@ -3,6 +3,7 @@ package com.marillia.milebag.business.comprovante.service;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,9 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.repository.ComprovanteEntregaRepository;
-import com.marillia.milebag.business.entrega.model.Entrega;
-import com.marillia.milebag.business.entrega.model.EntregaStatus;
-import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.viagem.model.EncerrarTrajetoRequest;
 import com.marillia.milebag.business.viagem.model.RegistrarCheckpointRequest;
 import com.marillia.milebag.business.viagem.model.TipoCheckpoint;
@@ -37,19 +36,25 @@ public class ComprovanteEntregaService {
     private static final Logger log = LoggerFactory.getLogger(ComprovanteEntregaService.class);
 
     private final ComprovanteEntregaRepository comprovanteEntregaRepository;
-    private final EntregaRepository entregaRepository;
+    private final EntregaService entregaService;
     private final ArmazenamentoImagemService armazenamentoImagemService;
     private final ViagemService viagemService;
 
     public ComprovanteEntregaService(
             ComprovanteEntregaRepository comprovanteEntregaRepository,
-            EntregaRepository entregaRepository,
+            EntregaService entregaService,
             ArmazenamentoImagemService armazenamentoImagemService,
             ViagemService viagemService) {
         this.comprovanteEntregaRepository = comprovanteEntregaRepository;
-        this.entregaRepository = entregaRepository;
+        this.entregaService = entregaService;
         this.armazenamentoImagemService = armazenamentoImagemService;
         this.viagemService = viagemService;
+    }
+
+    /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code ComprovanteEntregaRepository} direto (CONVENTIONS.md 2.1). */
+    @Transactional(readOnly = true)
+    public List<ComprovanteEntrega> listarPorPeriodo(Instant inicio, Instant fim) {
+        return comprovanteEntregaRepository.findByDataHoraBetween(inicio, fim);
     }
 
     /**
@@ -74,7 +79,9 @@ public class ComprovanteEntregaService {
             String justificativaDivergencia) {
         Instant dataHora = validarCampos(foto, identificacaoRecebedor, dataHoraTexto, latitude, longitude);
 
-        Entrega entrega = buscarEntregaOuFalhar(entregaId);
+        if (entregaService.buscarPorId(entregaId).isEmpty()) {
+            throw new RecursoNaoEncontradoException("Entrega nao encontrada.");
+        }
 
         Optional<ComprovanteEntrega> existente = comprovanteEntregaRepository.findByEntregaId(entregaId);
         if (existente.isPresent()) {
@@ -98,8 +105,7 @@ public class ComprovanteEntregaService {
         viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.COMPROVANTE, latitude, longitude));
         viagemService.encerrarTrajeto(entregaId, new EncerrarTrajetoRequest(justificativaDivergencia));
 
-        entrega.setStatus(EntregaStatus.ENCERRADA_COM_SUCESSO);
-        entregaRepository.save(entrega);
+        entregaService.marcarEncerradaComSucesso(entregaId);
 
         log.info("Comprovante {} registrado; entrega {} encerrada com sucesso.", comprovante.getId(), entregaId);
         return new ComprovanteEntregaResultado(comprovante, true);
@@ -131,11 +137,6 @@ public class ComprovanteEntregaService {
         } catch (IOException e) {
             throw new IllegalStateException("Falha ao gravar a foto do comprovante.", e);
         }
-    }
-
-    private Entrega buscarEntregaOuFalhar(UUID entregaId) {
-        return entregaRepository.findById(entregaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 
     /** {@code novo}: distingue um registro recem-criado de um retorno idempotente, para o controller escolher o status HTTP. */

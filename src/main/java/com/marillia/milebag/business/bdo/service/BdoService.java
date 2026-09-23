@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -49,6 +50,12 @@ public class BdoService {
         this.armazenamentoImagemService = armazenamentoImagemService;
         this.bdoOcrService = bdoOcrService;
         this.bdoMapper = bdoMapper;
+    }
+
+    /** Ponto de leitura publico para outros dominios (rota, entrega, entrega.bagagemcarona) - nunca {@code BdoRepository} direto (CONVENTIONS.md 2.1). */
+    @Transactional(readOnly = true)
+    public Optional<Bdo> buscarPorId(UUID id) {
+        return bdoRepository.findById(id);
     }
 
     @Transactional

@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.rota.service;
+package com.marillia.milebag.core.geo;
 
 import java.util.List;
 import java.util.Optional;
@@ -11,16 +11,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import com.marillia.milebag.business.rota.model.Coordenada;
 import com.marillia.milebag.core.config.NominatimProperties;
 
 /**
- * Resolve o endereco de entrega do BDO em coordenadas, via Nominatim (API
- * `/search`, ver research.md da feature 001, secao 5). Falha de
- * geocodificacao (endereco nao encontrado, ou servico indisponivel) e
- * reportada como {@link Optional#empty()} - quem decide se isso vira um
- * erro 422 e o {@code RotaService} (depende de haver ou nao uma coordenada
- * manual, FR-006).
+ * Resolve um endereco em coordenadas, via Nominatim (API {@code /search},
+ * ver research.md da feature 001, secao 5). Cliente de infraestrutura puro
+ * (sem regra de negocio) - por isso vive em {@code core}, nao em {@code
+ * business.rota}, reaproveitado tambem por business.entrega.bagagemcarona.
+ * Falha de geocodificacao (endereco nao encontrado, ou servico
+ * indisponivel) e reportada como {@link Optional#empty()} - quem decide se
+ * isso vira um erro e cada chamador (ex.: {@code RotaService}, FR-006).
  */
 @Component
 public class GeocodingClient {

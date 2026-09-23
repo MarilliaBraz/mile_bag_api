@@ -2,6 +2,9 @@ package com.marillia.milebag.business.rota.model;
 
 import java.util.List;
 
+import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.core.geo.TipoSelecao;
+
 /**
  * {@code alternativaId}: obrigatorio quando {@code tipoSelecao = SUGERIDA} -
  * id de uma das alternativas devolvidas pelo calculo anterior.

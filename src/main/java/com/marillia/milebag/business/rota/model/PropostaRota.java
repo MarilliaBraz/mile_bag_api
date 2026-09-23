@@ -8,6 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import com.marillia.milebag.core.config.security.TenantContext;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

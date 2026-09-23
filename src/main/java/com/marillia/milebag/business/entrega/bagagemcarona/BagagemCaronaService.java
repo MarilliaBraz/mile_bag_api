@@ -12,16 +12,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
-import com.marillia.milebag.business.bdo.repository.BdoRepository;
+import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
-import com.marillia.milebag.business.rota.model.Coordenada;
-import com.marillia.milebag.business.rota.model.RotaAlternativa;
-import com.marillia.milebag.business.rota.service.GeocodingClient;
-import com.marillia.milebag.business.rota.service.RoutingClient;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
+import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.core.geo.GeocodingClient;
+import com.marillia.milebag.core.geo.RotaAlternativa;
+import com.marillia.milebag.core.geo.RoutingClient;
 
 /**
  * Vincula/desvincula bagagens carona a uma entrega principal em andamento
@@ -34,19 +34,19 @@ public class BagagemCaronaService {
 
     private final BagagemCaronaRepository bagagemCaronaRepository;
     private final EntregaRepository entregaRepository;
-    private final BdoRepository bdoRepository;
+    private final BdoService bdoService;
     private final GeocodingClient geocodingClient;
     private final RoutingClient routingClient;
 
     public BagagemCaronaService(
             BagagemCaronaRepository bagagemCaronaRepository,
             EntregaRepository entregaRepository,
-            BdoRepository bdoRepository,
+            BdoService bdoService,
             GeocodingClient geocodingClient,
             RoutingClient routingClient) {
         this.bagagemCaronaRepository = bagagemCaronaRepository;
         this.entregaRepository = entregaRepository;
-        this.bdoRepository = bdoRepository;
+        this.bdoService = bdoService;
         this.geocodingClient = geocodingClient;
         this.routingClient = routingClient;
     }
@@ -127,6 +127,6 @@ public class BagagemCaronaService {
     }
 
     private Bdo buscarBdoOuFalhar(UUID bdoId) {
-        return bdoRepository.findById(bdoId).orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
+        return bdoService.buscarPorId(bdoId).orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
     }
 }

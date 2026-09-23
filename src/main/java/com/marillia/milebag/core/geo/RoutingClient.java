@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.rota.service;
+package com.marillia.milebag.core.geo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,19 +12,20 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.marillia.milebag.business.rota.model.Coordenada;
-import com.marillia.milebag.business.rota.model.RotaAlternativa;
 import com.marillia.milebag.core.config.ValhallaProperties;
 
 /**
  * Calcula alternativas de trajeto via Valhalla (endpoint {@code /route}, ver
  * research.md da feature 001, secao 5) - distancia, tempo estimado e o
- * indicador agregado de pedagio (FR-001/FR-002).
+ * indicador agregado de pedagio (FR-001/FR-002 da HU03). Cliente de
+ * infraestrutura puro (sem regra de negocio) - por isso vive em {@code
+ * core}, nao em {@code business.rota}, reaproveitado tambem por
+ * business.entrega.bagagemcarona.
  *
- * <p>Falha ou indisponibilidade do motor de rotas nao e um erro desta HU:
- * o Edge Case do spec.md preve areas sem cobertura suficiente, resolvido
- * deixando o motorista tracar rota propria - por isso este cliente devolve
- * lista vazia em vez de lancar excecao.</p>
+ * <p>Falha ou indisponibilidade do motor de rotas nao e um erro fatal: o
+ * Edge Case do spec.md da HU03 preve areas sem cobertura suficiente,
+ * resolvido deixando o motorista tracar rota propria - por isso este
+ * cliente devolve lista vazia em vez de lancar excecao.</p>
  */
 @Component
 public class RoutingClient {

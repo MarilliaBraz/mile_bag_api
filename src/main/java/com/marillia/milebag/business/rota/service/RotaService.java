@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.rota.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -12,35 +13,42 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
-import com.marillia.milebag.business.bdo.repository.BdoRepository;
+import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
-import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.rota.model.CalcularRotaRequest;
 import com.marillia.milebag.business.rota.model.CalcularRotaResponse;
-import com.marillia.milebag.business.rota.model.Coordenada;
 import com.marillia.milebag.business.rota.model.PropostaRota;
-import com.marillia.milebag.business.rota.model.RotaAlternativa;
 import com.marillia.milebag.business.rota.model.SelecionarRotaRequest;
 import com.marillia.milebag.business.rota.model.SelecionarRotaResponse;
-import com.marillia.milebag.business.rota.model.TipoSelecao;
 import com.marillia.milebag.business.rota.repository.PropostaRotaRepository;
+import com.marillia.milebag.business.viagem.service.SelecaoRotaProvider;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.EnderecoNaoGeocodificavelException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
+import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.core.geo.GeocodingClient;
+import com.marillia.milebag.core.geo.RotaAlternativa;
+import com.marillia.milebag.core.geo.RoutingClient;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 /**
  * Orquestra o calculo e a selecao de rota (US1 desta HU) - ver
- * contracts/rota-api.md.
+ * contracts/rota-api.md. Implementa {@link SelecaoRotaProvider} (porta
+ * definida por {@code viagem}, Dependency Inversion) para que {@code
+ * ViagemService} leia a rota selecionada sem {@code viagem} depender deste
+ * pacote - a unica dependencia direta entre os dois fica nesta classe
+ * (rota -> viagem), nunca no sentido inverso.
  */
 @Service
-public class RotaService {
+public class RotaService implements SelecaoRotaProvider {
 
     private static final Logger log = LoggerFactory.getLogger(RotaService.class);
     private static final double RAIO_TERRA_METROS = 6_371_000;
 
-    private final EntregaRepository entregaRepository;
-    private final BdoRepository bdoRepository;
+    private final EntregaService entregaService;
+    private final BdoService bdoService;
     private final PropostaRotaRepository propostaRotaRepository;
     private final GeocodingClient geocodingClient;
     private final RoutingClient routingClient;
@@ -48,20 +56,29 @@ public class RotaService {
     private final ObjectMapper objectMapper;
 
     public RotaService(
-            EntregaRepository entregaRepository,
-            BdoRepository bdoRepository,
+            EntregaService entregaService,
+            BdoService bdoService,
             PropostaRotaRepository propostaRotaRepository,
             GeocodingClient geocodingClient,
             RoutingClient routingClient,
             ViagemService viagemService,
             ObjectMapper objectMapper) {
-        this.entregaRepository = entregaRepository;
-        this.bdoRepository = bdoRepository;
+        this.entregaService = entregaService;
+        this.bdoService = bdoService;
         this.propostaRotaRepository = propostaRotaRepository;
         this.geocodingClient = geocodingClient;
         this.routingClient = routingClient;
         this.viagemService = viagemService;
         this.objectMapper = objectMapper;
+    }
+
+    /** Implementacao de {@link SelecaoRotaProvider} - consumida por {@code ViagemService.iniciarViagem}. */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RotaSelecionada> buscarSelecionada(UUID entregaId) {
+        return propostaRotaRepository.findById(entregaId)
+                .filter(p -> p.getTipoSelecao() != null && p.getRotaEscolhida() != null)
+                .map(p -> new RotaSelecionada(p.getTipoSelecao(), lerRotaEscolhida(p.getRotaEscolhida())));
     }
 
     @Transactional
@@ -185,12 +202,12 @@ public class RotaService {
     }
 
     private Bdo buscarBdoOuFalhar(UUID bdoId) {
-        return bdoRepository.findById(bdoId)
+        return bdoService.buscarPorId(bdoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("BDO da entrega nao encontrado."));
     }
 
     private Entrega buscarEntregaOuFalhar(UUID entregaId) {
-        return entregaRepository.findById(entregaId)
+        return entregaService.buscarPorId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada, ou ainda nao autoatribuida."));
     }
 
@@ -208,6 +225,14 @@ public class RotaService {
             });
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Falha ao ler as alternativas de rota persistidas.", e);
+        }
+    }
+
+    private RotaAlternativa lerRotaEscolhida(String json) {
+        try {
+            return objectMapper.readValue(json, RotaAlternativa.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Falha ao ler a rota escolhida persistida.", e);
         }
     }
 }

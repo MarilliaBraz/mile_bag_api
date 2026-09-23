@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.entrega.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -10,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
-import com.marillia.milebag.business.bdo.repository.BdoRepository;
+import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.mapper.EntregaMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaResponse;
@@ -22,7 +23,11 @@ import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
 /**
  * Autoatribuicao da entrega a partir de um BDO confirmado (US1 desta HU) -
- * ver contracts/entrega-api.md.
+ * ver contracts/entrega-api.md. Tambem e o unico ponto de escrita em {@code
+ * Entrega} para os demais dominios (viagem, comprovante, ocorrencia): eles
+ * chamam {@link #marcarEmAndamento}/{@link #marcarEncerradaComSucesso}/
+ * {@link #reabrirParaNovaTentativa} em vez de mutar a entidade direto,
+ * preservando o encapsulamento deste dominio (CONVENTIONS.md 2.1, SRP).
  */
 @Service
 public class EntregaService {
@@ -30,13 +35,40 @@ public class EntregaService {
     private static final Logger log = LoggerFactory.getLogger(EntregaService.class);
 
     private final EntregaRepository entregaRepository;
-    private final BdoRepository bdoRepository;
+    private final BdoService bdoService;
     private final EntregaMapper entregaMapper;
 
-    public EntregaService(EntregaRepository entregaRepository, BdoRepository bdoRepository, EntregaMapper entregaMapper) {
+    public EntregaService(EntregaRepository entregaRepository, BdoService bdoService, EntregaMapper entregaMapper) {
         this.entregaRepository = entregaRepository;
-        this.bdoRepository = bdoRepository;
+        this.bdoService = bdoService;
         this.entregaMapper = entregaMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Entrega> buscarPorId(UUID id) {
+        return entregaRepository.findById(id);
+    }
+
+    @Transactional
+    public void marcarEmAndamento(UUID entregaId) {
+        Entrega entrega = buscarOuFalhar(entregaId);
+        entrega.setStatus(EntregaStatus.EM_ANDAMENTO);
+        entregaRepository.save(entrega);
+    }
+
+    @Transactional
+    public void marcarEncerradaComSucesso(UUID entregaId) {
+        Entrega entrega = buscarOuFalhar(entregaId);
+        entrega.setStatus(EntregaStatus.ENCERRADA_COM_SUCESSO);
+        entregaRepository.save(entrega);
+    }
+
+    @Transactional
+    public void reabrirParaNovaTentativa(UUID entregaId) {
+        Entrega entrega = buscarOuFalhar(entregaId);
+        entrega.setStatus(EntregaStatus.REABERTA);
+        entrega.setMotoristaResponsavel(null);
+        entregaRepository.save(entrega);
     }
 
     @Transactional
@@ -64,14 +96,19 @@ public class EntregaService {
                 .toList();
     }
 
+    private Entrega buscarOuFalhar(UUID entregaId) {
+        return entregaRepository.findById(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+    }
+
     private Bdo buscarBdoConfirmadoOuFalhar(UUID bdoId) {
-        return bdoRepository.findById(bdoId)
+        return bdoService.buscarPorId(bdoId)
                 .filter(bdo -> bdo.getStatusConferencia() == StatusConferencia.CONFIRMADO)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado ou ainda nao confirmado."));
     }
 
     private Bdo buscarBdoOuFalhar(UUID bdoId) {
-        return bdoRepository.findById(bdoId)
+        return bdoService.buscarPorId(bdoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
     }
 }

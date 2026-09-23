@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import com.marillia.milebag.business.rota.model.TipoSelecao;
+import com.marillia.milebag.core.geo.TipoSelecao;
 
 public record CalculoRotaResponse(
         UUID id,
