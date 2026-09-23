@@ -16,13 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
-import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
-import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
@@ -36,10 +31,9 @@ import com.marillia.milebag.business.fechamento.model.StatusItemFechamento;
 import com.marillia.milebag.business.fechamento.model.TotalPorMotorista;
 import com.marillia.milebag.business.fechamento.repository.FechamentoRepository;
 import com.marillia.milebag.business.fechamento.repository.ItemFechamentoRepository;
-import com.marillia.milebag.business.tarifa.model.TabelaTarifa;
-import com.marillia.milebag.business.tarifa.service.TabelaTarifaService;
+import com.marillia.milebag.business.viagem.model.CampoAjusteViagem;
 import com.marillia.milebag.business.viagem.model.Trajeto;
-import com.marillia.milebag.business.viagem.model.TrechoPedagio;
+import com.marillia.milebag.business.viagem.service.AjusteViagemService;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
@@ -47,9 +41,11 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 
 /**
  * Gera e consulta fechamentos periodicos (US1 desta HU) - ver
- * contracts/fechamento-api.md. Orquestra business/tarifa e le
- * diretamente os campos finais de business/viagem (Trajeto), nunca
- * recalculando a partir de uma nova consulta a mapas (RN02).
+ * contracts/fechamento-api.md. Le o trajeto consolidado via {@code
+ * ViagemService}, mas nunca calcula quilometragem/tarifa/pedagio por conta
+ * propria - {@code AjusteViagemService} (business/viagem) e a fonte unica
+ * dessa resolucao desde HU17 (FR-006: usa o valor vigente, ajustado pelo
+ * motorista quando houver, nunca sempre o bruto do Trajeto).
  */
 @Service
 public class FechamentoService {
@@ -61,9 +57,7 @@ public class FechamentoService {
     private final ComprovanteEntregaService comprovanteEntregaService;
     private final EntregaService entregaService;
     private final ViagemService viagemService;
-    private final TabelaTarifaService tabelaTarifaService;
-    private final BagagemCaronaService bagagemCaronaService;
-    private final ObjectMapper objectMapper;
+    private final AjusteViagemService ajusteViagemService;
 
     public FechamentoService(
             FechamentoRepository fechamentoRepository,
@@ -71,17 +65,13 @@ public class FechamentoService {
             ComprovanteEntregaService comprovanteEntregaService,
             EntregaService entregaService,
             ViagemService viagemService,
-            TabelaTarifaService tabelaTarifaService,
-            BagagemCaronaService bagagemCaronaService,
-            ObjectMapper objectMapper) {
+            AjusteViagemService ajusteViagemService) {
         this.fechamentoRepository = fechamentoRepository;
         this.itemFechamentoRepository = itemFechamentoRepository;
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.entregaService = entregaService;
         this.viagemService = viagemService;
-        this.tabelaTarifaService = tabelaTarifaService;
-        this.bagagemCaronaService = bagagemCaronaService;
-        this.objectMapper = objectMapper;
+        this.ajusteViagemService = ajusteViagemService;
     }
 
     @Transactional
@@ -164,47 +154,31 @@ public class FechamentoService {
     }
 
     /**
-     * FR-006: uma falha de resolucao (tarifa ou pedagio) marca so aquela
-     * entrega como PENDENTE, sem interromper as demais.
-     *
-     * <p><b>Limitacao conhecida</b>: {@code Trajeto.pracasPedagioFinal}
-     * (HU04) guarda so um sinalizador textual de pedagio, sem valor
-     * monetario nem referencia a uma {@code PracaPedagio} especifica (foi
-     * construido antes de HU10 existir) - por isso, quando ha pedagio
-     * sinalizado, este item fica PENDENTE em vez de usar um valor
-     * inventado ou o de uma praca qualquer do cadastro do tenant.</p>
+     * FR-006 (HU12) + HU17 FR-006: os tres valores vem de {@code
+     * AjusteViagemService.resolverValorVigente} - ja ajustado pelo motorista
+     * quando houver um {@code AjusteViagem} mais recente, senao o valor
+     * original calculado (tarifa/pedagio). Uma falha de resolucao (tarifa
+     * nao configurada, ou pedagio sinalizado sem praca cadastrada
+     * vinculavel - ver javadoc de {@code AjusteViagemService}) marca so
+     * aquela entrega como PENDENTE, sem interromper as demais.
      */
     private ItemFechamento calcularItem(UUID fechamentoId, Entrega entrega) {
-        List<String> problemas = new ArrayList<>();
         UUID motoristaId = entrega.getMotoristaResponsavel();
 
         Trajeto trajeto = viagemService.buscarTrajetoPorEntrega(entrega.getId()).orElse(null);
         if (trajeto == null || trajeto.getKmIdaFinal() == null || trajeto.getKmVoltaFinal() == null) {
-            problemas.add("trajeto da viagem nao consolidado");
+            return new ItemFechamento(
+                    fechamentoId, entrega.getId(), motoristaId, null, null, StatusItemFechamento.PENDENTE, "trajeto da viagem nao consolidado");
         }
 
-        BigDecimal valorPagamento = null;
-        if (problemas.isEmpty()) {
-            BigDecimal kmTotal = trajeto.getKmIdaFinal().add(trajeto.getKmVoltaFinal()).add(kmComplementarBagagemCarona(entrega.getId()));
-
-            Optional<TabelaTarifa> tarifa = tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null);
-            if (tarifa.isEmpty()) {
-                problemas.add("nenhuma tarifa aplicavel configurada para o motorista/regiao");
-            } else {
-                BigDecimal fixo = tarifa.get().getValorFixo() != null ? tarifa.get().getValorFixo() : BigDecimal.ZERO;
-                BigDecimal porKm = tarifa.get().getValorPorKm() != null ? tarifa.get().getValorPorKm() : BigDecimal.ZERO;
-                valorPagamento = fixo.add(porKm.multiply(kmTotal));
-            }
+        List<String> problemas = new ArrayList<>();
+        Optional<BigDecimal> valorPagamento = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
+        if (valorPagamento.isEmpty()) {
+            problemas.add("nenhuma tarifa aplicavel configurada para o motorista/regiao");
         }
-
-        BigDecimal valorPedagio = null;
-        if (problemas.isEmpty()) {
-            List<TrechoPedagio> trechos = lerPracasPedagio(trajeto.getPracasPedagioFinal());
-            if (trechos != null && !trechos.isEmpty()) {
-                problemas.add("pedagio identificado no trajeto sem praca de pedagio cadastrada vinculavel (ver HU10)");
-            } else {
-                valorPedagio = BigDecimal.ZERO;
-            }
+        Optional<BigDecimal> valorPedagio = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO);
+        if (valorPedagio.isEmpty()) {
+            problemas.add("pedagio identificado no trajeto sem praca de pedagio cadastrada vinculavel (ver HU10)");
         }
 
         if (!problemas.isEmpty()) {
@@ -212,14 +186,7 @@ public class FechamentoService {
                     fechamentoId, entrega.getId(), motoristaId, null, null, StatusItemFechamento.PENDENTE, String.join("; ", problemas));
         }
         return new ItemFechamento(
-                fechamentoId, entrega.getId(), motoristaId, valorPagamento, valorPedagio, StatusItemFechamento.CALCULADO, null);
-    }
-
-    /** Edge Case do spec.md desta HU: bagagem carona entra na entrega principal, nunca como linha separada. */
-    private BigDecimal kmComplementarBagagemCarona(UUID entregaId) {
-        return bagagemCaronaService.listarPorEntrega(entregaId).stream()
-                .map(BagagemCarona::getQuilometragemComplementar)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                fechamentoId, entrega.getId(), motoristaId, valorPagamento.get(), valorPedagio.get(), StatusItemFechamento.CALCULADO, null);
     }
 
     private void verificarSobreposicao(LocalDate inicio, LocalDate fim) {
@@ -249,18 +216,6 @@ public class FechamentoService {
         return new FechamentoResponse(
                 fechamento.getId(), fechamento.getPeriodoInicio(), fechamento.getPeriodoFim(), fechamento.getGeradoEm(), fechamento.getStatus(),
                 totaisPorMotorista);
-    }
-
-    private List<TrechoPedagio> lerPracasPedagio(String json) {
-        if (json == null) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<TrechoPedagio>>() {
-            });
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Falha ao ler as pracas de pedagio do trajeto.", e);
-        }
     }
 
     public record GeracaoResultado(FechamentoResponse resumo, boolean novo) {
