@@ -3,6 +3,8 @@ package com.marillia.milebag.business.bdo.repository;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.Query;
+
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.core.base.BaseRepository;
 
@@ -20,4 +22,23 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
      * (campo-chave, ver spec.md "Assumptions").
      */
     List<Bdo> findByNumero(String numero);
+
+    /**
+     * Lista de BDOs disponiveis para autoatribuicao (HU19, FR-007): ja
+     * confirmados, de qualquer {@code origem} (inclusive {@code
+     * EMAIL_AUTOMATICO}, RF21), mas ainda sem uma {@code Entrega}
+     * associada. Nativa (nao JPQL) para o {@code NOT EXISTS} contra a
+     * tabela de outro dominio ficar explicito, mesmo padrao ja usado em
+     * {@code EntregaRepository.autoatribuirSeDisponivel} - a policy de RLS
+     * de {@code entrega} tambem se aplica dentro da subquery, entao so
+     * enxerga entregas do mesmo tenant (irrelevante aqui: um bdo_id so
+     * pertence a entregas do proprio tenant do BDO).
+     */
+    @Query(value = """
+            SELECT b.* FROM bdo b
+            WHERE b.status_conferencia = 'CONFIRMADO'
+              AND NOT EXISTS (SELECT 1 FROM entrega e WHERE e.bdo_id = b.id)
+            ORDER BY b.data_captura ASC
+            """, nativeQuery = true)
+    List<Bdo> findConfirmadosSemEntrega();
 }

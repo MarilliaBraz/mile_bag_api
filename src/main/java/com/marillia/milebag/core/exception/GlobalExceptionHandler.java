@@ -78,6 +78,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.GONE, "convite-expirado", ex.getMessage());
     }
 
+    @ExceptionHandler(AcessoNegadoException.class)
+    public ProblemDetail handleAcessoNegado(AcessoNegadoException ex) {
+        return problema(HttpStatus.FORBIDDEN, "acesso-negado", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {

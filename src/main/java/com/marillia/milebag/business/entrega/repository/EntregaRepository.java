@@ -19,6 +19,20 @@ public interface EntregaRepository extends BaseRepository<Entrega, UUID> {
     List<Entrega> findByMotoristaResponsavelAndStatus(UUID motoristaResponsavel, EntregaStatus status);
 
     /**
+     * Painel de entregas pendentes do motorista (HU19, FR-001) - os tres
+     * status "em aberto" do ciclo de vida (RD05), nunca {@code
+     * AGUARDANDO_ATRIBUICAO} (sem motorista ainda) nem {@code
+     * ENCERRADA_COM_SUCESSO} (concluida). Ordenado por {@code atualizadoEm}
+     * (nao {@code criadoEm}): para uma entrega reaberta (HU07) e
+     * reatribuida, {@code autoatribuirSeDisponivel} atualiza a MESMA linha
+     * (UPSERT por {@code bdo_id}) - {@code atualizadoEm} reflete a
+     * atribuicao atual, {@code criadoEm} ficaria preso na primeira
+     * atribuicao (data-model.md desta HU, campo {@code dataAutoatribuicao}).
+     */
+    List<Entrega> findByMotoristaResponsavelAndStatusInOrderByAtualizadoEmAsc(
+            UUID motoristaResponsavel, List<EntregaStatus> status);
+
+    /**
      * Cria a Entrega (se ainda nao existir para este BDO) ou atribui o
      * motorista a uma ja existente, em uma unica instrucao atomica -
      * garante a unicidade do motorista responsavel por constraint/instrucao
