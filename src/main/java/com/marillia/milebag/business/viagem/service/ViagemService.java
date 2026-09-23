@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
@@ -131,6 +133,7 @@ public class ViagemService {
         entregaService.marcarEmAndamento(entregaId);
 
         log.info("Viagem iniciada: trajeto {} para a entrega {}", trajeto.getId(), entregaId);
+        notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA);
         return trajetoMapper.toIniciadoResponse(trajeto, calculoInicial, checkpointPartida);
     }
 
@@ -180,10 +183,20 @@ public class ViagemService {
                 semCoordenadas));
 
         log.info("Checkpoint {} registrado no trajeto {}", request.tipo(), trajeto.getId());
-        if (TIPOS_MARCO_PROGRESSO.contains(request.tipo())) {
-            notificarAutomaticaComSeguranca(entregaId, request.tipo());
+        TipoEventoNotificacao evento = eventoDoMarco(request.tipo());
+        if (evento != null) {
+            notificarAutomaticaComSeguranca(entregaId, evento);
         }
         return trajetoMapper.toResponse(checkpoint);
+    }
+
+    /** HU18: so A_CAMINHO/CHEGADA viram evento de notificacao - PARTIDA/COMPROVANTE/OCORRENCIA nao (data-model.md desta HU). */
+    private TipoEventoNotificacao eventoDoMarco(TipoCheckpoint tipo) {
+        return switch (tipo) {
+            case A_CAMINHO -> TipoEventoNotificacao.A_CAMINHO;
+            case CHEGADA -> TipoEventoNotificacao.CHEGADA;
+            default -> null;
+        };
     }
 
     /** HU20, FR-006: o marco (a_caminho/chegada) mais recente da entrega, para o painel (HU19) - null quando nenhum foi registrado ainda. */
@@ -196,12 +209,11 @@ public class ViagemService {
     }
 
     /**
-     * FR-005: a notificacao nunca bloqueia nem falha o registro do marco
-     * (contracts/marcos-api.md desta HU) - vale tanto para o no-op atual
-     * quanto para a implementacao real de HU18, entao a protecao fica aqui,
-     * nao em cada implementacao de {@link MensagemService}.
+     * FR-005 (HU20): a notificacao nunca bloqueia nem falha o registro do
+     * marco/inicio de viagem (contracts/marcos-api.md, HU20) - a protecao
+     * fica aqui (chamador), nao dentro de {@link MensagemService}.
      */
-    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoCheckpoint tipoEvento) {
+    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoEventoNotificacao tipoEvento) {
         try {
             mensagemService.notificarAutomatica(entregaId, tipoEvento);
         } catch (RuntimeException e) {

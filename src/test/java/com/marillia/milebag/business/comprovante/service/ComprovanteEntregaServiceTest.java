@@ -22,6 +22,8 @@ import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.repository.ComprovanteEntregaRepository;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.storage.ArmazenamentoImagemService;
@@ -42,6 +44,8 @@ class ComprovanteEntregaServiceTest {
     private ArmazenamentoImagemService armazenamentoImagemService;
     @Mock
     private ViagemService viagemService;
+    @Mock
+    private MensagemService mensagemService;
 
     @InjectMocks
     private ComprovanteEntregaService comprovanteEntregaService;
@@ -62,6 +66,7 @@ class ComprovanteEntregaServiceTest {
         verify(viagemService).registrarCheckpoint(any(), any());
         verify(viagemService).encerrarTrajeto(any(), any());
         verify(entregaService).marcarEncerradaComSucesso(entregaId);
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
     }
 
     @Test

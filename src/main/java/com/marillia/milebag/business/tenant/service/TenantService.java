@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.tenant.service;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -75,5 +76,19 @@ public class TenantService {
     @Transactional(readOnly = true)
     public Tenant buscar(UUID id) {
         return tenantRepository.findById(id).orElseThrow(() -> new RecursoNaoEncontradoException("Tenant nao encontrado."));
+    }
+
+    /**
+     * {@code tenant} nao tem Row Level Security (e o proprio registro de
+     * tenants, lido fora do contexto de qualquer um deles) - ver
+     * {@code TenantEmailBdo} (HU02) para o mesmo raciocinio. Usado por
+     * processos em segundo plano sem tenant conhecido de antemao (ex.:
+     * {@code EmailInboundListener}/{@code TelegramWebhookController}, HU18),
+     * que tentam cada tenant ate encontrar o dono do recurso resolvido pelo
+     * canal externo (endereco de e-mail, chat do Telegram).
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> listarTodosOsIds() {
+        return tenantRepository.findAll().stream().map(Tenant::getId).toList();
     }
 }

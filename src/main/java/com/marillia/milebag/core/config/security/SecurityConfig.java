@@ -42,6 +42,11 @@ public class SecurityConfig {
                         // qualquer login (contracts/convite-api.md) - sem
                         // JWT a apresentar, entao publico por definicao.
                         .requestMatchers("/api/v1/convites/**").permitAll()
+                        // HU18: webhook chamado pelos servidores do Telegram,
+                        // nao pelo front-end - autenticado pelo cabecalho
+                        // X-Telegram-Bot-Api-Secret-Token (TelegramWebhookController),
+                        // nao por JWT de usuario.
+                        .requestMatchers("/api/v1/webhooks/telegram").permitAll()
                         // HU09: "perfil exigido: administrador do tenant"
                         // (contracts/tarifas-api.md) - primeiro endpoint
                         // deste projeto restrito por perfil, nao so por

@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
@@ -94,6 +96,7 @@ class ViagemServiceTest {
         verify(entregaService).marcarEmAndamento(entregaId);
         verify(trajetoRepository).save(any(Trajeto.class));
         verify(calculoRotaRepository).save(any(CalculoRota.class));
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA);
     }
 
     @Test
@@ -173,7 +176,7 @@ class ViagemServiceTest {
 
         viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, -23.5, -46.6));
 
-        verify(mensagemService).notificarAutomatica(entregaId, TipoCheckpoint.A_CAMINHO);
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.A_CAMINHO);
     }
 
     @Test

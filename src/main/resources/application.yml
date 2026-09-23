@@ -70,6 +70,27 @@ milebag:
     usuario: ${MILEBAG_IMAP_USUARIO:}
     senha: ${MILEBAG_IMAP_SENHA:}
     intervalo-consulta-ms: ${MILEBAG_IMAP_INTERVALO_MS:60000}
+  telegram:
+    # Bot unico da plataforma (HU18, FR-010) - criado via @BotFather, sem
+    # processo de aprovacao. Desabilitado por padrao ate o token existir.
+    habilitado: ${MILEBAG_TELEGRAM_HABILITADO:false}
+    bot-token: ${MILEBAG_TELEGRAM_BOT_TOKEN:}
+    bot-username: ${MILEBAG_TELEGRAM_BOT_USERNAME:}
+    # Validado no cabecalho X-Telegram-Bot-Api-Secret-Token do webhook de
+    # entrada - configurado junto ao setWebhook, nao e segredo de usuario.
+    webhook-secret: ${MILEBAG_TELEGRAM_WEBHOOK_SECRET:}
+  mensageria:
+    # Caixa de e-mail de recebimento da conversa com o passageiro (HU18) -
+    # distinta da caixa de BDO (milebag.imap acima). Desabilitada por
+    # padrao ate a infraestrutura self-hosted estar provisionada.
+    imap-habilitado: ${MILEBAG_MENSAGERIA_IMAP_HABILITADO:false}
+    imap-host: ${MILEBAG_MENSAGERIA_IMAP_HOST:}
+    imap-port: ${MILEBAG_MENSAGERIA_IMAP_PORT:993}
+    imap-usuario: ${MILEBAG_MENSAGERIA_IMAP_USUARIO:}
+    imap-senha: ${MILEBAG_MENSAGERIA_IMAP_SENHA:}
+    imap-intervalo-consulta-ms: ${MILEBAG_MENSAGERIA_IMAP_INTERVALO_MS:60000}
+    # Base do Reply-To por entrega: entrega-{entregaId}@<dominio-email>.
+    dominio-email: ${MILEBAG_MENSAGERIA_DOMINIO_EMAIL:mensagens.milebag.local}
   rotas:
     # Motor de rotas/geocodificacao open source (HU03) - ver research.md da
     # feature 001, secao 5.

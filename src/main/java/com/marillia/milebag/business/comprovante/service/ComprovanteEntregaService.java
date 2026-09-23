@@ -16,6 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.repository.ComprovanteEntregaRepository;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.model.EncerrarTrajetoRequest;
 import com.marillia.milebag.business.viagem.model.RegistrarCheckpointRequest;
 import com.marillia.milebag.business.viagem.model.TipoCheckpoint;
@@ -39,16 +41,19 @@ public class ComprovanteEntregaService {
     private final EntregaService entregaService;
     private final ArmazenamentoImagemService armazenamentoImagemService;
     private final ViagemService viagemService;
+    private final MensagemService mensagemService;
 
     public ComprovanteEntregaService(
             ComprovanteEntregaRepository comprovanteEntregaRepository,
             EntregaService entregaService,
             ArmazenamentoImagemService armazenamentoImagemService,
-            ViagemService viagemService) {
+            ViagemService viagemService,
+            MensagemService mensagemService) {
         this.comprovanteEntregaRepository = comprovanteEntregaRepository;
         this.entregaService = entregaService;
         this.armazenamentoImagemService = armazenamentoImagemService;
         this.viagemService = viagemService;
+        this.mensagemService = mensagemService;
     }
 
     /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code ComprovanteEntregaRepository} direto (CONVENTIONS.md 2.1). */
@@ -108,6 +113,7 @@ public class ComprovanteEntregaService {
         entregaService.marcarEncerradaComSucesso(entregaId);
 
         log.info("Comprovante {} registrado; entrega {} encerrada com sucesso.", comprovante.getId(), entregaId);
+        notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
         return new ComprovanteEntregaResultado(comprovante, true);
     }
 
@@ -128,6 +134,15 @@ public class ComprovanteEntregaService {
             return Instant.parse(dataHoraTexto);
         } catch (DateTimeParseException e) {
             throw new ComprovanteIncompletoException("A data/hora da captura e invalida; use o formato ISO 8601.");
+        }
+    }
+
+    /** FR-005/FR-005 (HU18/HU20): notificacao automatica nunca bloqueia nem falha o registro do comprovante. */
+    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoEventoNotificacao tipoEvento) {
+        try {
+            mensagemService.notificarAutomatica(entregaId, tipoEvento);
+        } catch (RuntimeException e) {
+            log.warn("Falha ao notificar automaticamente a entrega {} do evento {} - comprovante ja registrado, seguindo.", entregaId, tipoEvento, e);
         }
     }
 

@@ -34,7 +34,7 @@ public class EmailSenderSmtp implements EmailSender {
     }
 
     @Override
-    public void enviar(String destinatario, String assunto, String corpo) throws MessagingException {
+    public void enviar(String destinatario, String assunto, String corpo, String replyTo) throws MessagingException {
         if (!smtpProperties.habilitado()) {
             log.warn("Envio de e-mail desabilitado (milebag.smtp.habilitado=false) - nenhum e-mail enviado para {}.", destinatario);
             return;
@@ -56,6 +56,9 @@ public class EmailSenderSmtp implements EmailSender {
         Message mensagem = new MimeMessage(sessao);
         mensagem.setFrom(new InternetAddress(smtpProperties.remetente()));
         mensagem.setRecipients(Message.RecipientType.TO, InternetAddress.parse(destinatario));
+        if (replyTo != null && !replyTo.isBlank()) {
+            mensagem.setReplyTo(InternetAddress.parse(replyTo));
+        }
         mensagem.setSubject(assunto);
         mensagem.setText(corpo);
         Transport.send(mensagem);

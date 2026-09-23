@@ -15,6 +15,8 @@ import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.ocorrencia.model.Ocorrencia;
 import com.marillia.milebag.business.ocorrencia.model.OcorrenciaResponse;
 import com.marillia.milebag.business.ocorrencia.repository.OcorrenciaRepository;
@@ -33,14 +35,17 @@ public class OcorrenciaService {
     private final OcorrenciaRepository ocorrenciaRepository;
     private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final EntregaService entregaService;
+    private final MensagemService mensagemService;
 
     public OcorrenciaService(
             OcorrenciaRepository ocorrenciaRepository,
             MotivoOcorrenciaService motivoOcorrenciaService,
-            EntregaService entregaService) {
+            EntregaService entregaService,
+            MensagemService mensagemService) {
         this.ocorrenciaRepository = ocorrenciaRepository;
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.entregaService = entregaService;
+        this.mensagemService = mensagemService;
     }
 
     @Transactional
@@ -73,7 +78,17 @@ public class OcorrenciaService {
         log.info(
                 "Ocorrencia {} registrada para a entrega {} (motivo {}); entrega reaberta para nova tentativa.",
                 ocorrencia.getId(), entregaId, motivo.getId());
+        notificarAutomaticaComSeguranca(entregaId);
         return paraResponse(ocorrencia, EntregaStatus.REABERTA);
+    }
+
+    /** FR-005 (HU18/HU20): notificacao automatica nunca bloqueia nem falha o registro da ocorrencia. */
+    private void notificarAutomaticaComSeguranca(UUID entregaId) {
+        try {
+            mensagemService.notificarAutomatica(entregaId, TipoEventoNotificacao.OCORRENCIA_REGISTRADA);
+        } catch (RuntimeException e) {
+            log.warn("Falha ao notificar automaticamente a entrega {} da ocorrencia - ocorrencia ja registrada, seguindo.", entregaId, e);
+        }
     }
 
     @Transactional(readOnly = true)

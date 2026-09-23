@@ -20,6 +20,8 @@ import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaServic
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
+import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.ocorrencia.model.Ocorrencia;
 import com.marillia.milebag.business.ocorrencia.repository.OcorrenciaRepository;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -40,6 +42,8 @@ class OcorrenciaServiceTest {
     private MotivoOcorrenciaService motivoOcorrenciaService;
     @Mock
     private EntregaService entregaService;
+    @Mock
+    private MensagemService mensagemService;
 
     @InjectMocks
     private OcorrenciaService ocorrenciaService;
@@ -64,6 +68,7 @@ class OcorrenciaServiceTest {
 
         verify(motivoOcorrenciaService).buscarAtivoOuFalhar(motivoId);
         verify(entregaService).reabrirParaNovaTentativa(entregaId);
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.OCORRENCIA_REGISTRADA);
     }
 
     @Test
