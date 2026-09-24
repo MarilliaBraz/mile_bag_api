@@ -185,8 +185,15 @@ public class FechamentoService {
             return new ItemFechamento(
                     fechamentoId, entrega.getId(), motoristaId, null, null, StatusItemFechamento.PENDENTE, String.join("; ", problemas));
         }
+        // Dinheiro em 2 casas ja aqui: a coluna arredonda ao gravar, e sem isto o resumo devolvido por POST (valores em
+        // memoria, ex.: 233,216) divergia das consultas seguintes (233,22) e do total dos PDFs.
         return new ItemFechamento(
-                fechamentoId, entrega.getId(), motoristaId, valorPagamento.get(), valorPedagio.get(), StatusItemFechamento.CALCULADO, null);
+                fechamentoId, entrega.getId(), motoristaId, dinheiro(valorPagamento.get()), dinheiro(valorPedagio.get()),
+                StatusItemFechamento.CALCULADO, null);
+    }
+
+    private static BigDecimal dinheiro(BigDecimal valor) {
+        return valor.setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     private void verificarSobreposicao(LocalDate inicio, LocalDate fim) {

@@ -3,6 +3,7 @@ package com.marillia.milebag.business.viagem.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
+import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
@@ -65,6 +67,8 @@ class ViagemServiceTest {
     private TrajetoMapper trajetoMapper;
     @Mock
     private MensagemService mensagemService;
+    @Mock
+    private PracaPedagioService pracaPedagioService;
 
     private ViagemService viagemService;
 
@@ -72,7 +76,7 @@ class ViagemServiceTest {
     void setUp() {
         viagemService = new ViagemService(
                 entregaService, selecaoRotaProvider, trajetoRepository, calculoRotaRepository,
-                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService);
+                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService);
         // lenient: nem todo teste chega a exercitar os tres saves (ex.: os
         // testes de erro em iniciarViagem retornam antes deles).
         org.mockito.Mockito.lenient().when(trajetoRepository.save(any(Trajeto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -223,5 +227,37 @@ class ViagemServiceTest {
         when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
 
         assertThat(viagemService.marcoMaisRecente(entregaId)).isEmpty();
+    }
+
+    @Test
+    void iniciarViagemCongelaOValorVigenteDeCadaPracaDoTracado() throws Exception {
+        UUID entregaId = UUID.randomUUID();
+        UUID pracaComValor = UUID.randomUUID();
+        UUID pracaSemValor = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
+        RotaAlternativa rota = new RotaAlternativa("principal", 5000.0, 600, true, java.util.List.of(
+                new com.marillia.milebag.core.geo.PracaNaRota(pracaComValor, "Praca A", new java.math.BigDecimal("10.00")),
+                new com.marillia.milebag.core.geo.PracaNaRota(pracaSemValor, "Praca B", null)));
+        when(selecaoRotaProvider.buscarSelecionada(entregaId)).thenReturn(Optional.of(new SelecaoRotaProvider.RotaSelecionada(TipoSelecao.SUGERIDA, rota)));
+        when(pracaPedagioService.buscarValorVigenteEm(eq(pracaComValor), any())).thenReturn(Optional.of(new java.math.BigDecimal("11.50")));
+        when(pracaPedagioService.buscarValorVigenteEm(eq(pracaSemValor), any())).thenReturn(Optional.empty());
+        when(trajetoMapper.toIniciadoResponse(any(), any(), any()))
+                .thenReturn(new TrajetoIniciadoResponse(UUID.randomUUID(), TrajetoStatus.EM_EXECUCAO, Instant.now(), null, null));
+
+        viagemService.iniciarViagem(entregaId, new IniciarViagemRequest(-23.5, -46.6));
+
+        org.mockito.ArgumentCaptor<CalculoRota> salvo = org.mockito.ArgumentCaptor.forClass(CalculoRota.class);
+        verify(calculoRotaRepository).save(salvo.capture());
+        java.util.List<com.marillia.milebag.business.viagem.model.TrechoPedagio> trechos = new ObjectMapper().readValue(
+                salvo.getValue().getPracasPedagio(), new com.fasterxml.jackson.core.type.TypeReference<>() {
+                });
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos.get(0).pracaId()).isEqualTo(pracaComValor);
+        assertThat(trechos.get(0).valorUnitario()).isEqualByComparingTo("11.50");
+        assertThat(trechos.get(0).valorCadastrado()).isTrue();
+        // O valor congelado e o VIGENTE na data do calculo, nao o que veio na proposta (pode ter mudado desde entao).
+        assertThat(trechos.get(1).valorCadastrado()).isFalse();
+        assertThat(trechos.get(1).valorUnitario()).isNull();
     }
 }

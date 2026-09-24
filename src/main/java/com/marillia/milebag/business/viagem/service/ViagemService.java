@@ -3,6 +3,8 @@ package com.marillia.milebag.business.viagem.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
@@ -75,6 +78,7 @@ public class ViagemService {
     private final TrajetoMapper trajetoMapper;
     private final ObjectMapper objectMapper;
     private final MensagemService mensagemService;
+    private final PracaPedagioService pracaPedagioService;
 
     // @Lazy: a inversao por SelecaoRotaProvider tira a dependencia de PACOTE
     // (viagem nao importa nada de rota), mas em runtime o Spring ainda ve o
@@ -89,7 +93,9 @@ public class ViagemService {
             CheckpointGpsRepository checkpointGpsRepository,
             TrajetoMapper trajetoMapper,
             ObjectMapper objectMapper,
-            MensagemService mensagemService) {
+            MensagemService mensagemService,
+            PracaPedagioService pracaPedagioService) {
+        this.pracaPedagioService = pracaPedagioService;
         this.entregaService = entregaService;
         this.selecaoRotaProvider = selecaoRotaProvider;
         this.trajetoRepository = trajetoRepository;
@@ -292,16 +298,29 @@ public class ViagemService {
                 trajetoId,
                 km,
                 km,
-                escrever(construirPracasPedagio(alternativa.possuiPedagio())),
+                escrever(construirPracasPedagio(alternativa, dataHora)),
                 alternativa.duracaoSegundos(),
                 tipoSelecao,
                 dataHora,
                 ehRotaInicial);
     }
 
-    private List<TrechoPedagio> construirPracasPedagio(boolean possuiPedagio) {
-        return possuiPedagio
-                ? List.of(new TrechoPedagio("Pedagio identificado pelo motor de rotas (sem cadastro de pracas ainda)", false))
+    /**
+     * HU24: com pracas cadastradas no tracado, um trecho por praca com o valor vigente CONGELADO na data do calculo
+     * (mudancas de valor depois disso nao alteram a viagem). Sem nenhuma, cai no indicador agregado do motor de rotas.
+     */
+    private List<TrechoPedagio> construirPracasPedagio(RotaAlternativa alternativa, Instant dataHora) {
+        if (!alternativa.pracasPedagio().isEmpty()) {
+            LocalDate data = LocalDate.ofInstant(dataHora, ZoneId.systemDefault());
+            return alternativa.pracasPedagio().stream()
+                    .map(praca -> {
+                        Optional<BigDecimal> valor = pracaPedagioService.buscarValorVigenteEm(praca.pracaId(), data);
+                        return new TrechoPedagio(praca.nome(), valor.isPresent(), praca.pracaId(), valor.orElse(null));
+                    })
+                    .toList();
+        }
+        return alternativa.possuiPedagio()
+                ? List.of(new TrechoPedagio("Pedagio identificado pelo motor de rotas (nenhuma praca cadastrada no tracado)", false))
                 : List.of();
     }
 

@@ -229,4 +229,30 @@ class AjusteViagemServiceTest {
         when(ajusteViagemRepository.findByViagemIdOrderByCriadoEmDesc(viagemId)).thenReturn(List.of());
         assertThat(ajusteViagemService.temAjuste(viagemId)).isFalse();
     }
+
+    private void prepararPedagio(Trajeto trajeto, String trechosJson) {
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void resolverValorVigentePedagioSomaAsPracasValoradasEmIdaEVolta() {
+        String trechos = "[{\"descricao\":\"A\",\"valorCadastrado\":true,\"pracaId\":\"" + UUID.randomUUID() + "\",\"valorUnitario\":10.00},"
+                + "{\"descricao\":\"B\",\"valorCadastrado\":true,\"pracaId\":\"" + UUID.randomUUID() + "\",\"valorUnitario\":5.50}]";
+        Trajeto trajeto = trajetoConsolidado(UUID.randomUUID(), "10.000", "10.000", trechos);
+        prepararPedagio(trajeto, trechos);
+
+        // RN06: (10,00 + 5,50) por passagem x 2 (ida e volta).
+        assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO).get()).isEqualByComparingTo("31.00");
+    }
+
+    @Test
+    void resolverValorVigentePedagioVazioQuandoUmaPracaFicouSemValor() {
+        String trechos = "[{\"descricao\":\"A\",\"valorCadastrado\":true,\"pracaId\":\"" + UUID.randomUUID() + "\",\"valorUnitario\":10.00},"
+                + "{\"descricao\":\"B\",\"valorCadastrado\":false}]";
+        Trajeto trajeto = trajetoConsolidado(UUID.randomUUID(), "10.000", "10.000", trechos);
+        prepararPedagio(trajeto, trechos);
+
+        assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO)).isEmpty();
+    }
 }

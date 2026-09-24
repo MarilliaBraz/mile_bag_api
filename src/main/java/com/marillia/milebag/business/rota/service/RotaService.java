@@ -1,9 +1,11 @@
 package com.marillia.milebag.business.rota.service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,8 @@ import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.pedagio.model.PracaLocalizada;
+import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.rota.model.CalcularRotaRequest;
 import com.marillia.milebag.business.rota.model.CalcularRotaResponse;
 import com.marillia.milebag.business.rota.model.PropostaRota;
@@ -29,6 +33,8 @@ import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 import com.marillia.milebag.core.geo.Coordenada;
 import com.marillia.milebag.core.geo.GeocodingClient;
+import com.marillia.milebag.core.geo.GeometriaRota;
+import com.marillia.milebag.core.geo.PracaNaRota;
 import com.marillia.milebag.core.geo.RotaAlternativa;
 import com.marillia.milebag.core.geo.RoutingClient;
 import com.marillia.milebag.core.geo.TipoSelecao;
@@ -54,6 +60,8 @@ public class RotaService implements SelecaoRotaProvider {
     private final RoutingClient routingClient;
     private final ViagemService viagemService;
     private final ObjectMapper objectMapper;
+    private final PracaPedagioService pracaPedagioService;
+    private final double raioDeteccaoPedagioMetros;
 
     public RotaService(
             EntregaService entregaService,
@@ -62,7 +70,11 @@ public class RotaService implements SelecaoRotaProvider {
             GeocodingClient geocodingClient,
             RoutingClient routingClient,
             ViagemService viagemService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PracaPedagioService pracaPedagioService,
+            @Value("${milebag.pedagio.raio-deteccao-metros:150}") double raioDeteccaoPedagioMetros) {
+        this.pracaPedagioService = pracaPedagioService;
+        this.raioDeteccaoPedagioMetros = raioDeteccaoPedagioMetros;
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.propostaRotaRepository = propostaRotaRepository;
@@ -98,7 +110,10 @@ public class RotaService implements SelecaoRotaProvider {
                                 "Nao foi possivel geocodificar o endereco de entrega; informe uma coordenada manual."));
 
         Coordenada origem = request.origemAtual();
-        List<RotaAlternativa> alternativas = routingClient.calcularAlternativas(origem, destino);
+        List<PracaLocalizada> pracasLocalizadas = pracaPedagioService.listarLocalizadas(LocalDate.now());
+        List<RotaAlternativa> alternativas = routingClient.calcularAlternativasComTracado(origem, destino).stream()
+                .map(rota -> rota.alternativa().comPracas(pracasNoTracado(rota.tracado(), pracasLocalizadas)))
+                .toList();
 
         // Substitui a proposta anterior (Edge Case do spec.md): cada novo
         // calculo limpa qualquer selecao ja feita, ate a viagem comecar.
@@ -167,7 +182,16 @@ public class RotaService implements SelecaoRotaProvider {
         // tracado, ja que nenhum motor de rotas e chamado sobre um trajeto
         // desenhado manualmente. Duracao fica indefinida (0).
         double distanciaMetros = calcularDistanciaTracado(request.tracadoManual());
-        return new RotaAlternativa("propria", distanciaMetros, 0, false);
+        // HU24: o tracado desenhado pelo motorista tambem passa (ou nao) por pracas cadastradas.
+        List<PracaNaRota> pracas = pracasNoTracado(request.tracadoManual(), pracaPedagioService.listarLocalizadas(LocalDate.now()));
+        return new RotaAlternativa("propria", distanciaMetros, 0, false).comPracas(pracas);
+    }
+
+    /** Pracas cadastradas (HU10) a no maximo o raio de deteccao do tracado, com o valor vigente por passagem (so para exibir). */
+    private List<PracaNaRota> pracasNoTracado(List<Coordenada> tracado, List<PracaLocalizada> pracas) {
+        return GeometriaRota.proximosDoTracado(tracado, pracas, PracaLocalizada::localizacao, raioDeteccaoPedagioMetros).stream()
+                .map(praca -> new PracaNaRota(praca.id(), praca.nome(), praca.valorVigente()))
+                .toList();
     }
 
     private RotaAlternativa localizarAlternativa(PropostaRota proposta, String alternativaId) {

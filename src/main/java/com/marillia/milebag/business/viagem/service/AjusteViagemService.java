@@ -173,15 +173,23 @@ public class AjusteViagemService {
     }
 
     /**
-     * {@code Trajeto.pracasPedagioFinal} (HU04) guarda so um sinalizador
-     * textual de pedagio, sem valor monetario nem referencia a uma {@code
-     * PracaPedagio} especifica (HU10) - mesma limitacao ja documentada em
-     * {@code FechamentoService}. Sem trecho sinalizado, o pedagio original e
-     * zero; com trecho sinalizado, nao ha como calcular (vazio).
+     * {@code Trajeto.pracasPedagioFinal} guarda um trecho por praca cadastrada no tracado (HU24, com o valor
+     * por passagem congelado) ou, quando o motor de rotas so sinaliza pedagio, um trecho generico sem praca
+     * (HU04). Sem trecho, o pedagio original e zero.
      */
     private Optional<BigDecimal> calcularValorPedagioOriginal(Trajeto trajeto) {
         List<TrechoPedagio> trechos = lerPracasPedagio(trajeto.getPracasPedagioFinal());
-        return (trechos == null || trechos.isEmpty()) ? Optional.of(BigDecimal.ZERO) : Optional.empty();
+        if (trechos == null || trechos.isEmpty()) {
+            return Optional.of(BigDecimal.ZERO);
+        }
+        // HU24: so calcula se TODA praca do trajeto tem valor congelado; um trecho generico (pedagio sem praca
+        // cadastrada) ou uma praca sem valor vigente deixa o item pendente em vez de inventar um numero.
+        boolean todosValorados = trechos.stream().allMatch(trecho -> trecho.valorCadastrado() && trecho.valorUnitario() != null);
+        if (!todosValorados) {
+            return Optional.empty();
+        }
+        // RN06: reembolso de pedagio sempre ida e volta (2x o valor por passagem).
+        return Optional.of(trechos.stream().map(TrechoPedagio::valorUnitario).reduce(BigDecimal.ZERO, BigDecimal::add).multiply(BigDecimal.valueOf(2)));
     }
 
     private List<TrechoPedagio> lerPracasPedagio(String json) {

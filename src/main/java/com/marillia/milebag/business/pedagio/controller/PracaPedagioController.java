@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.marillia.milebag.business.pedagio.model.AdicionarValorRequest;
+import com.marillia.milebag.business.pedagio.model.DefinirLocalizacaoRequest;
 import com.marillia.milebag.business.pedagio.model.CriarPracaPedagioRequest;
 import com.marillia.milebag.business.pedagio.model.PracaPedagioResponse;
 import com.marillia.milebag.business.pedagio.model.ValorPedagioResponse;
@@ -39,12 +41,18 @@ public class PracaPedagioController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PracaPedagioResponse criar(@RequestBody CriarPracaPedagioRequest request) {
-        return pracaPedagioService.criarPraca(request.nome(), request.valor(), request.vigenteDesde());
+        return pracaPedagioService.criarPraca(request.nome(), request.valor(), request.vigenteDesde(), request.latitude(), request.longitude());
     }
 
     @GetMapping
     public List<PracaPedagioResponse> listar() {
         return pracaPedagioService.listarPracas();
+    }
+
+    /** HU24: localizacao da praca (ou as duas coordenadas nulas para remover) - e o que permite detectar a praca nas rotas. */
+    @PutMapping("/{id}/localizacao")
+    public PracaPedagioResponse definirLocalizacao(@PathVariable UUID id, @RequestBody DefinirLocalizacaoRequest request) {
+        return pracaPedagioService.definirLocalizacao(id, request.latitude(), request.longitude());
     }
 
     @GetMapping("/{id}/valores")

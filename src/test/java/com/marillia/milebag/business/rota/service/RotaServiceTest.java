@@ -25,6 +25,8 @@ import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.pedagio.model.PracaLocalizada;
+import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.rota.model.CalcularRotaRequest;
 import com.marillia.milebag.business.rota.model.CalcularRotaResponse;
 import com.marillia.milebag.business.rota.model.PropostaRota;
@@ -61,6 +63,8 @@ class RotaServiceTest {
     private RoutingClient routingClient;
     @Mock
     private ViagemService viagemService;
+    @Mock
+    private PracaPedagioService pracaPedagioService;
 
     private RotaService rotaService;
 
@@ -69,7 +73,8 @@ class RotaServiceTest {
         // ObjectMapper real (nao mock): calcular/selecionar dependem de
         // (de)serializacao JSON de verdade para persistir/ler PropostaRota.
         rotaService = new RotaService(
-                entregaService, bdoService, propostaRotaRepository, geocodingClient, routingClient, viagemService, new ObjectMapper());
+                entregaService, bdoService, propostaRotaRepository, geocodingClient, routingClient, viagemService, new ObjectMapper(),
+                pracaPedagioService, 150);
     }
 
     private Entrega entregaComBdo(UUID entregaId, UUID bdoId) {
@@ -130,7 +135,8 @@ class RotaServiceTest {
         Coordenada origem = new Coordenada(-23.5, -46.6);
         Coordenada destino = new Coordenada(-23.6, -46.7);
         List<RotaAlternativa> alternativas = List.of(new RotaAlternativa("principal", 5000.0, 600, false));
-        when(routingClient.calcularAlternativas(origem, destino)).thenReturn(alternativas);
+        when(routingClient.calcularAlternativasComTracado(origem, destino))
+                .thenReturn(List.of(new RoutingClient.RotaComTracado(alternativas.get(0), List.of(origem, destino))));
 
         CalcularRotaResponse resposta = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino));
 
@@ -222,5 +228,52 @@ class RotaServiceTest {
 
         assertThatThrownBy(() -> rotaService.selecionar(entregaId, new SelecionarRotaRequest(TipoSelecao.PROPRIA, null, null, "j")))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    // --- HU24: pracas de pedagio no tracado ---
+
+    private void prepararCalculo(UUID entregaId) {
+        UUID bdoId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComBdo(entregaId, bdoId)));
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(new Bdo()));
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void calcularAnexaAsPracasCadastradasPorOndeOTracadoPassaEMarcaPedagio() {
+        UUID entregaId = UUID.randomUUID();
+        prepararCalculo(entregaId);
+        Coordenada origem = new Coordenada(-16.0, -49.0);
+        Coordenada destino = new Coordenada(-16.0, -48.0);
+        // O motor de rotas diz "sem pedagio" (falta a tag no OpenStreetMap), mas ha uma praca cadastrada em cima do tracado.
+        when(routingClient.calcularAlternativasComTracado(origem, destino))
+                .thenReturn(List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, false), List.of(origem, destino))));
+        PracaLocalizada naRota = new PracaLocalizada(UUID.randomUUID(), "Praca da BR", new Coordenada(-16.0, -48.5), new java.math.BigDecimal("12.40"));
+        PracaLocalizada longe = new PracaLocalizada(UUID.randomUUID(), "Praca longe", new Coordenada(-15.0, -48.5), new java.math.BigDecimal("9.00"));
+        when(pracaPedagioService.listarLocalizadas(any())).thenReturn(List.of(naRota, longe));
+
+        CalcularRotaResponse resposta = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino));
+
+        RotaAlternativa principal = resposta.alternativas().get(0);
+        assertThat(principal.possuiPedagio()).isTrue();
+        assertThat(principal.pracasPedagio()).hasSize(1);
+        assertThat(principal.pracasPedagio().get(0).pracaId()).isEqualTo(naRota.id());
+        assertThat(principal.pracasPedagio().get(0).valor()).isEqualByComparingTo("12.40");
+    }
+
+    @Test
+    void calcularSemPracasNoTracadoMantemSoOIndicadorDoMotorDeRotas() {
+        UUID entregaId = UUID.randomUUID();
+        prepararCalculo(entregaId);
+        Coordenada origem = new Coordenada(-16.0, -49.0);
+        Coordenada destino = new Coordenada(-16.0, -48.0);
+        when(routingClient.calcularAlternativasComTracado(origem, destino))
+                .thenReturn(List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, true), List.of(origem, destino))));
+        when(pracaPedagioService.listarLocalizadas(any())).thenReturn(List.of());
+
+        RotaAlternativa principal = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino)).alternativas().get(0);
+
+        assertThat(principal.possuiPedagio()).isTrue();
+        assertThat(principal.pracasPedagio()).isEmpty();
     }
 }

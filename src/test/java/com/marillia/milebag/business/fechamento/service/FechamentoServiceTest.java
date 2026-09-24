@@ -207,4 +207,29 @@ class FechamentoServiceTest {
         org.mockito.Mockito.verify(itemFechamentoRepository, org.mockito.Mockito.never()).save(any());
         org.mockito.Mockito.verify(viagemService, org.mockito.Mockito.never()).buscarTrajetoPorEntrega(any());
     }
+
+    /** Valores em dinheiro saem com 2 casas ja na resposta do POST (antes vinham como 233,216 e so o banco arredondava). */
+    @Test
+    void gerarArredondaOsValoresDoItemParaCentavos() {
+        LocalDate inicio = LocalDate.of(2026, 5, 1);
+        LocalDate fim = LocalDate.of(2026, 5, 15);
+        when(fechamentoRepository.findByPeriodoInicioAndPeriodoFim(inicio, fim)).thenReturn(Optional.empty());
+        UUID entregaId = UUID.randomUUID();
+        ComprovanteEntrega comprovante = new ComprovanteEntrega(
+                entregaId, "foto.jpg", "Fulano", Instant.parse("2026-05-05T12:00:00Z"), 0, 0, false, null);
+        when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaEncerrada(entregaId, UUID.randomUUID())));
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        trajeto.consolidar(new BigDecimal("58.300"), new BigDecimal("58.300"), "[]", 600L, null);
+        when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).thenReturn(Optional.of(new BigDecimal("233.216")));
+        when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO)).thenReturn(Optional.of(new BigDecimal("17.005")));
+
+        fechamentoService.gerar(inicio, fim);
+
+        ArgumentCaptor<ItemFechamento> captor = ArgumentCaptor.forClass(ItemFechamento.class);
+        org.mockito.Mockito.verify(itemFechamentoRepository).save(captor.capture());
+        assertThat(captor.getValue().getValorPagamentoEntrega()).isEqualTo(new BigDecimal("233.22"));
+        assertThat(captor.getValue().getValorReembolsoPedagio()).isEqualTo(new BigDecimal("17.01"));
+    }
 }
