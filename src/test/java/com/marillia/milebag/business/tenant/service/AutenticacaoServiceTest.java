@@ -143,4 +143,34 @@ class AutenticacaoServiceTest {
         assertThatThrownBy(() -> service.autenticar("admin", "errada")).isInstanceOf(CredenciaisInvalidasException.class);
         service.autenticar("admin", "12345678");
     }
+
+    @Test
+    void motoristaDesativadoNaoEntraEDaOMesmoErroDeSenhaErrada() {
+        when(usuarioPlataformaRepository.findByLogin("joao")).thenReturn(Optional.empty());
+        when(tenantService.listarTodosOsIds()).thenReturn(List.of(tenantA));
+        Usuario motorista = new Usuario("joao", passwordEncoder.encode("12345678"), Papeis.MOTORISTA, "Joao");
+        motorista.setId(UUID.randomUUID());
+        motorista.definirAtivo(false);
+        when(usuarioRepository.findByEmailIgnoreCase("joao")).thenReturn(List.of(motorista));
+
+        assertThatThrownBy(() -> service.autenticar("joao", "12345678")).isInstanceOf(CredenciaisInvalidasException.class);
+    }
+
+    @Test
+    void loginJaExisteProcuraEmTodosOsTenantsEDevolveOTenantDaRequisicao() {
+        UUID tenantDoAdmin = UUID.randomUUID();
+        TenantContext.set(tenantDoAdmin);
+        try {
+            when(usuarioPlataformaRepository.findByLogin("joao")).thenReturn(Optional.empty());
+            when(tenantService.listarTodosOsIds()).thenReturn(List.of(tenantA, tenantB));
+            Usuario existente = new Usuario("joao", "hash", Papeis.MOTORISTA);
+            when(usuarioRepository.findByEmailIgnoreCase("joao"))
+                    .thenAnswer(chamada -> tenantB.equals(TenantContext.get()) ? List.of(existente) : List.of());
+
+            assertThat(service.loginJaExiste(" joao ")).isTrue();
+            assertThat(TenantContext.get()).as("o tenant de quem cadastra tem que ser restaurado").isEqualTo(tenantDoAdmin);
+        } finally {
+            TenantContext.clear();
+        }
+    }
 }

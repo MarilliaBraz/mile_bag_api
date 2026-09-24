@@ -77,6 +77,31 @@ public class AutenticacaoService {
         return new Sessao(jwtService.gerarToken(c.usuarioId(), c.tenantId(), c.papel()), c.papel());
     }
 
+    /**
+     * Se o login ja existe na plataforma ou em qualquer tenant (ativo ou nao). O login e unico no
+     * sistema todo porque o login de {@link #autenticar} nao informa a empresa. Restaura o tenant do
+     * contexto da requisicao (o de quem cadastra), que esta busca troca a cada tenant visitado.
+     */
+    public boolean loginJaExiste(String login) {
+        String procurado = login.trim();
+        if (Boolean.TRUE.equals(transacao.execute(status -> usuarioPlataformaRepository.findByLogin(procurado).isPresent()))) {
+            return true;
+        }
+        UUID tenantDaRequisicao = TenantContext.get();
+        try {
+            for (UUID tenantId : tenantService.listarTodosOsIds()) {
+                TenantContext.set(tenantId);
+                List<Usuario> encontrados = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(procurado));
+                if (!encontrados.isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            TenantContext.set(tenantDaRequisicao);
+        }
+    }
+
     private Optional<Credencial> buscarCredencial(String login, String senha) {
         Optional<Credencial> plataforma = transacao.execute(status -> usuarioPlataformaRepository.findByLogin(login)
                 .filter(u -> passwordEncoder.matches(senha, u.getSenhaHash()))
@@ -92,7 +117,8 @@ public class AutenticacaoService {
                 List<Usuario> usuarios = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(login));
                 for (Usuario usuario : usuarios) {
                     loginEncontrado = true;
-                    if (passwordEncoder.matches(senha, usuario.getSenhaHash())) {
+                    // Conta desativada (HU23) e tratada como senha errada: mesmo 401, sem revelar que o login existe.
+                    if (usuario.isAtivo() && passwordEncoder.matches(senha, usuario.getSenhaHash())) {
                         return Optional.of(new Credencial(usuario.getId(), tenantId, usuario.getPapel()));
                     }
                 }

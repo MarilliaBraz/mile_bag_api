@@ -10,4 +10,6 @@ public interface UsuarioRepository extends BaseRepository<Usuario, UUID> {
 
     /** Filtrado por tenant pela RLS: so enxerga o tenant do {@code TenantContext} da transacao. */
     List<Usuario> findByEmailIgnoreCase(String email);
+
+    List<Usuario> findByPapelOrderByNomeAscEmailAsc(String papel);
 }

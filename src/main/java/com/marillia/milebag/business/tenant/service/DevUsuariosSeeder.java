@@ -91,14 +91,14 @@ public class DevUsuariosSeeder implements ApplicationRunner {
             criarNoTenant(novoId, () -> tenantPlanoService.associarInicial(novoId, PLANO_DEV));
             tenantId = novoId;
         }
-        criarUsuarioSeAusente(tenantId, "empresa", Papeis.ADMINISTRADOR_TENANT);
-        criarUsuarioSeAusente(tenantId, "motorista", Papeis.MOTORISTA);
+        criarUsuarioSeAusente(tenantId, "empresa", Papeis.ADMINISTRADOR_TENANT, "Administrador Dev");
+        criarUsuarioSeAusente(tenantId, "motorista", Papeis.MOTORISTA, "Motorista Dev");
     }
 
-    private void criarUsuarioSeAusente(UUID tenantId, String login, String papel) {
+    private void criarUsuarioSeAusente(UUID tenantId, String login, String papel, String nome) {
         criarNoTenant(tenantId, () -> {
             if (usuarioRepository.findByEmailIgnoreCase(login).isEmpty()) {
-                usuarioRepository.save(new Usuario(login, passwordEncoder.encode(SENHA_DEV), papel));
+                usuarioRepository.save(new Usuario(login, passwordEncoder.encode(SENHA_DEV), papel, nome));
             }
         });
     }

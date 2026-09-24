@@ -62,6 +62,8 @@ public class SecurityConfig {
                         // deste projeto restrito por perfil, nao so por
                         // autenticacao.
                         .requestMatchers("/api/v1/tarifas/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU23: cadastro de motoristas so pelo administrador do tenant.
+                        .requestMatchers("/api/v1/motoristas/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         // HU10: leitura tambem liberada ao motorista (para
                         // exibir pedagios na escolha de rota, HU03), mas
                         // escrita (POST) continua restrita ao administrador
