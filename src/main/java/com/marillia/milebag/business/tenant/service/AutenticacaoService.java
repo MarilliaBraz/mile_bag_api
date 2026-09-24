@@ -1,6 +1,6 @@
 package com.marillia.milebag.business.tenant.service;
 
-import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,6 +10,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.marillia.milebag.business.tenant.model.Usuario;
+import com.marillia.milebag.business.tenant.model.UsuarioLogin;
+import com.marillia.milebag.business.tenant.repository.UsuarioLoginRepository;
 import com.marillia.milebag.business.tenant.repository.UsuarioPlataformaRepository;
 import com.marillia.milebag.business.tenant.repository.UsuarioRepository;
 import com.marillia.milebag.core.config.security.JwtService;
@@ -20,11 +22,9 @@ import com.marillia.milebag.core.exception.CredenciaisInvalidasException;
 /**
  * Login por usuario e senha (HU22) - emite o JWT que o resto da API ja valida.
  *
- * <p>O login chega sem tenant, mas {@code usuario} tem RLS por tenant: a busca
- * tenta cada tenant conhecido (mesma estrategia de {@code TelegramWebhookController},
- * HU18) dentro de uma transacao propria, para o {@code TenantAspect} aplicar o
- * tenant. Se o mesmo login existir em dois tenants, vale o primeiro cuja senha
- * confere. O administrador da plataforma (sem tenant) e consultado primeiro.</p>
+ * <p>O login chega sem tenant, mas {@code usuario} tem RLS por tenant. A tabela {@code usuario_login} (V32,
+ * mantida por trigger, sem RLS) diz de qual empresa e cada login, entao a busca vai direto ao tenant certo, em
+ * vez de tentar todos (HU26). O administrador da plataforma (sem tenant) e consultado primeiro.</p>
  */
 @Service
 public class AutenticacaoService {
@@ -40,8 +40,8 @@ public class AutenticacaoService {
     }
 
     private final UsuarioPlataformaRepository usuarioPlataformaRepository;
+    private final UsuarioLoginRepository usuarioLoginRepository;
     private final UsuarioRepository usuarioRepository;
-    private final TenantService tenantService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final LimitadorTentativasLogin limitador;
@@ -50,12 +50,11 @@ public class AutenticacaoService {
     private final String hashFalso;
 
     public AutenticacaoService(
-            UsuarioPlataformaRepository usuarioPlataformaRepository, UsuarioRepository usuarioRepository, TenantService tenantService,
-            PasswordEncoder passwordEncoder, JwtService jwtService, LimitadorTentativasLogin limitador,
-            PlatformTransactionManager transactionManager) {
+            UsuarioPlataformaRepository usuarioPlataformaRepository, UsuarioLoginRepository usuarioLoginRepository, UsuarioRepository usuarioRepository,
+            PasswordEncoder passwordEncoder, JwtService jwtService, LimitadorTentativasLogin limitador, PlatformTransactionManager transactionManager) {
         this.usuarioPlataformaRepository = usuarioPlataformaRepository;
+        this.usuarioLoginRepository = usuarioLoginRepository;
         this.usuarioRepository = usuarioRepository;
-        this.tenantService = tenantService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.limitador = limitador;
@@ -81,48 +80,22 @@ public class AutenticacaoService {
         return new Sessao(jwtService.gerarToken(c.usuarioId(), c.tenantId(), c.papel()), c.papel());
     }
 
-    /** Procura a conta de EMPRESA com este login (ignora maiusculas) em cada tenant; o administrador da plataforma nao entra aqui. */
+    /** Procura a conta de EMPRESA com este login (ignora maiusculas); o administrador da plataforma nao entra aqui. */
     public Optional<ContaLocalizada> localizarContaDeTenant(String login) {
-        String procurado = login.trim();
-        UUID tenantDaRequisicao = TenantContext.get();
-        try {
-            for (UUID tenantId : tenantService.listarTodosOsIds()) {
-                TenantContext.set(tenantId);
-                List<Usuario> encontrados = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(procurado));
-                if (!encontrados.isEmpty()) {
-                    Usuario conta = encontrados.get(0);
-                    return Optional.of(new ContaLocalizada(conta.getId(), tenantId, conta.isAtivo()));
-                }
-            }
-            return Optional.empty();
-        } finally {
-            TenantContext.set(tenantDaRequisicao);
-        }
+        return usuarioLoginRepository.findById(chave(login))
+                .flatMap(mapa -> lerConta(mapa).map(conta -> new ContaLocalizada(conta.getId(), mapa.getTenantId(), conta.isAtivo())));
     }
 
     /**
      * Se o login ja existe na plataforma ou em qualquer tenant (ativo ou nao). O login e unico no
-     * sistema todo porque o login de {@link #autenticar} nao informa a empresa. Restaura o tenant do
-     * contexto da requisicao (o de quem cadastra), que esta busca troca a cada tenant visitado.
+     * sistema todo porque o login de {@link #autenticar} nao informa a empresa.
      */
     public boolean loginJaExiste(String login) {
         String procurado = login.trim();
         if (Boolean.TRUE.equals(transacao.execute(status -> usuarioPlataformaRepository.findByLogin(procurado).isPresent()))) {
             return true;
         }
-        UUID tenantDaRequisicao = TenantContext.get();
-        try {
-            for (UUID tenantId : tenantService.listarTodosOsIds()) {
-                TenantContext.set(tenantId);
-                List<Usuario> encontrados = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(procurado));
-                if (!encontrados.isEmpty()) {
-                    return true;
-                }
-            }
-            return false;
-        } finally {
-            TenantContext.set(tenantDaRequisicao);
-        }
+        return usuarioLoginRepository.existsById(chave(login));
     }
 
     private Optional<Credencial> buscarCredencial(String login, String senha) {
@@ -133,25 +106,29 @@ public class AutenticacaoService {
             return plataforma;
         }
 
-        boolean loginEncontrado = false;
-        for (UUID tenantId : tenantService.listarTodosOsIds()) {
-            TenantContext.set(tenantId);
-            try {
-                List<Usuario> usuarios = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(login));
-                for (Usuario usuario : usuarios) {
-                    loginEncontrado = true;
-                    // Conta desativada (HU23) e tratada como senha errada: mesmo 401, sem revelar que o login existe.
-                    if (usuario.isAtivo() && passwordEncoder.matches(senha, usuario.getSenhaHash())) {
-                        return Optional.of(new Credencial(usuario.getId(), tenantId, usuario.getPapel()));
-                    }
-                }
-            } finally {
-                TenantContext.clear();
-            }
-        }
-        if (!loginEncontrado) {
+        Optional<UsuarioLogin> mapa = usuarioLoginRepository.findById(chave(login));
+        if (mapa.isEmpty()) {
             passwordEncoder.matches(senha, hashFalso);
+            return Optional.empty();
         }
-        return Optional.empty();
+        // Conta desativada (HU23) e tratada como senha errada: mesmo 401, sem revelar que o login existe.
+        return lerConta(mapa.get())
+                .filter(usuario -> usuario.isAtivo() && passwordEncoder.matches(senha, usuario.getSenhaHash()))
+                .map(usuario -> new Credencial(usuario.getId(), mapa.get().getTenantId(), usuario.getPapel()));
+    }
+
+    /** Le a conta no tenant dela (a RLS de {@code usuario} exige o tenant no contexto) e restaura o contexto que havia. */
+    private Optional<Usuario> lerConta(UsuarioLogin mapa) {
+        UUID tenantAnterior = TenantContext.get();
+        TenantContext.set(mapa.getTenantId());
+        try {
+            return transacao.execute(status -> usuarioRepository.findById(mapa.getUsuarioId()));
+        } finally {
+            TenantContext.set(tenantAnterior);
+        }
+    }
+
+    private static String chave(String login) {
+        return login.trim().toLowerCase(Locale.ROOT);
     }
 }
