@@ -141,6 +141,7 @@ class RelatorioMotoristaServiceTest {
         assertThat(relatorio.entregas()).hasSize(1);
         ItemRelatorioMotoristaResponse item = relatorio.entregas().get(0);
         assertThat(item.entregaId()).isEqualTo(entregaId);
+        assertThat(item.viagemId()).isEqualTo(trajeto.getId());
         assertThat(item.bdoNumero()).isEqualTo("BDO-123");
         assertThat(item.kmIda()).isEqualByComparingTo("10.000");
         assertThat(item.tarifaAplicada()).isEqualByComparingTo("90.00");

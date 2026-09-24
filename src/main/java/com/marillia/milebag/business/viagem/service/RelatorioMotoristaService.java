@@ -88,6 +88,7 @@ public class RelatorioMotoristaService {
         // pessoal do motorista, nunca um zero inventado.
         return Optional.of(new ItemRelatorioMotoristaResponse(
                 entrega.getId(),
+                trajeto.getId(),
                 bdoNumero,
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_IDA).orElse(null),
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_VOLTA).orElse(null),
