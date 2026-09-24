@@ -78,6 +78,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.GONE, "convite-expirado", ex.getMessage());
     }
 
+    @ExceptionHandler(CredenciaisInvalidasException.class)
+    public ProblemDetail handleCredenciaisInvalidas(CredenciaisInvalidasException ex) {
+        return problema(HttpStatus.UNAUTHORIZED, "credenciais-invalidas", ex.getMessage());
+    }
+
+    @ExceptionHandler(LoginBloqueadoException.class)
+    public ProblemDetail handleLoginBloqueado(LoginBloqueadoException ex) {
+        return problema(HttpStatus.TOO_MANY_REQUESTS, "login-bloqueado", ex.getMessage());
+    }
+
     @ExceptionHandler(AcessoNegadoException.class)
     public ProblemDetail handleAcessoNegado(AcessoNegadoException ex) {
         return problema(HttpStatus.FORBIDDEN, "acesso-negado", ex.getMessage());

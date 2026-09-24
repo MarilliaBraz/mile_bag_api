@@ -21,8 +21,7 @@ import io.jsonwebtoken.security.Keys;
  * multi-tenant documentada em {@code research.md} da feature 001, secao 3.
  *
  * <p>Este servico so cobre validacao/emissao do token em si. O fluxo de
- * login (verificacao de usuario/senha) pertence a uma historia de usuario
- * ainda nao especificada no backlog de HUs - fora do escopo desta classe.</p>
+ * login (verificacao de usuario/senha, HU22) fica em {@code AutenticacaoService}.</p>
  */
 @Service
 public class JwtService {

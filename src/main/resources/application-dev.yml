@@ -15,6 +15,9 @@ logging:
     org.hibernate.SQL: DEBUG
 
 milebag:
+  dev:
+    # Contas padrao com senha conhecida (admin / empresa / motorista, senha 12345678) - SO em desenvolvimento.
+    seed-usuarios: ${MILEBAG_DEV_SEED_USUARIOS:true}
   cors:
     # Vite muda de porta quando a padrao (5173) ja esta ocupada (comum numa
     # mesma maquina de dev) - liberar qualquer porta localhost evita ter que

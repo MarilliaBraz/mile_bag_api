@@ -50,6 +50,8 @@ public class SecurityConfig {
                         // qualquer login (contracts/convite-api.md) - sem
                         // JWT a apresentar, entao publico por definicao.
                         .requestMatchers("/api/v1/convites/**").permitAll()
+                        // HU22: o login emite o JWT - nao ha token a apresentar.
+                        .requestMatchers("/api/v1/auth/login").permitAll()
                         // HU18: webhook chamado pelos servidores do Telegram,
                         // nao pelo front-end - autenticado pelo cabecalho
                         // X-Telegram-Bot-Api-Secret-Token (TelegramWebhookController),

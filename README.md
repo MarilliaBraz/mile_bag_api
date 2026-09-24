@@ -56,8 +56,10 @@ Pre-requisitos: JDK 21, Maven, Docker. (Sem Maven instalado, use o binario do Ap
    e-mail local (certificado de uma CA de desenvolvimento) a JVM precisa do truststore gerado la:
    `-Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=<mile_bag_infra>/data/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"`.
 
-3. **Autenticar:** `node scripts/dev/emitir-tokens.cjs` imprime tokens de motorista, admin do tenant e
-   admin da plataforma (nao ha endpoint de login ainda).
+3. **Autenticar:** `POST /api/v1/auth/login` (HU22). No perfil `dev` a API cria contas padrao, todas com
+   senha `12345678`: `admin` (administrador da plataforma), `empresa` (administrador da empresa `dev`) e
+   `motorista`. **So para desenvolvimento** — sobem apenas com `milebag.dev.seed-usuarios=true` e o segredo
+   de JWT de desenvolvimento. `node scripts/dev/emitir-tokens.cjs` continua emitindo tokens avulsos para scripts.
 
 4. **Servicos externos** desabilitados por padrao (`milebag.smtp/imap/telegram/mensageria.*`); a
    geocodificacao usa o Nominatim publico. O bot do Telegram real nao esta provisionado (exige uma
