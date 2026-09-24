@@ -136,7 +136,10 @@ public class RelatorioFechamentoService {
             y -= altura + 10;
         }
         if (identidade.cabecalho() != null && !identidade.cabecalho().isBlank()) {
-            y = escreverLinha(conteudo, identidade.cabecalho(), PDType1Font.HELVETICA_BOLD, 12, y);
+            // O cabecalho vem de um textarea: showText nao aceita quebra de linha (CR/LF), entao cada linha e desenhada a parte.
+            for (String linha : identidade.cabecalho().strip().split("\\R", -1)) {
+                y = escreverLinha(conteudo, linha, PDType1Font.HELVETICA_BOLD, 12, y);
+            }
             y -= 10;
         }
         return y;
@@ -146,8 +149,23 @@ public class RelatorioFechamentoService {
         conteudo.beginText();
         conteudo.setFont(fonte, tamanho);
         conteudo.newLineAtOffset(50, y);
-        conteudo.showText(texto);
+        conteudo.showText(somenteCaracteresDaFonte(fonte, texto));
         conteudo.endText();
         return y - (tamanho + 6);
+    }
+
+    /** As fontes padrao do PDF so cobrem WinAnsi; texto livre do tenant (emoji, tab) derrubaria a geracao inteira. */
+    private String somenteCaracteresDaFonte(PDType1Font fonte, String texto) {
+        StringBuilder seguro = new StringBuilder(texto.length());
+        texto.codePoints().forEach(codigo -> {
+            String caractere = new String(Character.toChars(codigo));
+            try {
+                fonte.encode(caractere);
+                seguro.append(caractere);
+            } catch (IOException | IllegalArgumentException e) {
+                seguro.append(codigo == '\t' ? ' ' : '?');
+            }
+        });
+        return seguro.toString();
     }
 }
