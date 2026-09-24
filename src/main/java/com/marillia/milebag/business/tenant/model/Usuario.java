@@ -16,8 +16,9 @@ import lombok.NoArgsConstructor;
  * (o administrador de tenant ativado pelo convite) e HU23 as de motorista -
  * entidade tenant-scoped normal (estende {@link BaseEntity}: RLS padrao).
  * {@code papel} guarda a mesma string usada em {@code Papeis} (nao um enum) -
- * consistente com a claim {@code papel} do JWT. {@code email} e o login e nao
- * muda; senha, nome e {@code ativo} sim (HU23).
+ * consistente com a claim {@code papel} do JWT. {@code email} e o login: so o administrador
+ * o altera (HU26), e o trigger de V32 mantem o mapa login -> empresa em dia. Senha, nome e
+ * {@code ativo} tambem mudam (HU23).
  */
 @Entity
 @Table(name = "usuario")
@@ -25,7 +26,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Usuario extends BaseEntity {
 
-    @Column(updatable = false, length = 320)
+    @Column(length = 320)
     private String email;
 
     @Column(name = "senha_hash", length = 100)
@@ -63,6 +64,10 @@ public class Usuario extends BaseEntity {
 
     public void definirAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public void definirLogin(String novoLogin) {
+        this.email = novoLogin;
     }
 
     public void definirNome(String novoNome) {

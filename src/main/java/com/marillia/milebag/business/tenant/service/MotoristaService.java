@@ -1,5 +1,7 @@
 package com.marillia.milebag.business.tenant.service;
 
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,6 +12,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.marillia.milebag.business.tenant.model.Usuario;
+import com.marillia.milebag.business.tenant.repository.RedefinicaoSenhaRepository;
 import com.marillia.milebag.business.tenant.repository.UsuarioRepository;
 import com.marillia.milebag.core.config.security.Papeis;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -29,18 +32,27 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 public class MotoristaService {
 
     static final int TAMANHO_MINIMO_SENHA = 8;
+    /** Cada cadastro faz um hash BCrypt (~100 ms): o teto mantem o pedido dentro de poucos segundos. */
+    static final int MAXIMO_POR_LOTE = 100;
+    /** Sem caracteres que se confundem ao ditar/copiar (0/O, 1/l/I). */
+    private static final String ALFABETO_SENHA = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int TAMANHO_SENHA_GERADA = 12;
+    private static final SecureRandom ALEATORIO = new SecureRandom();
 
     private final UsuarioRepository usuarioRepository;
     private final AutenticacaoService autenticacaoService;
     private final PasswordEncoder passwordEncoder;
     private final SessaoUsuarioService sessaoUsuarioService;
+    private final RedefinicaoSenhaRepository redefinicaoSenhaRepository;
     private final TransactionTemplate escrita;
     private final TransactionTemplate leitura;
 
     public MotoristaService(
             UsuarioRepository usuarioRepository, AutenticacaoService autenticacaoService, PasswordEncoder passwordEncoder,
-            SessaoUsuarioService sessaoUsuarioService, PlatformTransactionManager transactionManager) {
+            SessaoUsuarioService sessaoUsuarioService, RedefinicaoSenhaRepository redefinicaoSenhaRepository,
+            PlatformTransactionManager transactionManager) {
         this.sessaoUsuarioService = sessaoUsuarioService;
+        this.redefinicaoSenhaRepository = redefinicaoSenhaRepository;
         this.usuarioRepository = usuarioRepository;
         this.autenticacaoService = autenticacaoService;
         this.passwordEncoder = passwordEncoder;
@@ -51,6 +63,55 @@ public class MotoristaService {
 
     public List<Usuario> listar() {
         return leitura.execute(status -> usuarioRepository.findByPapelOrderByNomeAscEmailAsc(Papeis.MOTORISTA));
+    }
+
+    /** Uma linha do lote (HU27): {@code senha} vazia pede uma senha gerada. */
+    public record NovoMotorista(String nome, String login, String senha) {
+    }
+
+    /** Resultado de uma linha do lote; {@code senhaGerada} so vem quando o sistema gerou a senha (nao ha como ler depois). */
+    public record ResultadoLote(int linha, String nome, String login, boolean criado, String mensagem, Usuario motorista, String senhaGerada) {
+    }
+
+    /**
+     * Cadastra varios motoristas de uma vez (HU27). Cada linha e independente: uma que falha (login repetido, senha curta...) nao
+     * impede as outras, e o resultado diz o que aconteceu com cada uma. Um login repetido DENTRO do lote conta como erro na 2a ocorrencia.
+     */
+    public List<ResultadoLote> criarEmLote(List<NovoMotorista> linhas) {
+        if (linhas == null || linhas.isEmpty()) {
+            throw new RegraNegocioException("informe ao menos um motorista.");
+        }
+        if (linhas.size() > MAXIMO_POR_LOTE) {
+            throw new RegraNegocioException("o lote aceita no maximo " + MAXIMO_POR_LOTE + " motoristas por vez.");
+        }
+        java.util.Set<String> vistos = new java.util.HashSet<>();
+        List<ResultadoLote> resultados = new java.util.ArrayList<>();
+        int numero = 0;
+        for (NovoMotorista linha : linhas) {
+            numero++;
+            String loginLimpo = linha.login() == null ? "" : linha.login().trim();
+            if (!loginLimpo.isEmpty() && !vistos.add(loginLimpo.toLowerCase(java.util.Locale.ROOT))) {
+                resultados.add(new ResultadoLote(numero, linha.nome(), loginLimpo, false, "login repetido neste lote", null, null));
+                continue;
+            }
+            boolean gerar = linha.senha() == null || linha.senha().isEmpty();
+            String senha = gerar ? gerarSenha() : linha.senha();
+            try {
+                Usuario criado = criar(linha.nome(), linha.login(), senha);
+                resultados.add(new ResultadoLote(numero, criado.getNome(), criado.getEmail(), true, null, criado, gerar ? senha : null));
+            } catch (RegraNegocioException | ConflitoException e) {
+                resultados.add(new ResultadoLote(numero, linha.nome(), loginLimpo, false, e.getMessage(), null, null));
+            }
+        }
+        return resultados;
+    }
+
+    private static String gerarSenha() {
+        StringBuilder senha = new StringBuilder(TAMANHO_SENHA_GERADA);
+        for (int i = 0; i < TAMANHO_SENHA_GERADA; i++) {
+            senha.append(ALFABETO_SENHA.charAt(ALEATORIO.nextInt(ALFABETO_SENHA.length())));
+        }
+        return senha.toString();
     }
 
     public Usuario criar(String nome, String login, String senha) {
@@ -73,19 +134,50 @@ public class MotoristaService {
         }
     }
 
-    /** PATCH parcial: aplica o nome e/ou o estado informados (ao menos um). */
-    public Usuario atualizar(UUID id, String nome, Boolean ativo) {
-        if (nome == null && ativo == null) {
-            throw new RegraNegocioException("informe nome e/ou ativo.");
+    /** PATCH parcial: aplica o nome, o login e/ou o estado informados (ao menos um). */
+    public Usuario atualizar(UUID id, String nome, String login, Boolean ativo) {
+        if (nome == null && login == null && ativo == null) {
+            throw new RegraNegocioException("informe nome, login e/ou ativo.");
         }
         Usuario atual = null;
         if (nome != null) {
             atual = renomear(id, nome);
         }
+        if (login != null) {
+            atual = alterarLogin(id, login);
+        }
         if (ativo != null) {
             atual = definirAtivo(id, ativo);
         }
         return atual;
+    }
+
+    /**
+     * Troca o login (HU26). Continua unico no sistema todo (mesma checagem do cadastro, mais o indice unico de V32/V29 contra a
+     * corrida). Um pedido de redefinicao de senha ainda pendente e cancelado: o link foi para o e-mail ANTIGO, e quem ainda tem
+     * acesso a ele nao pode mais assumir a conta.
+     */
+    public Usuario alterarLogin(UUID id, String novoLogin) {
+        if (novoLogin == null || novoLogin.isBlank()) {
+            throw new RegraNegocioException("login e obrigatorio.");
+        }
+        String loginLimpo = novoLogin.trim();
+        Usuario atual = leitura.execute(status -> buscarMotorista(id));
+        // So trocar a caixa das letras (Ana -> ana) nao muda a chave do mapa: nao precisa de checagem de unicidade.
+        if (!loginLimpo.equalsIgnoreCase(atual.getEmail()) && autenticacaoService.loginJaExiste(loginLimpo)) {
+            throw new ConflitoException("Ja existe uma conta com este login.");
+        }
+        try {
+            return escrita.execute(status -> {
+                Usuario motorista = buscarMotorista(id);
+                motorista.definirLogin(loginLimpo);
+                Instant agora = Instant.now();
+                redefinicaoSenhaRepository.findByUsuarioIdAndUsadoEmIsNull(id).forEach(pendente -> pendente.marcarUsada(agora));
+                return usuarioRepository.save(motorista);
+            });
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflitoException("Ja existe uma conta com este login.");
+        }
     }
 
     public Usuario definirAtivo(UUID id, Boolean ativo) {

@@ -26,8 +26,21 @@ public class MotoristaController {
     public record CriarMotoristaRequest(String nome, String login, String senha) {
     }
 
-    /** Ao menos um dos dois campos; o login nao muda (e a identidade da conta). */
-    public record AtualizarMotoristaRequest(String nome, Boolean ativo) {
+    /** Ao menos um dos tres campos. Trocar o login (HU26) cancela pedidos de redefinicao de senha pendentes. */
+    /** {@code senha} vazia/ausente: o sistema gera uma (HU27). */
+    public record LinhaLoteRequest(String nome, String login, String senha) {
+    }
+
+    public record CriarLoteRequest(List<LinhaLoteRequest> motoristas) {
+    }
+
+    public record ResultadoLinhaResponse(int linha, String nome, String login, boolean criado, String mensagem, UUID id, String senhaGerada) {
+    }
+
+    public record ResultadoLoteResponse(int criados, int comErro, List<ResultadoLinhaResponse> resultados) {
+    }
+
+    public record AtualizarMotoristaRequest(String nome, String login, Boolean ativo) {
     }
 
     public record RedefinirSenhaRequest(String senha) {
@@ -59,9 +72,25 @@ public class MotoristaController {
         return MotoristaResponse.de(motoristaService.criar(request.nome(), request.login(), request.senha()));
     }
 
+    /**
+     * Cadastro em lote (HU27): 200 sempre que o pedido e valido, mesmo com linhas que falharam - o corpo diz o que houve com cada
+     * uma. As senhas geradas so aparecem aqui; nao ficam guardadas em claro em lugar nenhum.
+     */
+    @PostMapping("/lote")
+    public ResultadoLoteResponse criarEmLote(@RequestBody CriarLoteRequest request) {
+        var linhas = request.motoristas() == null ? List.<MotoristaService.NovoMotorista>of()
+                : request.motoristas().stream().map(l -> new MotoristaService.NovoMotorista(l.nome(), l.login(), l.senha())).toList();
+        var resultados = motoristaService.criarEmLote(linhas).stream()
+                .map(r -> new ResultadoLinhaResponse(
+                        r.linha(), r.nome(), r.login(), r.criado(), r.mensagem(), r.motorista() == null ? null : r.motorista().getId(), r.senhaGerada()))
+                .toList();
+        int criados = (int) resultados.stream().filter(ResultadoLinhaResponse::criado).count();
+        return new ResultadoLoteResponse(criados, resultados.size() - criados, resultados);
+    }
+
     @PatchMapping("/{id}")
     public MotoristaResponse atualizar(@PathVariable UUID id, @RequestBody AtualizarMotoristaRequest request) {
-        return MotoristaResponse.de(motoristaService.atualizar(id, request.nome(), request.ativo()));
+        return MotoristaResponse.de(motoristaService.atualizar(id, request.nome(), request.login(), request.ativo()));
     }
 
     @PutMapping("/{id}/senha")

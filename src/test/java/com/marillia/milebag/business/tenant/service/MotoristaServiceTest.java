@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.marillia.milebag.business.tenant.model.Usuario;
+import com.marillia.milebag.business.tenant.repository.RedefinicaoSenhaRepository;
 import com.marillia.milebag.business.tenant.repository.UsuarioRepository;
 import com.marillia.milebag.core.config.security.Papeis;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -37,6 +38,8 @@ class MotoristaServiceTest {
     @Mock
     private SessaoUsuarioService sessaoUsuarioService;
     @Mock
+    private RedefinicaoSenhaRepository redefinicaoSenhaRepository;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -44,7 +47,7 @@ class MotoristaServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, sessaoUsuarioService, transactionManager);
+        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, sessaoUsuarioService, redefinicaoSenhaRepository, transactionManager);
     }
 
     @Test
@@ -155,9 +158,9 @@ class MotoristaServiceTest {
         when(usuarioRepository.findById(motorista.getId())).thenReturn(Optional.of(motorista));
         when(usuarioRepository.save(motorista)).thenReturn(motorista);
 
-        assertThat(service.atualizar(motorista.getId(), "  Joao Pedro ", null).getNome()).isEqualTo("Joao Pedro");
-        assertThatThrownBy(() -> service.atualizar(motorista.getId(), null, null)).isInstanceOf(RegraNegocioException.class);
-        assertThatThrownBy(() -> service.atualizar(motorista.getId(), " ", null)).isInstanceOf(RegraNegocioException.class);
+        assertThat(service.atualizar(motorista.getId(), "  Joao Pedro ", null, null).getNome()).isEqualTo("Joao Pedro");
+        assertThatThrownBy(() -> service.atualizar(motorista.getId(), null, null, null)).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.atualizar(motorista.getId(), " ", null, null)).isInstanceOf(RegraNegocioException.class);
     }
 
     @Test
@@ -166,6 +169,101 @@ class MotoristaServiceTest {
         when(usuarioRepository.save(any(Usuario.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_usuario_email_lower"));
 
         assertThatThrownBy(() -> service.criar("Joao", "joao", "senha-forte-1")).isInstanceOf(ConflitoException.class);
+    }
+
+    @Test
+    void trocarLoginGravaOnovoCancelaPedidosDeSenhaPendentesEChecaUnicidade() {
+        Usuario motorista = motorista();
+        UUID id = motorista.getId();
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(motorista));
+        when(usuarioRepository.save(motorista)).thenReturn(motorista);
+        when(autenticacaoService.loginJaExiste("joao.novo@empresa.com")).thenReturn(false);
+        com.marillia.milebag.business.tenant.model.RedefinicaoSenha pendente = new com.marillia.milebag.business.tenant.model.RedefinicaoSenha(
+                UUID.randomUUID(), id, "hash", java.time.Instant.now(), java.time.Instant.now().plusSeconds(600));
+        when(redefinicaoSenhaRepository.findByUsuarioIdAndUsadoEmIsNull(id)).thenReturn(java.util.List.of(pendente));
+
+        Usuario alterado = service.alterarLogin(id, "  joao.novo@empresa.com ");
+
+        assertThat(alterado.getEmail()).isEqualTo("joao.novo@empresa.com");
+        assertThat(pendente.getUsadoEm()).as("o link foi para o e-mail antigo").isNotNull();
+    }
+
+    @Test
+    void trocarLoginParaUmJaUsadoEConflitoESoMudarACaixaNaoConsultaNada() {
+        Usuario motorista = motorista();
+        UUID id = motorista.getId();
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(motorista));
+        when(autenticacaoService.loginJaExiste("outro")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.alterarLogin(id, "outro")).isInstanceOf(ConflitoException.class);
+        verify(usuarioRepository, never()).save(any());
+
+        when(usuarioRepository.save(motorista)).thenReturn(motorista);
+        service.alterarLogin(id, "JOAO");
+        verify(autenticacaoService, never()).loginJaExiste("JOAO");
+        assertThat(motorista.getEmail()).isEqualTo("JOAO");
+    }
+
+    @Test
+    void trocarLoginVazioERecusadoEACorridaNoIndiceVira409() {
+        Usuario motorista = motorista();
+        UUID id = motorista.getId();
+        assertThatThrownBy(() -> service.alterarLogin(id, " ")).isInstanceOf(RegraNegocioException.class);
+
+        when(usuarioRepository.findById(id)).thenReturn(Optional.of(motorista));
+        when(autenticacaoService.loginJaExiste("novo")).thenReturn(false);
+        when(usuarioRepository.save(motorista)).thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_usuario_email_lower"));
+
+        assertThatThrownBy(() -> service.alterarLogin(id, "novo")).isInstanceOf(ConflitoException.class);
+    }
+
+    @Test
+    void loteCadastraCadaLinhaPorContaPropriaGeraSenhaQuandoFaltaEContinuaAposUmErro() {
+        when(autenticacaoService.loginJaExiste("ana")).thenReturn(false);
+        when(autenticacaoService.loginJaExiste("bia")).thenReturn(true); // ja existe em alguma empresa
+        when(autenticacaoService.loginJaExiste("caio")).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> {
+            Usuario u = chamada.getArgument(0);
+            u.setId(UUID.randomUUID());
+            return u;
+        });
+
+        var resultados = service.criarEmLote(java.util.List.of(
+                new MotoristaService.NovoMotorista("Ana", "ana", null),
+                new MotoristaService.NovoMotorista("Bia", "bia", "senha-forte-1"),
+                new MotoristaService.NovoMotorista("Caio", "caio", "senha-forte-2")));
+
+        assertThat(resultados).extracting(MotoristaService.ResultadoLote::criado).containsExactly(true, false, true);
+        assertThat(resultados.get(0).senhaGerada()).hasSize(12).matches("[a-zA-Z2-9]+");
+        assertThat(passwordEncoder.matches(resultados.get(0).senhaGerada(), resultados.get(0).motorista().getSenhaHash())).isTrue();
+        assertThat(resultados.get(1).mensagem()).contains("Ja existe");
+        assertThat(resultados.get(2).senhaGerada()).as("senha informada nao volta na resposta").isNull();
+    }
+
+    @Test
+    void loteMarcaLoginRepetidoDentroDoProprioLoteEValidaCadaLinha() {
+        when(autenticacaoService.loginJaExiste("ana")).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> chamada.getArgument(0));
+
+        var resultados = service.criarEmLote(java.util.List.of(
+                new MotoristaService.NovoMotorista("Ana", "ana", "senha-forte-1"),
+                new MotoristaService.NovoMotorista("Ana 2", "ANA", "senha-forte-1"),
+                new MotoristaService.NovoMotorista("", "sem-nome", "senha-forte-1"),
+                new MotoristaService.NovoMotorista("Curta", "curta", "abc")));
+
+        assertThat(resultados).extracting(MotoristaService.ResultadoLote::criado).containsExactly(true, false, false, false);
+        assertThat(resultados.get(1).mensagem()).contains("repetido neste lote");
+        assertThat(resultados.get(2).mensagem()).contains("nome");
+        assertThat(resultados.get(3).mensagem()).contains("senha");
+        verify(usuarioRepository, org.mockito.Mockito.times(1)).save(any(Usuario.class));
+    }
+
+    @Test
+    void loteVazioOuGrandeDemaisERecusado() {
+        assertThatThrownBy(() -> service.criarEmLote(java.util.List.of())).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.criarEmLote(null)).isInstanceOf(RegraNegocioException.class);
+        var demais = java.util.Collections.nCopies(MotoristaService.MAXIMO_POR_LOTE + 1, new MotoristaService.NovoMotorista("X", "x", "senha-forte-1"));
+        assertThatThrownBy(() -> service.criarEmLote(demais)).isInstanceOf(RegraNegocioException.class);
     }
 
     private Usuario motorista() {
