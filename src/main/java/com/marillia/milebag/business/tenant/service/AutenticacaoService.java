@@ -35,6 +35,10 @@ public class AutenticacaoService {
     private record Credencial(UUID usuarioId, UUID tenantId, String papel) {
     }
 
+    /** Uma conta de empresa encontrada pelo login, sem a senha (HU25: recuperacao de senha). */
+    public record ContaLocalizada(UUID usuarioId, UUID tenantId, boolean ativo) {
+    }
+
     private final UsuarioPlataformaRepository usuarioPlataformaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TenantService tenantService;
@@ -75,6 +79,25 @@ public class AutenticacaoService {
         limitador.registrarSucesso(loginNormalizado);
         Credencial c = credencial.get();
         return new Sessao(jwtService.gerarToken(c.usuarioId(), c.tenantId(), c.papel()), c.papel());
+    }
+
+    /** Procura a conta de EMPRESA com este login (ignora maiusculas) em cada tenant; o administrador da plataforma nao entra aqui. */
+    public Optional<ContaLocalizada> localizarContaDeTenant(String login) {
+        String procurado = login.trim();
+        UUID tenantDaRequisicao = TenantContext.get();
+        try {
+            for (UUID tenantId : tenantService.listarTodosOsIds()) {
+                TenantContext.set(tenantId);
+                List<Usuario> encontrados = transacao.execute(status -> usuarioRepository.findByEmailIgnoreCase(procurado));
+                if (!encontrados.isEmpty()) {
+                    Usuario conta = encontrados.get(0);
+                    return Optional.of(new ContaLocalizada(conta.getId(), tenantId, conta.isAtivo()));
+                }
+            }
+            return Optional.empty();
+        } finally {
+            TenantContext.set(tenantDaRequisicao);
+        }
     }
 
     /**

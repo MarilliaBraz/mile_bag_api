@@ -33,7 +33,7 @@ public class UsuarioPlataforma {
     @Column(updatable = false, length = 100)
     private String login;
 
-    @Column(name = "senha_hash", updatable = false, length = 100)
+    @Column(name = "senha_hash", length = 100)
     private String senhaHash;
 
     @CreationTimestamp
@@ -43,5 +43,9 @@ public class UsuarioPlataforma {
     public UsuarioPlataforma(String login, String senhaHash) {
         this.login = login;
         this.senhaHash = senhaHash;
+    }
+
+    public void definirSenhaHash(String novoHash) {
+        this.senhaHash = novoHash;
     }
 }
