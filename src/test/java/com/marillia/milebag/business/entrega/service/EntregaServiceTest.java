@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
+import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaRepository;
 import com.marillia.milebag.business.entrega.mapper.EntregaMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
@@ -41,6 +44,8 @@ class EntregaServiceTest {
     private BdoService bdoService;
     @Mock
     private EntregaMapper entregaMapper;
+    @Mock
+    private BagagemCaronaRepository bagagemCaronaRepository;
 
     @InjectMocks
     private EntregaService entregaService;
@@ -134,5 +139,17 @@ class EntregaServiceTest {
 
         assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, motoristaId))
                 .isInstanceOf(ConflitoException.class);
+    }
+
+    @Test
+    void autoatribuirRecusaBdoJaVinculadoComoBagagemCarona() {
+        UUID bdoId = UUID.randomUUID();
+        Bdo bdo = new Bdo();
+        bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        when(bagagemCaronaRepository.findByBdoId(bdoId)).thenReturn(Optional.of(new BagagemCarona(bdoId, UUID.randomUUID(), BigDecimal.ONE)));
+
+        assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, UUID.randomUUID())).isInstanceOf(ConflitoException.class);
+        verify(entregaRepository, never()).autoatribuirSeDisponivel(any(), any(), any(), any());
     }
 }

@@ -33,18 +33,6 @@ public interface EntregaRepository extends BaseRepository<Entrega, UUID> {
             UUID motoristaResponsavel, List<EntregaStatus> status);
 
     /**
-     * "Motoristas ativos" do tenant (HU16, uso atual contra o limite do
-     * plano) - nao ha ainda um cadastro/papel MOTORISTA de {@code Usuario}
-     * nesta base de codigo (nenhuma HU implementada cria um), entao a
-     * metrica usada e o numero de motoristas distintos com ao menos uma
-     * entrega em aberto (mesmo conjunto de status "pendente" de HU19) -
-     * interpretacao operacional, nao normativa (spec.md desta HU deixa o
-     * calculo exato como responsabilidade de implementacao).
-     */
-    @Query("SELECT COUNT(DISTINCT e.motoristaResponsavel) FROM Entrega e WHERE e.status IN :status AND e.motoristaResponsavel IS NOT NULL")
-    long countDistinctMotoristaResponsavelByStatusIn(@Param("status") List<EntregaStatus> status);
-
-    /**
      * Cria a Entrega (se ainda nao existir para este BDO) ou atribui o
      * motorista a uma ja existente, em uma unica instrucao atomica -
      * garante a unicidade do motorista responsavel por constraint/instrucao

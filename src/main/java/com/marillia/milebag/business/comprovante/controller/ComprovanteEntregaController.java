@@ -3,12 +3,12 @@ package com.marillia.milebag.business.comprovante.controller;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -26,9 +26,9 @@ public class ComprovanteEntregaController {
         this.comprovanteEntregaService = comprovanteEntregaService;
     }
 
+    /** 201 para um comprovante novo; 200 quando e o reenvio do mesmo {@code idLocal} (nada foi criado). */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public ComprovanteEntregaResponse registrar(
+    public ResponseEntity<ComprovanteEntregaResponse> registrar(
             @PathVariable UUID entregaId,
             @RequestParam(value = "foto", required = false) MultipartFile foto,
             @RequestParam(value = "identificacaoRecebedor", required = false) String identificacaoRecebedor,
@@ -39,6 +39,6 @@ public class ComprovanteEntregaController {
             @RequestParam(value = "justificativaDivergencia", required = false) String justificativaDivergencia) {
         var resultado = comprovanteEntregaService.registrar(
                 entregaId, foto, identificacaoRecebedor, dataHora, latitude, longitude, idLocal, justificativaDivergencia);
-        return ComprovanteEntregaResponse.de(resultado.comprovante());
+        return ResponseEntity.status(resultado.novo() ? HttpStatus.CREATED : HttpStatus.OK).body(ComprovanteEntregaResponse.de(resultado.comprovante()));
     }
 }

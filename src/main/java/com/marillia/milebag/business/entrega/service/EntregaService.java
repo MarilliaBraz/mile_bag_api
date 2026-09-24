@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaRepository;
 import com.marillia.milebag.business.entrega.mapper.EntregaMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaResponse;
@@ -34,15 +35,15 @@ public class EntregaService {
 
     private static final Logger log = LoggerFactory.getLogger(EntregaService.class);
 
-    /** Mesmo conjunto de status "em aberto" usado pelo painel do motorista (HU19). */
-    private static final List<EntregaStatus> STATUS_PENDENTES =
-            List.of(EntregaStatus.ATRIBUIDA, EntregaStatus.EM_ANDAMENTO, EntregaStatus.REABERTA);
-
     private final EntregaRepository entregaRepository;
     private final BdoService bdoService;
     private final EntregaMapper entregaMapper;
+    private final BagagemCaronaRepository bagagemCaronaRepository;
 
-    public EntregaService(EntregaRepository entregaRepository, BdoService bdoService, EntregaMapper entregaMapper) {
+    public EntregaService(
+            EntregaRepository entregaRepository, BdoService bdoService, EntregaMapper entregaMapper,
+            BagagemCaronaRepository bagagemCaronaRepository) {
+        this.bagagemCaronaRepository = bagagemCaronaRepository;
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.entregaMapper = entregaMapper;
@@ -51,18 +52,6 @@ public class EntregaService {
     @Transactional(readOnly = true)
     public Optional<Entrega> buscarPorId(UUID id) {
         return entregaRepository.findById(id);
-    }
-
-    /**
-     * "Motoristas ativos" do tenant ambiente (HU16, uso atual contra o
-     * limite do plano) - ver javadoc de
-     * {@code EntregaRepository.countDistinctMotoristaResponsavelByStatusIn}
-     * para a interpretacao adotada (sem cadastro de motorista ainda nesta
-     * base de codigo).
-     */
-    @Transactional(readOnly = true)
-    public long contarMotoristasAtivos() {
-        return entregaRepository.countDistinctMotoristaResponsavelByStatusIn(STATUS_PENDENTES);
     }
 
     @Transactional
@@ -90,6 +79,10 @@ public class EntregaService {
     @Transactional
     public EntregaResponse autoatribuir(UUID bdoId, UUID motoristaId) {
         Bdo bdo = buscarBdoConfirmadoOuFalhar(bdoId);
+        // Um BDO ja vinculado como bagagem carona viaja junto de outra entrega: nao pode virar entrega propria.
+        if (bagagemCaronaRepository.findByBdoId(bdoId).isPresent()) {
+            throw new ConflitoException("Este BDO ja esta vinculado como bagagem carona de outra entrega.");
+        }
 
         int atribuidas = entregaRepository.autoatribuirSeDisponivel(
                 UUID.randomUUID(), TenantContext.get(), bdoId, motoristaId);

@@ -48,8 +48,17 @@ public class OcorrenciaService {
         this.mensagemService = mensagemService;
     }
 
+    /** {@code novo}: distingue um registro recem-criado de um reenvio idempotente (mesmo idLocal), para o controller escolher 201 ou 200. */
+    public record ResultadoRegistro(OcorrenciaResponse ocorrencia, boolean novo) {
+    }
+
     @Transactional
     public OcorrenciaResponse registrar(UUID entregaId, UUID motivoOcorrenciaId, String descricaoAdicional, String idLocal) {
+        return registrarComResultado(entregaId, motivoOcorrenciaId, descricaoAdicional, idLocal).ocorrencia();
+    }
+
+    @Transactional
+    public ResultadoRegistro registrarComResultado(UUID entregaId, UUID motivoOcorrenciaId, String descricaoAdicional, String idLocal) {
         Entrega entrega = buscarEntregaOuFalhar(entregaId);
         if (entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO) {
             throw new ConflitoException("Esta entrega ja foi encerrada com comprovante de entrega.");
@@ -60,7 +69,7 @@ public class OcorrenciaService {
             Optional<Ocorrencia> existente = ocorrenciaRepository.findByEntregaIdAndIdLocal(entregaId, idLocal);
             if (existente.isPresent()) {
                 log.info("Ocorrencia da entrega {} ja registrada com o mesmo idLocal - retorno idempotente.", entregaId);
-                return paraResponse(existente.get(), entrega.getStatus());
+                return new ResultadoRegistro(paraResponse(existente.get(), entrega.getStatus()), false);
             }
         }
 
@@ -79,7 +88,7 @@ public class OcorrenciaService {
                 "Ocorrencia {} registrada para a entrega {} (motivo {}); entrega reaberta para nova tentativa.",
                 ocorrencia.getId(), entregaId, motivo.getId());
         notificarAutomaticaComSeguranca(entregaId);
-        return paraResponse(ocorrencia, EntregaStatus.REABERTA);
+        return new ResultadoRegistro(paraResponse(ocorrencia, EntregaStatus.REABERTA), true);
     }
 
     /** FR-005 (HU18/HU20): notificacao automatica nunca bloqueia nem falha o registro da ocorrencia. */

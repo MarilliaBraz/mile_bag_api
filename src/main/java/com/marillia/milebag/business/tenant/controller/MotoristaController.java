@@ -26,7 +26,8 @@ public class MotoristaController {
     public record CriarMotoristaRequest(String nome, String login, String senha) {
     }
 
-    public record AtualizarAtivoRequest(Boolean ativo) {
+    /** Ao menos um dos dois campos; o login nao muda (e a identidade da conta). */
+    public record AtualizarMotoristaRequest(String nome, Boolean ativo) {
     }
 
     public record RedefinirSenhaRequest(String senha) {
@@ -59,8 +60,8 @@ public class MotoristaController {
     }
 
     @PatchMapping("/{id}")
-    public MotoristaResponse atualizarAtivo(@PathVariable UUID id, @RequestBody AtualizarAtivoRequest request) {
-        return MotoristaResponse.de(motoristaService.definirAtivo(id, request.ativo()));
+    public MotoristaResponse atualizar(@PathVariable UUID id, @RequestBody AtualizarMotoristaRequest request) {
+        return MotoristaResponse.de(motoristaService.atualizar(id, request.nome(), request.ativo()));
     }
 
     @PutMapping("/{id}/senha")

@@ -1,5 +1,7 @@
 package com.marillia.milebag.business.tenant.model;
 
+import java.time.Instant;
+
 import com.marillia.milebag.core.base.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -40,6 +42,10 @@ public class Usuario extends BaseEntity {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    /** Sessoes (JWT) emitidas antes deste instante nao valem mais; nulo = nenhuma revogacao. */
+    @Column(name = "tokens_validos_desde")
+    private Instant tokensValidosDesde;
+
     public Usuario(String email, String senhaHash, String papel) {
         this(email, senhaHash, papel, null);
     }
@@ -57,5 +63,14 @@ public class Usuario extends BaseEntity {
 
     public void definirAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public void definirNome(String novoNome) {
+        this.nome = novoNome;
+    }
+
+    /** Invalida todas as sessoes ja emitidas (conta desativada ou senha redefinida). */
+    public void revogarSessoesAnteriores() {
+        this.tokensValidosDesde = Instant.now();
     }
 }

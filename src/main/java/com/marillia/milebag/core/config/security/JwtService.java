@@ -70,6 +70,7 @@ public class JwtService {
         String tenantIdClaim = claims.get(CLAIM_TENANT_ID, String.class);
         UUID tenantId = tenantIdClaim != null ? UUID.fromString(tenantIdClaim) : null;
         String papel = claims.get(CLAIM_PAPEL, String.class);
-        return new AuthenticatedUser(userId, tenantId, papel);
+        Date emitidoEm = claims.getIssuedAt();
+        return new AuthenticatedUser(userId, tenantId, papel, emitidoEm != null ? emitidoEm.toInstant() : null);
     }
 }

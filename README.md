@@ -59,7 +59,7 @@ Pre-requisitos: JDK 21, Maven, Docker. (Sem Maven instalado, use o binario do Ap
 3. **Autenticar:** `POST /api/v1/auth/login` (HU22). No perfil `dev` a API cria contas padrao, todas com
    senha `12345678`: `admin` (administrador da plataforma), `empresa` (administrador da empresa `dev`) e
    `motorista`. **So para desenvolvimento** — sobem apenas com `milebag.dev.seed-usuarios=true` e o segredo
-   de JWT de desenvolvimento. `node scripts/dev/emitir-tokens.cjs` continua emitindo tokens avulsos para scripts.
+   de JWT de desenvolvimento. Para scripts, faca o login pela API e use o `token` devolvido (o antigo `scripts/dev/emitir-tokens.cjs` foi removido: seus tokens eram de usuarios inexistentes e a API agora recusa sessao de conta que nao esta no banco).
 
 4. **Servicos externos** desabilitados por padrao (`milebag.smtp/imap/telegram/mensageria.*`); a
    geocodificacao usa o Nominatim publico. O bot do Telegram real nao esta provisionado (exige uma

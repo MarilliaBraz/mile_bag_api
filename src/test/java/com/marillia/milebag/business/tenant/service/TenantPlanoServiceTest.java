@@ -20,13 +20,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.marillia.milebag.business.bdo.service.BdoService;
-import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.tenant.model.HistoricoPlanoTenant;
 import com.marillia.milebag.business.tenant.model.PlanoAssinatura;
 import com.marillia.milebag.business.tenant.model.PlanoVigenteConsulta;
 import com.marillia.milebag.business.tenant.model.TrocaPlanoResultado;
 import com.marillia.milebag.business.tenant.repository.HistoricoPlanoTenantRepository;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
+import com.marillia.milebag.business.tenant.repository.UsuarioRepository;
+import com.marillia.milebag.core.config.security.Papeis;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
 /** Cobre HU16 (US1): associacao inicial e troca de plano de um tenant. */
@@ -40,7 +41,7 @@ class TenantPlanoServiceTest {
     @Mock
     private TenantRepository tenantRepository;
     @Mock
-    private EntregaService entregaService;
+    private UsuarioRepository usuarioRepository;
     @Mock
     private BdoService bdoService;
 
@@ -49,7 +50,7 @@ class TenantPlanoServiceTest {
     @BeforeEach
     void setUp() {
         tenantPlanoService = new TenantPlanoService(
-                historicoPlanoTenantRepository, planoAssinaturaService, tenantRepository, entregaService, bdoService);
+                historicoPlanoTenantRepository, planoAssinaturaService, tenantRepository, usuarioRepository, bdoService);
         // lenient: nem todo teste chega a salvar (ex.: trocarPlanoLancaQuandoTenantNaoExiste).
         org.mockito.Mockito.lenient()
                 .when(historicoPlanoTenantRepository.save(any(HistoricoPlanoTenant.class)))
@@ -91,7 +92,7 @@ class TenantPlanoServiceTest {
         when(planoAssinaturaService.buscarOuFalhar(planoNovoId)).thenReturn(planoNovo);
         HistoricoPlanoTenant vigenteAnterior = new HistoricoPlanoTenant(tenantId, planoAntigoId, Instant.now(), false);
         when(historicoPlanoTenantRepository.findByTenantIdAndVigenteAteIsNull(tenantId)).thenReturn(Optional.of(vigenteAnterior));
-        when(entregaService.contarMotoristasAtivos()).thenReturn(5L);
+        when(usuarioRepository.countByPapelAndAtivoTrue(Papeis.MOTORISTA)).thenReturn(5L);
         when(bdoService.contarNoMesCorrente()).thenReturn(100L);
 
         TrocaPlanoResultado resultado = tenantPlanoService.trocarPlano(tenantId, planoNovoId);
@@ -113,7 +114,7 @@ class TenantPlanoServiceTest {
         PlanoAssinatura planoRestrito = new PlanoAssinatura("Plano Basico", 2, 10);
         when(planoAssinaturaService.buscarOuFalhar(planoNovoId)).thenReturn(planoRestrito);
         when(historicoPlanoTenantRepository.findByTenantIdAndVigenteAteIsNull(tenantId)).thenReturn(Optional.empty());
-        when(entregaService.contarMotoristasAtivos()).thenReturn(5L); // acima do limite de 2
+        when(usuarioRepository.countByPapelAndAtivoTrue(Papeis.MOTORISTA)).thenReturn(5L); // acima do limite de 2
         when(bdoService.contarNoMesCorrente()).thenReturn(3L);
 
         TrocaPlanoResultado resultado = tenantPlanoService.trocarPlano(tenantId, planoNovoId);
@@ -129,7 +130,7 @@ class TenantPlanoServiceTest {
         HistoricoPlanoTenant vigente = new HistoricoPlanoTenant(tenantId, planoId, Instant.now(), false);
         when(historicoPlanoTenantRepository.findByTenantIdAndVigenteAteIsNull(tenantId)).thenReturn(Optional.of(vigente));
         when(planoAssinaturaService.buscarOuFalhar(planoId)).thenReturn(plano);
-        when(entregaService.contarMotoristasAtivos()).thenReturn(3L);
+        when(usuarioRepository.countByPapelAndAtivoTrue(Papeis.MOTORISTA)).thenReturn(3L);
         when(bdoService.contarNoMesCorrente()).thenReturn(600L); // acima do limite de 500
 
         PlanoVigenteConsulta consulta = tenantPlanoService.consultarVigente(tenantId);

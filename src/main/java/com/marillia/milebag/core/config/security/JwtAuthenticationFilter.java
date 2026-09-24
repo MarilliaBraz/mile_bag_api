@@ -32,9 +32,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final SessaoValidador sessaoValidador;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, SessaoValidador sessaoValidador) {
         this.jwtService = jwtService;
+        this.sessaoValidador = sessaoValidador;
     }
 
     @Override
@@ -50,6 +52,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 AuthenticatedUser usuario = jwtService.validarToken(token);
 
                 TenantContext.set(usuario.tenantId());
+
+                // Token com assinatura valida mas de sessao revogada (conta desativada, senha trocada): segue sem autenticacao.
+                if (!sessaoValidador.sessaoValida(usuario)) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + usuario.papel()));
                 var authentication = new UsernamePasswordAuthenticationToken(usuario, null, authorities);

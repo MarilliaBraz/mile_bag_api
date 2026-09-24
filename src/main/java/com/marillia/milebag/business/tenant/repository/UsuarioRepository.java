@@ -12,4 +12,7 @@ public interface UsuarioRepository extends BaseRepository<Usuario, UUID> {
     List<Usuario> findByEmailIgnoreCase(String email);
 
     List<Usuario> findByPapelOrderByNomeAscEmailAsc(String papel);
+
+    /** "Motoristas ativos" do tenant (HU16): contas de motorista nao desativadas. */
+    long countByPapelAndAtivoTrue(String papel);
 }

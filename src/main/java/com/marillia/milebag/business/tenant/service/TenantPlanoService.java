@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.service.BdoService;
-import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.tenant.model.HistoricoPlanoTenant;
 import com.marillia.milebag.business.tenant.model.PlanoAssinatura;
 import com.marillia.milebag.business.tenant.model.PlanoVigenteConsulta;
@@ -17,6 +16,8 @@ import com.marillia.milebag.business.tenant.model.TrocaPlanoResultado;
 import com.marillia.milebag.business.tenant.model.UsoAtual;
 import com.marillia.milebag.business.tenant.repository.HistoricoPlanoTenantRepository;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
+import com.marillia.milebag.business.tenant.repository.UsuarioRepository;
+import com.marillia.milebag.core.config.security.Papeis;
 import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
@@ -33,19 +34,19 @@ public class TenantPlanoService {
     private final HistoricoPlanoTenantRepository historicoPlanoTenantRepository;
     private final PlanoAssinaturaService planoAssinaturaService;
     private final TenantRepository tenantRepository;
-    private final EntregaService entregaService;
+    private final UsuarioRepository usuarioRepository;
     private final BdoService bdoService;
 
     public TenantPlanoService(
             HistoricoPlanoTenantRepository historicoPlanoTenantRepository,
             PlanoAssinaturaService planoAssinaturaService,
             TenantRepository tenantRepository,
-            EntregaService entregaService,
+            UsuarioRepository usuarioRepository,
             BdoService bdoService) {
         this.historicoPlanoTenantRepository = historicoPlanoTenantRepository;
         this.planoAssinaturaService = planoAssinaturaService;
         this.tenantRepository = tenantRepository;
-        this.entregaService = entregaService;
+        this.usuarioRepository = usuarioRepository;
         this.bdoService = bdoService;
     }
 
@@ -123,7 +124,7 @@ public class TenantPlanoService {
     private UsoAtual calcularUso(UUID tenantId) {
         TenantContext.set(tenantId);
         try {
-            return new UsoAtual(entregaService.contarMotoristasAtivos(), bdoService.contarNoMesCorrente());
+            return new UsoAtual(usuarioRepository.countByPapelAndAtivoTrue(Papeis.MOTORISTA), bdoService.contarNoMesCorrente());
         } finally {
             TenantContext.clear();
         }

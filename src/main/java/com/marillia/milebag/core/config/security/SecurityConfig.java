@@ -3,6 +3,7 @@ package com.marillia.milebag.core.config.security;
 import java.util.List;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,8 +25,11 @@ public class SecurityConfig {
 
     private final JwtService jwtService;
     private final CorsProperties corsProperties;
+    private final SessaoValidador sessaoValidador;
 
-    public SecurityConfig(JwtService jwtService, CorsProperties corsProperties) {
+    // @Lazy: o validador depende de repositorios JPA, e este @Configuration tambem define beans (PasswordEncoder) que outros servicos usam.
+    public SecurityConfig(JwtService jwtService, CorsProperties corsProperties, @Lazy SessaoValidador sessaoValidador) {
+        this.sessaoValidador = sessaoValidador;
         this.jwtService = jwtService;
         this.corsProperties = corsProperties;
     }
@@ -103,7 +107,7 @@ public class SecurityConfig {
                         // exclusivos do administrador da plataforma.
                         .requestMatchers("/api/v1/plano").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
-                .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtService, sessaoValidador), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

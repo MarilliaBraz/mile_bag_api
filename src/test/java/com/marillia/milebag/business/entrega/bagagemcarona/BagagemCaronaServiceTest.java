@@ -3,6 +3,8 @@ package com.marillia.milebag.business.entrega.bagagemcarona;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -101,5 +103,19 @@ class BagagemCaronaServiceTest {
 
         assertThatThrownBy(() -> bagagemCaronaService.vincular(entregaPrincipalId, bdoCaronaId))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
+    void vincularRecusaBdoQueJaTemEntregaPropria() {
+        UUID entregaPrincipalId = UUID.randomUUID();
+        UUID bdoCaronaId = UUID.randomUUID();
+        when(entregaRepository.findById(entregaPrincipalId)).thenReturn(
+                Optional.of(entregaComStatus(entregaPrincipalId, UUID.randomUUID(), EntregaStatus.EM_ANDAMENTO)));
+        when(bdoService.buscarPorId(bdoCaronaId)).thenReturn(Optional.of(new Bdo()));
+        when(entregaRepository.findByBdoId(bdoCaronaId))
+                .thenReturn(Optional.of(entregaComStatus(UUID.randomUUID(), bdoCaronaId, EntregaStatus.ATRIBUIDA)));
+
+        assertThatThrownBy(() -> bagagemCaronaService.vincular(entregaPrincipalId, bdoCaronaId)).isInstanceOf(ConflitoException.class);
+        verify(bagagemCaronaRepository, never()).save(any());
     }
 }

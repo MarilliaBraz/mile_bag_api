@@ -1,11 +1,13 @@
 package com.marillia.milebag.business.ocorrencia.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -90,5 +92,32 @@ class OcorrenciaServiceTest {
 
         assertThatThrownBy(() -> ocorrenciaService.registrar(entregaId, UUID.randomUUID(), "desc", null))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
+    void reenvioComOMesmoIdLocalNaoCriaNadaEInformaQueNaoEUmRegistroNovo() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motivoId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.REABERTA)));
+        Ocorrencia existente = new Ocorrencia(entregaId, motivoId, "ninguem atendeu", Instant.now(), true, "local-1");
+        when(ocorrenciaRepository.findByEntregaIdAndIdLocal(entregaId, "local-1")).thenReturn(Optional.of(existente));
+
+        var resultado = ocorrenciaService.registrarComResultado(entregaId, motivoId, "ninguem atendeu", "local-1");
+
+        assertThat(resultado.novo()).isFalse();
+        verify(ocorrenciaRepository, never()).save(any());
+        verify(entregaService, never()).reabrirParaNovaTentativa(any());
+        verify(mensagemService, never()).notificarAutomatica(any(), any());
+    }
+
+    @Test
+    void registroNovoInformaNovoVerdadeiro() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motivoId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(new MotivoOcorrencia("Endereco nao localizado"));
+        when(ocorrenciaRepository.save(any(Ocorrencia.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(ocorrenciaService.registrarComResultado(entregaId, motivoId, null, "local-2").novo()).isTrue();
     }
 }

@@ -3,6 +3,7 @@ package com.marillia.milebag.business.tenant.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,12 +33,14 @@ public class MotoristaService {
     private final UsuarioRepository usuarioRepository;
     private final AutenticacaoService autenticacaoService;
     private final PasswordEncoder passwordEncoder;
+    private final SessaoUsuarioService sessaoUsuarioService;
     private final TransactionTemplate escrita;
     private final TransactionTemplate leitura;
 
     public MotoristaService(
             UsuarioRepository usuarioRepository, AutenticacaoService autenticacaoService, PasswordEncoder passwordEncoder,
-            PlatformTransactionManager transactionManager) {
+            SessaoUsuarioService sessaoUsuarioService, PlatformTransactionManager transactionManager) {
+        this.sessaoUsuarioService = sessaoUsuarioService;
         this.usuarioRepository = usuarioRepository;
         this.autenticacaoService = autenticacaoService;
         this.passwordEncoder = passwordEncoder;
@@ -62,18 +65,43 @@ public class MotoristaService {
         if (autenticacaoService.loginJaExiste(loginLimpo)) {
             throw new ConflitoException("Ja existe uma conta com este login.");
         }
-        return escrita.execute(status -> usuarioRepository.save(new Usuario(loginLimpo, passwordEncoder.encode(senha), Papeis.MOTORISTA, nome.trim())));
+        try {
+            return escrita.execute(status -> usuarioRepository.save(new Usuario(loginLimpo, passwordEncoder.encode(senha), Papeis.MOTORISTA, nome.trim())));
+        } catch (DataIntegrityViolationException e) {
+            // Corrida entre dois cadastros com o mesmo login: quem perde e barrado pelo indice unico (V29).
+            throw new ConflitoException("Ja existe uma conta com este login.");
+        }
+    }
+
+    /** PATCH parcial: aplica o nome e/ou o estado informados (ao menos um). */
+    public Usuario atualizar(UUID id, String nome, Boolean ativo) {
+        if (nome == null && ativo == null) {
+            throw new RegraNegocioException("informe nome e/ou ativo.");
+        }
+        Usuario atual = null;
+        if (nome != null) {
+            atual = renomear(id, nome);
+        }
+        if (ativo != null) {
+            atual = definirAtivo(id, ativo);
+        }
+        return atual;
     }
 
     public Usuario definirAtivo(UUID id, Boolean ativo) {
         if (ativo == null) {
             throw new RegraNegocioException("ativo e obrigatorio.");
         }
-        return escrita.execute(status -> {
+        Usuario atualizado = escrita.execute(status -> {
             Usuario motorista = buscarMotorista(id);
             motorista.definirAtivo(ativo);
+            if (!ativo) {
+                motorista.revogarSessoesAnteriores();
+            }
             return usuarioRepository.save(motorista);
         });
+        sessaoUsuarioService.esquecer(id);
+        return atualizado;
     }
 
     /** O administrador define a nova senha (nao ha "esqueci minha senha" ainda); a conta segue com o mesmo login. */
@@ -82,7 +110,21 @@ public class MotoristaService {
         escrita.executeWithoutResult(status -> {
             Usuario motorista = buscarMotorista(id);
             motorista.definirSenhaHash(passwordEncoder.encode(novaSenha));
+            motorista.revogarSessoesAnteriores();
             usuarioRepository.save(motorista);
+        });
+        sessaoUsuarioService.esquecer(id);
+    }
+
+    /** So o nome muda; o login e a identidade da conta (o indice unico e o historico dependem dele). */
+    public Usuario renomear(UUID id, String novoNome) {
+        if (novoNome == null || novoNome.isBlank()) {
+            throw new RegraNegocioException("nome e obrigatorio.");
+        }
+        return escrita.execute(status -> {
+            Usuario motorista = buscarMotorista(id);
+            motorista.definirNome(novoNome.trim());
+            return usuarioRepository.save(motorista);
         });
     }
 

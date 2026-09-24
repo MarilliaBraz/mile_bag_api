@@ -35,6 +35,8 @@ class MotoristaServiceTest {
     @Mock
     private AutenticacaoService autenticacaoService;
     @Mock
+    private SessaoUsuarioService sessaoUsuarioService;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -42,7 +44,7 @@ class MotoristaServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, transactionManager);
+        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, sessaoUsuarioService, transactionManager);
     }
 
     @Test
@@ -111,6 +113,59 @@ class MotoristaServiceTest {
         assertThat(motorista.getSenhaHash()).isNotEqualTo(hashAntigo);
         assertThat(passwordEncoder.matches("outra-senha-9", motorista.getSenhaHash())).isTrue();
         assertThatThrownBy(() -> service.redefinirSenha(motorista.getId(), "curta")).isInstanceOf(RegraNegocioException.class);
+    }
+
+    @Test
+    void desativarRevogaSessoesAnterioresEEsqueceOCacheDeSessao() {
+        Usuario motorista = motorista();
+        when(usuarioRepository.findById(motorista.getId())).thenReturn(Optional.of(motorista));
+        when(usuarioRepository.save(motorista)).thenReturn(motorista);
+
+        service.definirAtivo(motorista.getId(), false);
+
+        assertThat(motorista.getTokensValidosDesde()).isNotNull();
+        verify(sessaoUsuarioService).esquecer(motorista.getId());
+    }
+
+    @Test
+    void reativarNaoRevogaMaisNada() {
+        Usuario motorista = motorista();
+        when(usuarioRepository.findById(motorista.getId())).thenReturn(Optional.of(motorista));
+        when(usuarioRepository.save(motorista)).thenReturn(motorista);
+
+        service.definirAtivo(motorista.getId(), true);
+
+        assertThat(motorista.getTokensValidosDesde()).isNull();
+    }
+
+    @Test
+    void redefinirSenhaRevogaSessoesAnteriores() {
+        Usuario motorista = motorista();
+        when(usuarioRepository.findById(motorista.getId())).thenReturn(Optional.of(motorista));
+
+        service.redefinirSenha(motorista.getId(), "outra-senha-9");
+
+        assertThat(motorista.getTokensValidosDesde()).isNotNull();
+        verify(sessaoUsuarioService).esquecer(motorista.getId());
+    }
+
+    @Test
+    void atualizarAceitaSoONomeEExigeAoMenosUmCampo() {
+        Usuario motorista = motorista();
+        when(usuarioRepository.findById(motorista.getId())).thenReturn(Optional.of(motorista));
+        when(usuarioRepository.save(motorista)).thenReturn(motorista);
+
+        assertThat(service.atualizar(motorista.getId(), "  Joao Pedro ", null).getNome()).isEqualTo("Joao Pedro");
+        assertThatThrownBy(() -> service.atualizar(motorista.getId(), null, null)).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.atualizar(motorista.getId(), " ", null)).isInstanceOf(RegraNegocioException.class);
+    }
+
+    @Test
+    void corridaDeDoisCadastrosBarradaPeloIndiceUnicoVira409() {
+        when(autenticacaoService.loginJaExiste("joao")).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_usuario_email_lower"));
+
+        assertThatThrownBy(() -> service.criar("Joao", "joao", "senha-forte-1")).isInstanceOf(ConflitoException.class);
     }
 
     private Usuario motorista() {

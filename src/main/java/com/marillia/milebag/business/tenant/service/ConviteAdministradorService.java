@@ -3,7 +3,8 @@ package com.marillia.milebag.business.tenant.service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
-import java.util.regex.Pattern;
+
+import org.springframework.dao.DataIntegrityViolationException;import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +144,12 @@ public class ConviteAdministradorService {
 
         TenantContext.set(convite.getTenantId());
         try {
-            usuarioRepository.save(new Usuario(convite.getEmailDestinatario(), passwordEncoder.encode(senha), Papeis.ADMINISTRADOR_TENANT));
+            try {
+                // saveAndFlush: o indice unico de login (V29) tem que disparar aqui, dentro do try, e nao so no commit.
+                usuarioRepository.saveAndFlush(new Usuario(convite.getEmailDestinatario(), passwordEncoder.encode(senha), Papeis.ADMINISTRADOR_TENANT));
+            } catch (DataIntegrityViolationException e) {
+                throw new ConflitoException("Ja existe uma conta com este e-mail.");
+            }
         } finally {
             TenantContext.clear();
         }

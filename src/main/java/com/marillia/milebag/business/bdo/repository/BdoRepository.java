@@ -39,6 +39,7 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
             SELECT b.* FROM bdo b
             WHERE b.status_conferencia = 'CONFIRMADO'
               AND NOT EXISTS (SELECT 1 FROM entrega e WHERE e.bdo_id = b.id)
+              AND NOT EXISTS (SELECT 1 FROM bagagem_carona bc WHERE bc.bdo_id = b.id)
             ORDER BY b.data_captura ASC
             """, nativeQuery = true)
     List<Bdo> findConfirmadosSemEntrega();

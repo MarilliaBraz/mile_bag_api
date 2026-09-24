@@ -59,6 +59,10 @@ public class BagagemCaronaService {
         }
 
         Bdo bdoCarona = buscarBdoOuFalhar(bdoId);
+        // O BDO de carona nao pode ter entrega propria (nem ser o da entrega principal): senao seria entregue duas vezes.
+        if (entregaRepository.findByBdoId(bdoId).isPresent()) {
+            throw new ConflitoException("Este BDO ja tem entrega propria; nao pode ser bagagem carona.");
+        }
         if (bagagemCaronaRepository.findByBdoId(bdoId).isPresent()) {
             throw new ConflitoException("Este BDO ja esta vinculado a outra bagagem carona.");
         }
