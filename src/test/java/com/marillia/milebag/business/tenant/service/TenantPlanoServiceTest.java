@@ -99,7 +99,10 @@ class TenantPlanoServiceTest {
         assertThat(vigenteAnterior.getVigenteAte()).isNotNull(); // encerrado
         assertThat(resultado.planoVigente()).isEqualTo(planoNovo);
         assertThat(resultado.usoExcedeuLimiteNaTroca()).isFalse();
-        verify(historicoPlanoTenantRepository, times(2)).save(any(HistoricoPlanoTenant.class)); // fecha antigo + cria novo
+        // O antigo e gravado com flush ANTES do novo (indice unico parcial de plano vigente) - ver TenantPlanoService.
+        org.mockito.InOrder ordem = org.mockito.Mockito.inOrder(historicoPlanoTenantRepository);
+        ordem.verify(historicoPlanoTenantRepository).saveAndFlush(vigenteAnterior);
+        ordem.verify(historicoPlanoTenantRepository).save(any(HistoricoPlanoTenant.class));
     }
 
     @Test

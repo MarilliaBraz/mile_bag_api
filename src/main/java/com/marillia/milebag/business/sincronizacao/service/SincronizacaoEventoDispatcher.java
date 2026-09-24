@@ -2,6 +2,7 @@ package com.marillia.milebag.business.sincronizacao.service;
 
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -79,6 +80,20 @@ public class SincronizacaoEventoDispatcher {
         this.ocorrenciaService = ocorrenciaService;
         this.eventoSincronizadoRepository = eventoSincronizadoRepository;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Consulta de duplicidade (FR-006) e de status. Fica aqui, e nao direto
+     * em {@code SincronizacaoService}, por causa do {@code TenantAspect}: ele
+     * so aplica o tenant na conexao quando ja existe uma transacao ativa, e
+     * {@code processarLote} e propositalmente nao transacional (cada item
+     * tem a sua, em {@link #despachar}). Sem transacao, o RLS via a GUC vazia
+     * - erro de cast para uuid numa conexao reaproveitada, ou resultado vazio
+     * silencioso numa conexao nova.
+     */
+    @Transactional(readOnly = true)
+    public Optional<EventoSincronizado> buscarProcessado(UUID idLocal) {
+        return eventoSincronizadoRepository.findById(idLocal);
     }
 
     @Transactional

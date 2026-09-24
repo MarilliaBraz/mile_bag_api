@@ -18,7 +18,6 @@ import com.marillia.milebag.business.sincronizacao.model.ResultadoEventoResponse
 import com.marillia.milebag.business.sincronizacao.model.ResultadoSincronizacao;
 import com.marillia.milebag.business.sincronizacao.model.SincronizarLoteResponse;
 import com.marillia.milebag.business.sincronizacao.model.StatusEventoResponse;
-import com.marillia.milebag.business.sincronizacao.repository.EventoSincronizadoRepository;
 
 /**
  * Processa o lote de eventos offline (US1 desta HU) - ver
@@ -33,11 +32,9 @@ public class SincronizacaoService {
 
     private static final Logger log = LoggerFactory.getLogger(SincronizacaoService.class);
 
-    private final EventoSincronizadoRepository eventoSincronizadoRepository;
     private final SincronizacaoEventoDispatcher dispatcher;
 
-    public SincronizacaoService(EventoSincronizadoRepository eventoSincronizadoRepository, SincronizacaoEventoDispatcher dispatcher) {
-        this.eventoSincronizadoRepository = eventoSincronizadoRepository;
+    public SincronizacaoService(SincronizacaoEventoDispatcher dispatcher) {
         this.dispatcher = dispatcher;
     }
 
@@ -52,7 +49,7 @@ public class SincronizacaoService {
         List<ResultadoEventoResponse> resultados = new ArrayList<>();
 
         for (EventoSincronizacaoRequest evento : ordenados) {
-            Optional<EventoSincronizado> existente = eventoSincronizadoRepository.findById(evento.idLocal());
+            Optional<EventoSincronizado> existente = dispatcher.buscarProcessado(evento.idLocal());
             if (existente.isPresent()) {
                 UUID idServidor = existente.get().getIdServidor();
                 resolvidosNesteLote.put(evento.idLocal(), idServidor);
@@ -77,7 +74,7 @@ public class SincronizacaoService {
 
     public List<StatusEventoResponse> consultarStatus(List<UUID> idsLocais) {
         return idsLocais.stream()
-                .map(idLocal -> eventoSincronizadoRepository.findById(idLocal)
+                .map(idLocal -> dispatcher.buscarProcessado(idLocal)
                         .map(evento -> new StatusEventoResponse(idLocal, ResultadoSincronizacao.ACEITO))
                         .orElseGet(() -> new StatusEventoResponse(idLocal, ResultadoSincronizacao.NAO_ENCONTRADO)))
                 .toList();

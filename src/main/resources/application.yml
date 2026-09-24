@@ -14,6 +14,14 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # Conta das migracoes SEPARADA da conta da aplicacao: as tabelas tem
+    # FORCE ROW LEVEL SECURITY, entao a conta da aplicacao (sem BYPASSRLS,
+    # de proposito - e o que faz o isolamento por tenant valer) nao consegue
+    # rodar migracoes de seed nem manter as tabelas. Sem MILEBAG_FLYWAY_USER
+    # cai na conta da aplicacao (comportamento anterior) - suficiente para
+    # migracoes sem dados, mas as de seed (ex.: V13) exigem a conta propria.
+    user: ${MILEBAG_FLYWAY_USER:${MILEBAG_DB_USER:milebag_app}}
+    password: ${MILEBAG_FLYWAY_PASSWORD:${MILEBAG_DB_PASSWORD:milebag_app}}
 
 server:
   error:

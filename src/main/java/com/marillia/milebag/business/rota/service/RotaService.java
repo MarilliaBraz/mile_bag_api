@@ -87,6 +87,7 @@ public class RotaService implements SelecaoRotaProvider {
             throw new RegraNegocioException("A posicao atual do motorista (origemAtual) e obrigatoria.");
         }
 
+        propostaRotaRepository.travarPorEntrega(entregaId);
         Entrega entrega = buscarEntregaOuFalhar(entregaId);
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
 
@@ -117,6 +118,7 @@ public class RotaService implements SelecaoRotaProvider {
 
     @Transactional
     public SelecionarRotaResponse selecionar(UUID entregaId, SelecionarRotaRequest request) {
+        propostaRotaRepository.travarPorEntrega(entregaId);
         buscarEntregaOuFalhar(entregaId);
         PropostaRota proposta = propostaRotaRepository.findById(entregaId).orElseGet(() -> {
             // Rota propria sem um /calcular previo (ex.: sincronizacao offline,

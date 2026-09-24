@@ -8,6 +8,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -26,6 +28,12 @@ public class SecurityConfig {
     public SecurityConfig(JwtService jwtService, CorsProperties corsProperties) {
         this.jwtService = jwtService;
         this.corsProperties = corsProperties;
+    }
+
+    /** Hash da senha definida na ativacao do convite do administrador (HU15) - nunca armazenada em claro. */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 
     @Bean

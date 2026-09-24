@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import com.marillia.milebag.core.config.MensageriaProperties;
+import com.marillia.milebag.core.config.SmtpProperties;
 import com.marillia.milebag.core.config.TelegramProperties;
 import com.marillia.milebag.core.mail.EmailSender;
 
@@ -27,15 +28,28 @@ public class EmailChannel {
     private final EmailSender emailSender;
     private final MensageriaProperties mensageriaProperties;
     private final TelegramProperties telegramProperties;
+    private final SmtpProperties smtpProperties;
 
-    public EmailChannel(EmailSender emailSender, MensageriaProperties mensageriaProperties, TelegramProperties telegramProperties) {
+    public EmailChannel(
+            EmailSender emailSender,
+            MensageriaProperties mensageriaProperties,
+            TelegramProperties telegramProperties,
+            SmtpProperties smtpProperties) {
         this.emailSender = emailSender;
         this.mensageriaProperties = mensageriaProperties;
         this.telegramProperties = telegramProperties;
+        this.smtpProperties = smtpProperties;
     }
 
     /** {@code false} em qualquer falha de envio - o chamador decide o {@code statusEnvio} resultante (FR-009), nunca lanca. */
     public boolean enviar(UUID entregaId, String destinatario, String assunto, String conteudo, boolean incluirConviteTelegram) {
+        // EmailSender.enviar nao lanca quando o SMTP esta desabilitado (so
+        // registra um aviso) - sem esta checagem, a Mensagem ficaria ENVIADA
+        // sem nenhum e-mail ter saido, e o motorista veria um status falso.
+        if (!smtpProperties.habilitado()) {
+            log.warn("E-mail da conversa da entrega {} nao enviado: SMTP desabilitado (milebag.smtp.habilitado=false).", entregaId);
+            return false;
+        }
         String corpo = incluirConviteTelegram ? conteudo + "\n\n" + linkConvite(entregaId) : conteudo;
         try {
             emailSender.enviar(destinatario, assunto, corpo, enderecoResposta(entregaId));

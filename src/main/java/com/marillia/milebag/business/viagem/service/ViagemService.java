@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,9 +76,14 @@ public class ViagemService {
     private final ObjectMapper objectMapper;
     private final MensagemService mensagemService;
 
+    // @Lazy: a inversao por SelecaoRotaProvider tira a dependencia de PACOTE
+    // (viagem nao importa nada de rota), mas em runtime o Spring ainda ve o
+    // ciclo de beans viagem -> RotaService -> viagem (RotaService registra
+    // recalculos via registrarCalculoRotaSeTrajetoExistir). O proxy adia a
+    // resolucao do RotaService para o primeiro uso, depois da inicializacao.
     public ViagemService(
             EntregaService entregaService,
-            SelecaoRotaProvider selecaoRotaProvider,
+            @Lazy SelecaoRotaProvider selecaoRotaProvider,
             TrajetoRepository trajetoRepository,
             CalculoRotaRepository calculoRotaRepository,
             CheckpointGpsRepository checkpointGpsRepository,

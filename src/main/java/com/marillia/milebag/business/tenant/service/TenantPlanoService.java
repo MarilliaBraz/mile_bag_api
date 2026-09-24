@@ -70,7 +70,12 @@ public class TenantPlanoService {
         Instant agora = Instant.now();
         historicoPlanoTenantRepository.findByTenantIdAndVigenteAteIsNull(tenantId).ifPresent(vigente -> {
             vigente.encerrar(agora);
-            historicoPlanoTenantRepository.save(vigente);
+            // saveAndFlush (nao save): o Hibernate ordena INSERTs antes de
+            // UPDATEs no mesmo flush, entao sem isto o registro novo entraria
+            // enquanto o antigo ainda tem vigente_ate nulo e violaria o
+            // indice unico parcial uk_historico_plano_tenant_vigente (no
+            // maximo um plano vigente por tenant).
+            historicoPlanoTenantRepository.saveAndFlush(vigente);
         });
 
         // FR-006/Edge Case 1: a troca e sempre permitida, mesmo com excedente
