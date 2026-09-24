@@ -37,7 +37,7 @@ class EmailChannelTest {
         return new EmailChannel(
                 emailSender,
                 new MensageriaProperties(false, "", 993, "", "", 60000, "mensagens.milebag.local"),
-                new TelegramProperties(false, "", "milebag_bot", ""),
+                new TelegramProperties(false, "", "milebag_bot", "", "https://api.telegram.org"),
                 new SmtpProperties(smtpHabilitado, "smtp", 587, "u", "s", "no-reply@milebag.local"));
     }
 

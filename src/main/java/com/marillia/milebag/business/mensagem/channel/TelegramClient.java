@@ -25,7 +25,7 @@ public class TelegramClient {
 
     public TelegramClient(TelegramProperties properties) {
         this.properties = properties;
-        this.restClient = RestClient.builder().baseUrl("https://api.telegram.org").build();
+        this.restClient = RestClient.builder().baseUrl(properties.apiBaseUrl()).build();
     }
 
     /** {@code false} tambem quando desabilitado (sem token configurado) - o chamador decide o {@code statusEnvio} resultante (FR-009). */
@@ -36,7 +36,8 @@ public class TelegramClient {
         }
         try {
             restClient.post()
-                    .uri("/bot{token}/sendMessage", properties.botToken())
+                    // Token concatenado (nao variavel de URI): o template codificaria o ":" como %3A, e a Bot API documenta o ":" literal no caminho.
+                    .uri("/bot" + properties.botToken() + "/sendMessage")
                     .body(new SendMessageRequest(chatId, texto))
                     .retrieve()
                     .toBodilessEntity();

@@ -87,6 +87,8 @@ milebag:
     # Validado no cabecalho X-Telegram-Bot-Api-Secret-Token do webhook de
     # entrada - configurado junto ao setWebhook, nao e segredo de usuario.
     webhook-secret: ${MILEBAG_TELEGRAM_WEBHOOK_SECRET:}
+    # So muda em teste (servidor local no lugar da Bot API real).
+    api-base-url: ${MILEBAG_TELEGRAM_API_URL:https://api.telegram.org}
   mensageria:
     # Caixa de e-mail de recebimento da conversa com o passageiro (HU18) -
     # distinta da caixa de BDO (milebag.imap acima). Desabilitada por

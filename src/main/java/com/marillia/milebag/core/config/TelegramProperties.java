@@ -9,5 +9,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * chamar a Bot API quando o token estiver de fato configurado.
  */
 @ConfigurationProperties(prefix = "milebag.telegram")
-public record TelegramProperties(boolean habilitado, String botToken, String botUsername, String webhookSecret) {
+public record TelegramProperties(boolean habilitado, String botToken, String botUsername, String webhookSecret, String apiBaseUrl) {
 }

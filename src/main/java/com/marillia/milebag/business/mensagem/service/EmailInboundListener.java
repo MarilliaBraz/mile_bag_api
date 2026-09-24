@@ -98,7 +98,10 @@ public class EmailInboundListener {
                 processarMensagem(mensagem);
             }
         } finally {
-            inbox.close(false);
+            // Se open() falhou a pasta segue fechada e close() lancaria IllegalStateException, escondendo o erro real.
+            if (inbox.isOpen()) {
+                inbox.close(false);
+            }
         }
     }
 

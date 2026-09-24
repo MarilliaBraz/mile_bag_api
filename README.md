@@ -34,30 +34,35 @@ Organização por camadas `core` (infraestrutura genérica, sem regra de negóci
 
 Pre-requisitos: JDK 21, Maven, Docker. (Sem Maven instalado, use o binario do Apache Maven.)
 
-1. **PostgreSQL com duas contas.** As tabelas usam `FORCE ROW LEVEL SECURITY`, entao a conta da
-   aplicacao **nao pode** ser superusuario nem ter `BYPASSRLS` (senao o isolamento por tenant deixa
-   de valer) - e por isso migracoes de seed precisam de uma conta propria:
+1. **Dependencias externas** (PostgreSQL com duas contas, Valhalla, Postfix+Dovecot): use o
+   `docker-compose.yml` do repositorio `mile_bag_infra` — o passo a passo (certificado do e-mail,
+   contas, mapa do Valhalla, truststore) esta no README de la. O minimo para a API subir e:
 
    ```bash
-   docker run -d --name milebag-pg -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin -p 5433:5432 postgres:16
-   docker exec milebag-pg psql -U admin -d postgres      -c "CREATE ROLE milebag_app LOGIN PASSWORD 'milebag_app' NOSUPERUSER;"      -c "CREATE DATABASE milebag OWNER admin;"
-   docker exec milebag-pg psql -U admin -d milebag      -c "GRANT ALL ON SCHEMA public TO milebag_app;"      -c "ALTER DEFAULT PRIVILEGES FOR ROLE admin IN SCHEMA public GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO milebag_app;"      -c "ALTER DEFAULT PRIVILEGES FOR ROLE admin IN SCHEMA public GRANT USAGE,SELECT ON SEQUENCES TO milebag_app;"
+   cd ../mile_bag_infra && docker compose up -d postgres
    ```
 
-   (Porta 5433 evita conflito com um PostgreSQL local ja instalado na 5432.)
+   As tabelas usam `FORCE ROW LEVEL SECURITY`, entao a conta da aplicacao (`milebag_app`) **nao pode**
+   ser superusuario nem ter `BYPASSRLS`; as migracoes (seed) rodam com a conta `admin` (Flyway).
 
 2. **Subir a API** (perfil `dev` e o padrao):
 
    ```bash
-   MILEBAG_DB_URL=jdbc:postgresql://localhost:5433/milebag    MILEBAG_FLYWAY_USER=admin MILEBAG_FLYWAY_PASSWORD=admin    mvn spring-boot:run
+   MILEBAG_DB_URL=jdbc:postgresql://localhost:5433/milebag MILEBAG_FLYWAY_USER=admin MILEBAG_FLYWAY_PASSWORD=admin      mvn spring-boot:run
    ```
+
+   Para ligar rotas, e-mail e Telegram, veja as variaveis `MILEBAG_VALHALLA_URL`, `MILEBAG_SMTP_*`,
+   `MILEBAG_MENSAGERIA_IMAP_*` e `MILEBAG_TELEGRAM_*` no README do `mile_bag_infra`. Com o servidor de
+   e-mail local (certificado de uma CA de desenvolvimento) a JVM precisa do truststore gerado la:
+   `-Dspring-boot.run.jvmArguments="-Djavax.net.ssl.trustStore=<mile_bag_infra>/data/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"`.
 
 3. **Autenticar:** `node scripts/dev/emitir-tokens.cjs` imprime tokens de motorista, admin do tenant e
    admin da plataforma (nao ha endpoint de login ainda).
 
-4. **Servicos externos** (opcionais para testar): rotas exigem Valhalla (`MILEBAG_VALHALLA_URL`,
-   padrao `localhost:8002`); geocodificacao usa o Nominatim publico. SMTP/IMAP e Telegram vem
-   desabilitados por padrao (`milebag.smtp/imap/telegram/mensageria.*`).
+4. **Servicos externos** desabilitados por padrao (`milebag.smtp/imap/telegram/mensageria.*`); a
+   geocodificacao usa o Nominatim publico. O bot do Telegram real nao esta provisionado (exige uma
+   conta no `@BotFather`); `milebag.telegram.api-base-url` permite apontar para o servidor falso
+   `mile_bag_infra/scripts/fake-telegram.cjs`.
 
 Os testes com Testcontainers exigem Docker rodando; o `pom.xml` fixa `api.version=1.44` para o
 `docker-java` funcionar com Docker Engine 29+.
