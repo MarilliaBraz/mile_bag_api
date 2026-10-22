@@ -106,6 +106,13 @@ public class SecurityConfig {
                         // demais (CRUD de plano, troca de plano) sao
                         // exclusivos do administrador da plataforma.
                         .requestMatchers("/api/v1/plano").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU30: o motorista aciona, consulta o proprio alerta aberto
+                        // e cancela o que acionou por engano; listar e atender
+                        // sao do administrador do tenant.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/emergencias", "/api/v1/emergencias/*/cancelar")
+                        .hasRole(Papeis.MOTORISTA)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/emergencias/minha").hasRole(Papeis.MOTORISTA)
+                        .requestMatchers("/api/v1/emergencias/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, sessaoValidador), UsernamePasswordAuthenticationFilter.class)
                 .build();
