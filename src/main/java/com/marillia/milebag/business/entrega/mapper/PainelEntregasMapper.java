@@ -49,7 +49,8 @@ public class PainelEntregasMapper {
                 toBagagensResumo(bagagensCarona, etiquetaDoBdo),
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
-                marcoMaisRecente);
+                marcoMaisRecente,
+                bdo.pendenciasDeContato());
     }
 
     public ItemBdoDisponivelResponse toItemDisponivel(Bdo bdo) {
@@ -60,7 +61,8 @@ public class PainelEntregasMapper {
                 bdo.getPassageiroNome(),
                 bdo.getEnderecoEntrega(),
                 bdo.getEtiquetaBagagem(),
-                bdo.getDataCaptura());
+                bdo.getDataCaptura(),
+                bdo.pendenciasDeContato());
     }
 
     private List<BagagemCaronaResumo> toBagagensResumo(List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo) {

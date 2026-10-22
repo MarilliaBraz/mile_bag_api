@@ -25,6 +25,7 @@ public class BdoMapper {
                 camposExtraidos,
                 bdo.getImagemOriginal(),
                 bdo.getStatusConferencia(),
-                bdo.getDataCaptura());
+                bdo.getDataCaptura(),
+                bdo.pendenciasDeContato());
     }
 }

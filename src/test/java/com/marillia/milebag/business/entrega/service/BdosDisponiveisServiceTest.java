@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
+import com.marillia.milebag.business.bdo.model.PendenciaContatoBdo;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.BdosDisponiveisResponse;
@@ -52,6 +53,21 @@ class BdosDisponiveisServiceTest {
         assertThat(item.bdoId()).isEqualTo(bdoId);
         assertThat(item.origem()).isEqualTo(BdoOrigem.EMAIL_AUTOMATICO);
         assertThat(item.bdoNumero()).isEqualTo("BDO-999");
+    }
+
+    @Test
+    void consultarDisponiveisSinalizaContatoIncompletoSemTirarDaLista() {
+        Bdo bdo = new Bdo();
+        bdo.setId(UUID.randomUUID());
+        bdo.setOrigem(BdoOrigem.EMAIL_AUTOMATICO);
+        bdo.setEnderecoEntrega("Rua Sem Numero, Centro");
+        bdo.setDataCaptura(Instant.now());
+        when(bdoRepository.findConfirmadosSemEntrega()).thenReturn(List.of(bdo));
+
+        var item = bdosDisponiveisService.consultarDisponiveis().bdos().get(0);
+
+        assertThat(item.pendenciasContato())
+                .containsExactly(PendenciaContatoBdo.ENDERECO_SEM_NUMERO, PendenciaContatoBdo.TELEFONE_AUSENTE);
     }
 
     @Test
