@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.BdosDisponiveisResponse;
+import com.marillia.milebag.business.entrega.repository.EntregaRepository;
 
 /**
  * Lista de BDOs confirmados sem motorista responsavel (HU19, FR-007) - a
@@ -23,16 +24,21 @@ public class BdosDisponiveisService {
     private static final Logger log = LoggerFactory.getLogger(BdosDisponiveisService.class);
 
     private final BdoRepository bdoRepository;
+    private final EntregaRepository entregaRepository;
     private final PainelEntregasMapper mapper;
 
-    public BdosDisponiveisService(BdoRepository bdoRepository, PainelEntregasMapper mapper) {
+    public BdosDisponiveisService(BdoRepository bdoRepository, EntregaRepository entregaRepository, PainelEntregasMapper mapper) {
         this.bdoRepository = bdoRepository;
+        this.entregaRepository = entregaRepository;
         this.mapper = mapper;
     }
 
     @Transactional(readOnly = true)
     public BdosDisponiveisResponse consultarDisponiveis() {
-        var bdos = bdoRepository.findConfirmadosSemEntrega().stream().map(mapper::toItemDisponivel).toList();
+        // A entrega reaberta (RN05) traz a janela de reagendamento (HU29); a consulta so devolve BDO sem entrega ou com entrega reaberta.
+        var bdos = bdoRepository.findDisponiveisParaAutoatribuicao().stream()
+                .map(bdo -> mapper.toItemDisponivel(bdo, entregaRepository.findByBdoId(bdo.getId()).orElse(null)))
+                .toList();
         log.info("Consulta de BDOs disponiveis: {} encontrado(s)", bdos.size());
         return new BdosDisponiveisResponse(bdos);
     }

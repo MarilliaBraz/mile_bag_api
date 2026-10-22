@@ -1,5 +1,8 @@
 package com.marillia.milebag.business.mensagem.service;
 
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -7,6 +10,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +18,7 @@ import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.mensagem.channel.EmailChannel;
 import com.marillia.milebag.business.mensagem.channel.TelegramClient;
@@ -59,6 +64,10 @@ public class MensagemService {
     private final BdoService bdoService;
     private final TelegramClient telegramClient;
     private final EmailChannel emailChannel;
+    private final ZoneId fusoHorario;
+
+    private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
 
     public MensagemService(
             MensagemRepository mensagemRepository,
@@ -66,13 +75,15 @@ public class MensagemService {
             EntregaService entregaService,
             BdoService bdoService,
             TelegramClient telegramClient,
-            EmailChannel emailChannel) {
+            EmailChannel emailChannel,
+            @Value("${milebag.fuso-horario:America/Sao_Paulo}") String fusoHorario) {
         this.mensagemRepository = mensagemRepository;
         this.vinculoTelegramRepository = vinculoTelegramRepository;
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.telegramClient = telegramClient;
         this.emailChannel = emailChannel;
+        this.fusoHorario = ZoneId.of(fusoHorario);
     }
 
     @Transactional(readOnly = true)
@@ -138,7 +149,7 @@ public class MensagemService {
             return;
         }
 
-        String conteudo = textoDoEvento(tipoEvento, bdo);
+        String conteudo = textoDoEvento(tipoEvento, bdo, entrega);
         Optional<VinculoTelegram> vinculo = vinculoTelegramRepository.findByEntregaId(entregaId);
         enviarPorEmail(entregaId, bdo, AutorMensagem.SISTEMA, TipoMensagem.AUTOMATICA, conteudo, tipoEvento, vinculo.isEmpty());
         if (vinculo.isPresent()) {
@@ -240,7 +251,7 @@ public class MensagemService {
         return maisRecente.getEntregaId();
     }
 
-    private String textoDoEvento(TipoEventoNotificacao tipoEvento, Bdo bdo) {
+    private String textoDoEvento(TipoEventoNotificacao tipoEvento, Bdo bdo, Entrega entrega) {
         String identificacao = "sua entrega (BDO " + bdo.getNumero() + ")";
         return switch (tipoEvento) {
             case VIAGEM_INICIADA -> "O motorista iniciou o trajeto de " + identificacao + ".";
@@ -249,7 +260,20 @@ public class MensagemService {
             case COMPROVANTE_REGISTRADO -> "Entrega concluida! " + capitalizarPrimeiraLetra(identificacao) + " foi entregue com sucesso.";
             case OCORRENCIA_REGISTRADA ->
                     "Nao foi possivel concluir " + identificacao + " nesta tentativa; uma nova tentativa sera agendada.";
+            case REAGENDAMENTO_REGISTRADO -> textoReagendamento(identificacao, entrega.janelaReagendamento());
         };
+    }
+
+    private String textoReagendamento(String identificacao, JanelaReagendamento janela) {
+        if (janela == null) {
+            return "A nova tentativa de " + identificacao + " foi reagendada.";
+        }
+        ZonedDateTime inicio = janela.inicio().atZone(fusoHorario);
+        ZonedDateTime fim = janela.fim().atZone(fusoHorario);
+        String faixa = inicio.toLocalDate().equals(fim.toLocalDate())
+                ? "em " + DATA.format(inicio) + ", entre " + HORA.format(inicio) + " e " + HORA.format(fim)
+                : "entre " + DATA.format(inicio) + " " + HORA.format(inicio) + " e " + DATA.format(fim) + " " + HORA.format(fim);
+        return "A nova tentativa de " + identificacao + " foi reagendada para " + faixa + ", como combinado.";
     }
 
     private String capitalizarPrimeiraLetra(String texto) {

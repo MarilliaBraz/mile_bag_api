@@ -17,6 +17,7 @@ import com.marillia.milebag.business.entrega.mapper.EntregaMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaResponse;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
 import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -69,10 +70,15 @@ public class EntregaService {
     }
 
     @Transactional
-    public void reabrirParaNovaTentativa(UUID entregaId) {
+    /**
+     * RN05: sem motorista, a entrega volta a lista de disponiveis (HU19). A
+     * janela substitui a anterior - {@code null} a descarta (HU29, RD07).
+     */
+    public void reabrirParaNovaTentativa(UUID entregaId, JanelaReagendamento janela) {
         Entrega entrega = buscarOuFalhar(entregaId);
         entrega.setStatus(EntregaStatus.REABERTA);
         entrega.setMotoristaResponsavel(null);
+        entrega.definirJanelaReagendamento(janela);
         entregaRepository.save(entrega);
     }
 

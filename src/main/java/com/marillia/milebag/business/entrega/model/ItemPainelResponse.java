@@ -15,5 +15,6 @@ public record ItemPainelResponse(
         List<BagagemCaronaResumo> bagagensCarona,
         Instant dataAutoatribuicao,
         boolean temTrajetoIniciado,
-        String marcoMaisRecente) {
+        String marcoMaisRecente,
+        JanelaReagendamento janelaReagendamento) {
 }

@@ -36,6 +36,9 @@ springdoc:
     path: /docs
 
 milebag:
+  # Fuso usado nos textos enviados ao passageiro (ex.: janela de reagendamento,
+  # HU29) - a API pode rodar em UTC no container.
+  fuso-horario: ${MILEBAG_FUSO_HORARIO:America/Sao_Paulo}
   cors:
     # Origens do front-end autorizadas a chamar a API (CORS) - sempre
     # explicito por ambiente, nunca hardcoded. Valor de dev fica em

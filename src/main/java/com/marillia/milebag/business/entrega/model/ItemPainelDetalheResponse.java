@@ -25,5 +25,6 @@ public record ItemPainelDetalheResponse(
         Instant dataAutoatribuicao,
         boolean temTrajetoIniciado,
         String marcoMaisRecente,
-        List<PendenciaContatoBdo> pendenciasContato) {
+        List<PendenciaContatoBdo> pendenciasContato,
+        JanelaReagendamento janelaReagendamento) {
 }

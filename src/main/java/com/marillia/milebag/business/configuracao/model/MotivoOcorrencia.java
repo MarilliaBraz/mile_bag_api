@@ -44,9 +44,18 @@ public class MotivoOcorrencia {
     @Column(nullable = false)
     private boolean ativo;
 
+    /** RD07/HU29: motivo de reagendamento exige a janela combinada com o passageiro na ocorrencia. */
+    @Column(nullable = false, updatable = false)
+    private boolean reagendamento;
+
     public MotivoOcorrencia(String descricao) {
+        this(descricao, false);
+    }
+
+    public MotivoOcorrencia(String descricao, boolean reagendamento) {
         this.descricao = descricao;
         this.ativo = true;
+        this.reagendamento = reagendamento;
     }
 
     public void definirAtivo(boolean ativo) {

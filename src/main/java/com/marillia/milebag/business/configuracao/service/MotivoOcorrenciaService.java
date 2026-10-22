@@ -31,10 +31,15 @@ public class MotivoOcorrenciaService {
 
     @Transactional
     public MotivoOcorrencia criar(String descricao) {
+        return criar(descricao, false);
+    }
+
+    @Transactional
+    public MotivoOcorrencia criar(String descricao, boolean reagendamento) {
         if (descricao == null || descricao.isBlank()) {
             throw new RegraNegocioException("descricao e obrigatoria.");
         }
-        MotivoOcorrencia motivo = motivoOcorrenciaRepository.save(new MotivoOcorrencia(descricao));
+        MotivoOcorrencia motivo = motivoOcorrenciaRepository.save(new MotivoOcorrencia(descricao, reagendamento));
         log.info("Motivo de ocorrencia {} criado", motivo.getId());
         return motivo;
     }
