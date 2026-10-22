@@ -271,8 +271,8 @@ public class MensagemService {
         ZonedDateTime inicio = janela.inicio().atZone(fusoHorario);
         ZonedDateTime fim = janela.fim().atZone(fusoHorario);
         String faixa = inicio.toLocalDate().equals(fim.toLocalDate())
-                ? "em " + DATA.format(inicio) + ", entre " + HORA.format(inicio) + " e " + HORA.format(fim)
-                : "entre " + DATA.format(inicio) + " " + HORA.format(inicio) + " e " + DATA.format(fim) + " " + HORA.format(fim);
+                ? DATA.format(inicio) + ", entre " + HORA.format(inicio) + " e " + HORA.format(fim)
+                : "o periodo de " + DATA.format(inicio) + " " + HORA.format(inicio) + " a " + DATA.format(fim) + " " + HORA.format(fim);
         return "A nova tentativa de " + identificacao + " foi reagendada para " + faixa + ", como combinado.";
     }
 

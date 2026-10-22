@@ -235,7 +235,7 @@ class MensagemServiceTest {
 
         ArgumentCaptor<Mensagem> captor = ArgumentCaptor.forClass(Mensagem.class);
         verify(mensagemRepository).save(captor.capture());
-        assertThat(captor.getValue().getConteudo()).contains("reagendada para em 23/10/2026, entre 14:00 e 16:00");
+        assertThat(captor.getValue().getConteudo()).contains("foi reagendada para 23/10/2026, entre 14:00 e 16:00, como combinado.");
     }
 
     @Test
