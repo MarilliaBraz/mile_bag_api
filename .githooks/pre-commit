@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Verificações rápidas antes de cada commit (mile_bag_audite/scripts/padronizar-projeto.sh).
+# Lê o conteúdo que vai para o commit (index), não o da pasta de trabalho.
+falhou=0
+ts_alterados=()
+
+while IFS= read -r -d '' arquivo; do
+  conteudo() { git show ":$arquivo" 2>/dev/null; }
+
+  # Arquivo de ambiente com valores locais/secretos nunca vai para o
+  # repositório (§2.3, pilar Ambiente). .env.development/.env.production do
+  # Vite (só configuração pública) e os .example são permitidos.
+  case "$arquivo" in
+    *.example) ;;
+    .env|*/.env|*.env|.env.local|*/.env.local|*.local)
+      echo "✖ $arquivo: arquivo de ambiente local no commit (use um .example)."; falhou=1 ;;
+  esac
+
+  # Front-end: console.log e debugger esquecidos (testes ficam de fora).
+  case "$arquivo" in
+    *.test.ts|*.test.tsx|*.spec.ts|*.spec.tsx) ;;
+    *.ts|*.tsx)
+      if conteudo | grep -nE '(console\.log\(|^\s*debugger;?\s*$)' >/dev/null; then
+        echo "✖ $arquivo: console.log ou debugger esquecido."; falhou=1
+      fi
+      ts_alterados+=("$arquivo") ;;
+  esac
+
+  # Print de depuração em código de produção Java: use um Logger.
+  case "$arquivo" in
+    */src/main/*.java|src/main/*.java)
+      if conteudo | grep -nE 'System\.(out|err)\.print' >/dev/null; then
+        echo "✖ $arquivo: System.out/err (use um Logger)."; falhou=1
+      fi ;;
+  esac
+
+  # Segredo escrito no código. Testes ficam de fora (senhas de banco de teste
+  # do Testcontainers) e a chave precisa ser a palavra inteira, para não pegar
+  # ALFABETO_SENHA ou APP_PASSWORD.
+  case "$arquivo" in
+    */src/test/*|src/test/*|*.md|*.example) ;;
+    *)
+      if conteudo | grep -nEi "(^|[^A-Za-z0-9_])(password|senha|secret|api[_-]?key)[[:space:]]*[:=][[:space:]]*[\"'][^\"'\$]{4,}" >/dev/null; then
+        echo "✖ $arquivo: possível segredo no código. Use variável de ambiente (§2.3)."; falhou=1
+      fi ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+# Front-end: o oxlint do próprio projeto (npm run lint) nos arquivos do commit -
+# erro bloqueia, aviso não. O Prettier, se instalado, só avisa.
+if (( ${#ts_alterados[@]} > 0 )) && [[ -x node_modules/.bin/oxlint ]]; then
+  if ! node_modules/.bin/oxlint "${ts_alterados[@]}" >/dev/null 2>&1; then
+    echo "✖ oxlint encontrou erros. Veja com: npx oxlint ${ts_alterados[*]}"; falhou=1
+  fi
+fi
+if (( ${#ts_alterados[@]} > 0 )) && [[ -x node_modules/.bin/prettier ]]; then
+  node_modules/.bin/prettier --check "${ts_alterados[@]}" >/dev/null 2>&1 \
+    || echo "⚠ Arquivos fora da formatação do Prettier (rode: npx prettier --write <arquivos>)."
+fi
+
+exit $falhou

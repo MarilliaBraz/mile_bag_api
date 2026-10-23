@@ -1,0 +1,12 @@
+<!-- Cole dentro de <build><plugins> no pom.xml -->
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-checkstyle-plugin</artifactId>
+  <version>3.6.0</version>
+  <configuration>
+    <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+    <consoleOutput>true</consoleOutput>
+    <failOnViolation>false</failOnViolation>
+    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+  </configuration>
+</plugin>
