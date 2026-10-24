@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.tenant.model.Tenant;
 import com.marillia.milebag.business.tenant.model.Usuario;
 import com.marillia.milebag.business.tenant.model.UsuarioPlataforma;
@@ -53,18 +54,20 @@ public class DevUsuariosSeeder implements ApplicationRunner {
     private final TenantRepository tenantRepository;
     private final UsuarioRepository usuarioRepository;
     private final TenantPlanoService tenantPlanoService;
+    private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
     private final TransactionTemplate transacao;
 
     public DevUsuariosSeeder(
             UsuarioPlataformaRepository usuarioPlataformaRepository, TenantRepository tenantRepository, UsuarioRepository usuarioRepository,
-            TenantPlanoService tenantPlanoService, PasswordEncoder passwordEncoder, JwtProperties jwtProperties,
+            TenantPlanoService tenantPlanoService, MotivoOcorrenciaService motivoOcorrenciaService, PasswordEncoder passwordEncoder, JwtProperties jwtProperties,
             PlatformTransactionManager transactionManager) {
         this.usuarioPlataformaRepository = usuarioPlataformaRepository;
         this.tenantRepository = tenantRepository;
         this.usuarioRepository = usuarioRepository;
         this.tenantPlanoService = tenantPlanoService;
+        this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.passwordEncoder = passwordEncoder;
         this.jwtProperties = jwtProperties;
         this.transacao = new TransactionTemplate(transactionManager);
@@ -91,6 +94,7 @@ public class DevUsuariosSeeder implements ApplicationRunner {
             criarNoTenant(novoId, () -> tenantPlanoService.associarInicial(novoId, PLANO_DEV));
             tenantId = novoId;
         }
+        motivoOcorrenciaService.criarPadroesSeAusentes(tenantId);
         criarUsuarioSeAusente(tenantId, "empresa", Papeis.ADMINISTRADOR_TENANT, "Administrador Dev");
         criarUsuarioSeAusente(tenantId, "motorista", Papeis.MOTORISTA, "Motorista Dev");
     }
