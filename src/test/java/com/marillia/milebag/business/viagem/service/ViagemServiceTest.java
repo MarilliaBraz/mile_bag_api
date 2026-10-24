@@ -183,6 +183,21 @@ class ViagemServiceTest {
         verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.A_CAMINHO);
     }
 
+    /** HU20: repetir o marco registra de novo, mas nao reenvia o aviso ao passageiro. */
+    @Test
+    void registrarCheckpointRepetidoNaoNotificaDeNovo() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        when(checkpointGpsRepository.existsByTrajetoIdAndTipo(trajeto.getId(), TipoCheckpoint.A_CAMINHO)).thenReturn(true);
+        when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.A_CAMINHO, null, null, Instant.now(), false));
+
+        viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, -23.5, -46.6));
+
+        verify(checkpointGpsRepository).save(any(CheckpointGps.class));
+        verify(mensagemService, never()).notificarAutomatica(any(), any());
+    }
+
     @Test
     void registrarCheckpointNaoNotificaParaTiposQueNaoSaoMarcoDeProgresso() {
         UUID entregaId = UUID.randomUUID();
