@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.Query;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.core.base.BaseRepository;
 
 /**
@@ -54,6 +55,9 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
             ORDER BY b.data_captura ASC
             """;
 
-    /** "Volume mensal de BDOs" do tenant (HU16, uso atual contra o limite do plano) - contagem por data de captura, mes corrente. */
-    long countByDataCapturaBetween(Instant inicio, Instant fim);
+    /**
+     * "Volume mensal de BDOs" do tenant (HU16, uso atual contra o limite do plano) - contagem por data de captura, mes corrente.
+     * So conta BDO confirmado: uma foto descartada ou abandonada na conferencia nao e um BDO de verdade.
+     */
+    long countByStatusConferenciaAndDataCapturaBetween(StatusConferencia statusConferencia, Instant inicio, Instant fim);
 }

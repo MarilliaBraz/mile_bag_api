@@ -64,7 +64,7 @@ public class BdoService {
     public long contarNoMesCorrente() {
         Instant agora = Instant.now();
         Instant inicioDoMes = agora.atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        return bdoRepository.countByDataCapturaBetween(inicioDoMes, agora);
+        return bdoRepository.countByStatusConferenciaAndDataCapturaBetween(StatusConferencia.CONFIRMADO, inicioDoMes, agora);
     }
 
     @Transactional
@@ -124,6 +124,21 @@ public class BdoService {
         return bdoMapper.toResponse(salvo);
     }
 
+    /**
+     * O motorista desistiu da captura na tela de conferencia ("Descartar" ou
+     * nova foto): o registro e a imagem saem. So vale para foto ainda nao
+     * confirmada - BDO confirmado ou recebido por e-mail nunca e apagado.
+     */
+    @Transactional
+    public void descartarCaptura(UUID id) {
+        Bdo bdo = buscarOuFalhar(id);
+        if (bdo.getOrigem() != BdoOrigem.FOTO_MANUAL || bdo.getStatusConferencia() != StatusConferencia.PENDENTE) {
+            throw new ConflitoException("So uma captura por foto ainda nao confirmada pode ser descartada.");
+        }
+        excluirComImagem(bdo);
+        log.info("Captura de BDO {} descartada na conferencia", id);
+    }
+
     @Transactional(readOnly = true)
     public List<BdoResponse> buscarPossivelDuplicidade(String campoChave) {
         return bdoRepository.findByNumero(campoChave).stream()
@@ -134,6 +149,20 @@ public class BdoService {
     private Bdo buscarOuFalhar(UUID id) {
         return bdoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
+    }
+
+    private void excluirComImagem(Bdo bdo) {
+        bdoRepository.delete(bdo);
+        // flush antes de apagar o arquivo: se o DELETE falhar, a imagem continua junto do registro.
+        bdoRepository.flush();
+        if (bdo.getImagemOriginal() == null) {
+            return;
+        }
+        try {
+            armazenamentoImagemService.remover(bdo.getImagemOriginal());
+        } catch (IOException e) {
+            log.warn("BDO {} excluido, mas a imagem {} nao foi removida do disco.", bdo.getId(), bdo.getImagemOriginal(), e);
+        }
     }
 
     private String salvarImagem(UUID tenantId, MultipartFile imagem) {

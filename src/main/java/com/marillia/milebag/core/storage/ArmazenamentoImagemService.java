@@ -18,4 +18,7 @@ public interface ArmazenamentoImagemService {
     String salvar(UUID tenantId, MultipartFile imagem) throws IOException;
 
     byte[] carregar(String caminhoRelativo) throws IOException;
+
+    /** Remove a imagem, se ainda existir (captura de BDO descartada, HU01). */
+    void remover(String caminhoRelativo) throws IOException;
 }
