@@ -11,7 +11,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.core.config.OcrProperties;
 import com.marillia.milebag.core.exception.RegraNegocioException;
-import com.marillia.milebag.core.util.CampoRotuladoExtractor;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -37,7 +36,8 @@ public class BdoOcrService {
     public BdoOcrService(OcrProperties ocrProperties) {
         Tesseract tesseractInstance = new Tesseract();
         tesseractInstance.setDatapath(ocrProperties.tessdataPath());
-        tesseractInstance.setLanguage("eng");
+        // Portugues primeiro: rotulos e enderecos tem acento e cedilha; ingles cobre os rotulos do WorldTracer.
+        tesseractInstance.setLanguage("por+eng");
         this.tesseract = tesseractInstance;
     }
 
@@ -45,14 +45,7 @@ public class BdoOcrService {
         BufferedImage imagemDecodificada = decodificar(imagem);
         String textoBruto = reconhecerTexto(imagemDecodificada);
 
-        return new CamposExtraidosBdo(
-                CampoRotuladoExtractor.extrair(textoBruto, "BDO", "NUMERO", "NUMBER", "NBR"),
-                CampoRotuladoExtractor.extrair(textoBruto, "PAX", "PASSAGEIRO", "NAME"),
-                CampoRotuladoExtractor.extrair(textoBruto, "ADDR", "ENDERECO", "ADDRESS", "DELIVERY ADDRESS"),
-                CampoRotuladoExtractor.extrair(textoBruto, "FLT", "VOO", "AIRLINE", "CIA", "CARRIER"),
-                CampoRotuladoExtractor.extrair(textoBruto, "TEL", "TELEFONE", "PHONE"),
-                CampoRotuladoExtractor.extrair(textoBruto, "EMAIL", "E-MAIL"),
-                CampoRotuladoExtractor.extrair(textoBruto, "TAG", "ETIQUETA", "BAGGAGE", "BAG TAG"));
+        return CamposBdoExtractor.extrair(textoBruto);
     }
 
     private BufferedImage decodificar(MultipartFile imagem) {

@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
-import com.marillia.milebag.core.util.CampoRotuladoExtractor;
+import com.marillia.milebag.business.bdo.service.CamposBdoExtractor;
 
 /**
  * Extrai os campos do telex WorldTracer a partir do corpo de texto do
@@ -25,14 +25,7 @@ import com.marillia.milebag.core.util.CampoRotuladoExtractor;
 public class BdoTelexParser {
 
     public Optional<CamposExtraidosBdo> parsear(String corpoEmail) {
-        CamposExtraidosBdo campos = new CamposExtraidosBdo(
-                CampoRotuladoExtractor.extrair(corpoEmail, "BDO", "NUMERO", "NUMBER", "NBR"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "PAX", "PASSAGEIRO", "NAME"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "ADDR", "ENDERECO", "ADDRESS", "DELIVERY ADDRESS"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "FLT", "VOO", "AIRLINE", "CIA", "CARRIER"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "TEL", "TELEFONE", "PHONE"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "EMAIL", "E-MAIL"),
-                CampoRotuladoExtractor.extrair(corpoEmail, "TAG", "ETIQUETA", "BAGGAGE", "BAG TAG"));
+        CamposExtraidosBdo campos = CamposBdoExtractor.extrair(corpoEmail);
 
         if (campoAusente(campos.numero()) || campoAusente(campos.passageiroNome()) || campoAusente(campos.enderecoEntrega())) {
             return Optional.empty();
