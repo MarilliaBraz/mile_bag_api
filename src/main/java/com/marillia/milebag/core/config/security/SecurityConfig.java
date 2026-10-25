@@ -23,6 +23,8 @@ import com.marillia.milebag.core.config.CorsProperties;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final RespostaErroSeguranca RESPOSTA_ERRO = new RespostaErroSeguranca();
+
     private final JwtService jwtService;
     private final CorsProperties corsProperties;
     private final SessaoValidador sessaoValidador;
@@ -107,6 +109,10 @@ public class SecurityConfig {
                         // exclusivos do administrador da plataforma.
                         .requestMatchers("/api/v1/plano").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         .anyRequest().authenticated())
+                // Sessao invalida (401) e falta de permissao (403) com o mesmo contrato de erro do resto da API.
+                .exceptionHandling(erros -> erros
+                        .authenticationEntryPoint(RESPOSTA_ERRO)
+                        .accessDeniedHandler(RESPOSTA_ERRO))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, sessaoValidador), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
