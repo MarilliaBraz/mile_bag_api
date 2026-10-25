@@ -111,7 +111,8 @@ public class RotaService implements SelecaoRotaProvider {
 
         Coordenada origem = request.origemAtual();
         List<PracaLocalizada> pracasLocalizadas = pracaPedagioService.listarLocalizadas(LocalDate.now());
-        List<RotaAlternativa> alternativas = routingClient.calcularAlternativasComTracado(origem, destino).stream()
+        RoutingClient.ResultadoRotas resultado = routingClient.calcularAlternativasComTracado(origem, destino);
+        List<RotaAlternativa> alternativas = resultado.alternativas().stream()
                 .map(rota -> rota.alternativa().comPracas(pracasNoTracado(rota.tracado(), pracasLocalizadas)))
                 .toList();
 
@@ -128,7 +129,7 @@ public class RotaService implements SelecaoRotaProvider {
         propostaRotaRepository.save(proposta);
 
         log.info("Rota calculada para a entrega {} ({} alternativa(s))", entregaId, alternativas.size());
-        return new CalcularRotaResponse(entregaId, origem, destino, alternativas);
+        return new CalcularRotaResponse(entregaId, origem, destino, alternativas, resultado.motorDisponivel());
     }
 
     @Transactional

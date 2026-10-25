@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -26,7 +27,10 @@ import com.marillia.milebag.core.config.ValhallaProperties;
  * <p>Falha ou indisponibilidade do motor de rotas nao e um erro fatal: o
  * Edge Case do spec.md da HU03 preve areas sem cobertura suficiente,
  * resolvido deixando o motorista tracar rota propria - por isso este
- * cliente devolve lista vazia em vez de lancar excecao.</p>
+ * cliente devolve lista vazia em vez de lancar excecao. O resultado diz,
+ * porem, se a lista veio vazia porque nao ha caminho (o motor respondeu) ou
+ * porque o motor esta fora do ar, para a tela nao dizer "nenhuma rota
+ * encontrada" quando o problema e o servico.</p>
  */
 @Component
 public class RoutingClient {
@@ -37,6 +41,14 @@ public class RoutingClient {
     public record RotaComTracado(RotaAlternativa alternativa, List<Coordenada> tracado) {
     }
 
+    /** Alternativas calculadas; {@code motorDisponivel = false} quando o motor de rotas nao respondeu. */
+    public record ResultadoRotas(boolean motorDisponivel, List<RotaComTracado> alternativas) {
+
+        static ResultadoRotas indisponivel() {
+            return new ResultadoRotas(false, List.of());
+        }
+    }
+
     private final RestClient restClient;
 
     public RoutingClient(ValhallaProperties properties) {
@@ -44,10 +56,10 @@ public class RoutingClient {
     }
 
     public List<RotaAlternativa> calcularAlternativas(Coordenada origem, Coordenada destino) {
-        return calcularAlternativasComTracado(origem, destino).stream().map(RotaComTracado::alternativa).toList();
+        return calcularAlternativasComTracado(origem, destino).alternativas().stream().map(RotaComTracado::alternativa).toList();
     }
 
-    public List<RotaComTracado> calcularAlternativasComTracado(Coordenada origem, Coordenada destino) {
+    public ResultadoRotas calcularAlternativasComTracado(Coordenada origem, Coordenada destino) {
         Map<String, Object> corpo = Map.of(
                 "locations", List.of(
                         Map.of("lat", origem.latitude(), "lon", origem.longitude()),
@@ -67,7 +79,7 @@ public class RoutingClient {
                     .body(RespostaRota.class);
 
             if (resposta == null || resposta.trip() == null) {
-                return List.of();
+                return new ResultadoRotas(true, List.of());
             }
 
             List<RotaComTracado> alternativas = new ArrayList<>();
@@ -78,10 +90,14 @@ public class RoutingClient {
                     alternativas.add(converter("alternativa-" + indice++, alternativa.trip()));
                 }
             }
-            return alternativas;
+            return new ResultadoRotas(true, alternativas);
+        } catch (HttpClientErrorException e) {
+            // 4xx: o motor respondeu, mas nao ha caminho entre os pontos (ex.: "No path could be found").
+            log.warn("Valhalla nao encontrou rota entre os pontos ({}) - motorista podera tracar rota propria.", e.getStatusCode());
+            return new ResultadoRotas(true, List.of());
         } catch (RestClientException e) {
-            log.warn("Falha ao calcular rota via Valhalla - motorista podera tracar rota propria.", e);
-            return List.of();
+            log.warn("Motor de rotas (Valhalla) indisponivel - motorista podera tracar rota propria.", e);
+            return ResultadoRotas.indisponivel();
         }
     }
 
