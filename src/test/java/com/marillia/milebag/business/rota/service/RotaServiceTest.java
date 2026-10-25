@@ -144,6 +144,10 @@ class RotaServiceTest {
         assertThat(resposta.destino()).isEqualTo(destino);
         assertThat(resposta.alternativas()).isEqualTo(alternativas);
         assertThat(resposta.motorRotasDisponivel()).isTrue();
+        assertThat(resposta.tracados()).singleElement().satisfies(tracado -> {
+            assertThat(tracado.alternativaId()).isEqualTo("principal");
+            assertThat(tracado.pontos()).containsExactly(origem, destino);
+        });
         verify(propostaRotaRepository).save(any(PropostaRota.class));
         verify(geocodingClient, never()).geocodificar(anyString());
     }
