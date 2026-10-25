@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.core.config.security.AuthenticatedUser;
 
 /** Endpoints de captura e conferencia do BDO (HU01) - ver contracts/bdo-api.md. */
 @RestController
@@ -34,8 +36,14 @@ public class BdoController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public BdoResponse capturar(@RequestParam("imagem") MultipartFile imagem) {
-        return bdoService.capturar(imagem);
+    public BdoResponse capturar(@RequestParam("imagem") MultipartFile imagem, @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return bdoService.capturar(imagem, usuario.userId());
+    }
+
+    /** Fotos do motorista logado que ainda esperam conferencia (HU01/HU08). */
+    @GetMapping("/pendentes-conferencia")
+    public List<BdoResponse> listarPendentesDeConferencia(@AuthenticationPrincipal AuthenticatedUser usuario) {
+        return bdoService.listarPendentesDeConferencia(usuario.userId());
     }
 
     @PatchMapping("/{id}/conferencia")
