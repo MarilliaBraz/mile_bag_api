@@ -3,6 +3,7 @@ package com.marillia.milebag.business.viagem.service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,14 +65,19 @@ public class RelatorioMotoristaService {
         Instant inicioInstant = periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant fimInstant = periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-        List<ItemRelatorioMotoristaResponse> itens = comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
+        List<ItemRelatorioMotoristaResponse> itens = new ArrayList<>(comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
                 .map(ComprovanteEntrega::getEntregaId)
                 .map(entregaService::buscarPorId)
                 .flatMap(Optional::stream)
                 .filter(entrega -> motoristaId.equals(entrega.getMotoristaResponsavel()))
                 .map(this::montarItem)
                 .flatMap(Optional::stream)
-                .toList();
+                .toList());
+        // Tentativas sem sucesso (HU07) do motorista: a viagem tambem e paga a ele.
+        viagemService.listarEncerradosPorOcorrencia(inicioInstant, fimInstant).stream()
+                .filter(trajeto -> motoristaId.equals(trajeto.getMotoristaId()))
+                .forEach(trajeto -> entregaService.buscarPorId(trajeto.getEntregaId())
+                        .ifPresent(entrega -> itens.add(montarItem(entrega, trajeto, true))));
 
         return new RelatorioQuinzenalResponse(periodoInicio, periodoFim, itens);
     }
@@ -81,12 +87,15 @@ public class RelatorioMotoristaService {
         if (trajeto == null || trajeto.getStatus() != TrajetoStatus.ENCERRADO) {
             return Optional.empty();
         }
+        return Optional.of(montarItem(entrega, trajeto, false));
+    }
 
+    private ItemRelatorioMotoristaResponse montarItem(Entrega entrega, Trajeto trajeto, boolean tentativaSemSucesso) {
         String bdoNumero = bdoService.buscarPorId(entrega.getBdoId()).map(Bdo::getNumero).orElse(null);
         // TARIFA_APLICADA/VALOR_PEDAGIO podem vir vazios quando nao ha base
         // de calculo ainda (ver AjusteViagemService) - null no relatorio
         // pessoal do motorista, nunca um zero inventado.
-        return Optional.of(new ItemRelatorioMotoristaResponse(
+        return new ItemRelatorioMotoristaResponse(
                 entrega.getId(),
                 trajeto.getId(),
                 bdoNumero,
@@ -94,6 +103,7 @@ public class RelatorioMotoristaService {
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_VOLTA).orElse(null),
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA).orElse(null),
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO).orElse(null),
-                ajusteViagemService.temAjuste(trajeto.getId())));
+                ajusteViagemService.temAjuste(trajeto.getId()),
+                tentativaSemSucesso);
     }
 }

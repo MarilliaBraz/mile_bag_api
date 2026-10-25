@@ -47,6 +47,14 @@ public class ItemFechamento extends BaseEntity {
     @Column(name = "motivo_pendencia", updatable = false)
     private String motivoPendencia;
 
+    /** Viagem paga por este item (V37). Nulo nos itens gerados antes disso. */
+    @Column(name = "trajeto_id", updatable = false)
+    private UUID trajetoId;
+
+    /** Viagem de uma tentativa sem sucesso (HU07), paga a quem dirigiu - decisao de 2026-10-24. */
+    @Column(name = "tentativa_sem_sucesso", nullable = false, updatable = false)
+    private boolean tentativaSemSucesso;
+
     public ItemFechamento(
             UUID fechamentoId,
             UUID entregaId,
@@ -55,9 +63,24 @@ public class ItemFechamento extends BaseEntity {
             BigDecimal valorReembolsoPedagio,
             StatusItemFechamento statusItem,
             String motivoPendencia) {
+        this(fechamentoId, entregaId, motoristaId, null, false, valorPagamentoEntrega, valorReembolsoPedagio, statusItem, motivoPendencia);
+    }
+
+    public ItemFechamento(
+            UUID fechamentoId,
+            UUID entregaId,
+            UUID motoristaId,
+            UUID trajetoId,
+            boolean tentativaSemSucesso,
+            BigDecimal valorPagamentoEntrega,
+            BigDecimal valorReembolsoPedagio,
+            StatusItemFechamento statusItem,
+            String motivoPendencia) {
         this.fechamentoId = fechamentoId;
         this.entregaId = entregaId;
         this.motoristaId = motoristaId;
+        this.trajetoId = trajetoId;
+        this.tentativaSemSucesso = tentativaSemSucesso;
         this.valorPagamentoEntrega = valorPagamentoEntrega;
         this.valorReembolsoPedagio = valorReembolsoPedagio;
         this.statusItem = statusItem;

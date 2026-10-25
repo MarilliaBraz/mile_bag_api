@@ -3,6 +3,7 @@ package com.marillia.milebag.business.ocorrencia.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,6 +28,7 @@ import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.ocorrencia.model.Ocorrencia;
 import com.marillia.milebag.business.ocorrencia.repository.OcorrenciaRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -48,6 +50,8 @@ class OcorrenciaServiceTest {
     private EntregaService entregaService;
     @Mock
     private MensagemService mensagemService;
+    @Mock
+    private ViagemService viagemService;
 
     @InjectMocks
     private OcorrenciaService ocorrenciaService;
@@ -73,6 +77,8 @@ class OcorrenciaServiceTest {
         verify(motivoOcorrenciaService).buscarAtivoOuFalhar(motivoId);
         verify(entregaService).reabrirParaNovaTentativa(entregaId, null);
         verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.OCORRENCIA_REGISTRADA);
+        // A viagem desta tentativa e encerrada e vinculada a ocorrencia (paga a quem dirigiu).
+        verify(viagemService).encerrarPorOcorrencia(eq(entregaId), any());
     }
 
     @Test
