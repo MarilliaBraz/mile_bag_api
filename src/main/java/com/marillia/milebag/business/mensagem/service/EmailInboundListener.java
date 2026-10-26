@@ -17,12 +17,10 @@ import com.marillia.milebag.core.config.MensageriaProperties;
 import com.marillia.milebag.core.config.security.TenantContext;
 
 import jakarta.mail.Address;
-import jakarta.mail.BodyPart;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
-import jakarta.mail.Multipart;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.search.FlagTerm;
@@ -114,8 +112,10 @@ public class EmailInboundListener {
                 return;
             }
 
-            String corpo = extrairCorpoTexto(mensagem);
-            if (!tentarRegistrarEmTodosOsTenants(entregaId, corpo)) {
+            String corpo = TextoRespostaEmail.extrair(mensagem, MensagemService.PREFIXO_ASSUNTO_CONVERSA);
+            if (corpo.isEmpty()) {
+                log.warn("E-mail recebido para a entrega {} sem texto nem assunto - ignorado.", entregaId);
+            } else if (!tentarRegistrarEmTodosOsTenants(entregaId, corpo)) {
                 log.warn("E-mail recebido para a entrega {} nao encontrada em nenhum tenant - ignorado.", entregaId);
             }
 
@@ -156,23 +156,5 @@ public class EmailInboundListener {
             }
         }
         return null;
-    }
-
-    private String extrairCorpoTexto(Message mensagem) throws MessagingException, IOException {
-        Object conteudo = mensagem.getContent();
-        if (conteudo instanceof String texto) {
-            return texto;
-        }
-        if (conteudo instanceof Multipart multipart) {
-            StringBuilder textoCompleto = new StringBuilder();
-            for (int i = 0; i < multipart.getCount(); i++) {
-                BodyPart parte = multipart.getBodyPart(i);
-                if (parte.isMimeType("text/plain")) {
-                    textoCompleto.append(parte.getContent());
-                }
-            }
-            return textoCompleto.toString();
-        }
-        return "";
     }
 }

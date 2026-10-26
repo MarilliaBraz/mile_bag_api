@@ -52,6 +52,8 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 public class MensagemService {
 
     private static final Logger log = LoggerFactory.getLogger(MensagemService.class);
+    // Assunto dos e-mails da conversa; um "Re: <assunto>" sem corpo nao tem nada a registrar (EmailInboundListener).
+    static final String PREFIXO_ASSUNTO_CONVERSA = "Atualizacao da sua entrega - BDO ";
 
     private final MensagemRepository mensagemRepository;
     private final VinculoTelegramRepository vinculoTelegramRepository;
@@ -257,7 +259,7 @@ public class MensagemService {
     }
 
     private String assuntoConversa(Bdo bdo) {
-        return "Atualizacao da sua entrega - BDO " + bdo.getNumero();
+        return PREFIXO_ASSUNTO_CONVERSA + bdo.getNumero();
     }
 
     private boolean temEmail(Bdo bdo) {
