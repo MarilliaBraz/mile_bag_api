@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Mensagem de commit conforme mile_bag_audite/CONVENTIONS.md §3.
+arquivo="$1"
+primeira=$(grep -v '^#' "$arquivo" | sed '/^[[:space:]]*$/d' | head -n 1 | tr -d '\r')
+
+# Mensagens geradas pelo próprio Git não seguem o padrão.
+case "$primeira" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+tipos='feat|fix|docs|style|refactor|test|chore|perf'
+# Descrição começa minúscula; uma sigla em maiúsculas no início é aceita (ex.: "PDF não quebra...").
+if ! printf '%s\n' "$primeira" | grep -Eq "^(${tipos})(\([a-z0-9-]+\))?!?: ([^A-Z]|[A-Z][A-Z0-9]+[ /:,-]).*[^.]$"; then
+  echo "✖ Mensagem de commit fora do padrão (CONVENTIONS.md §3)."
+  echo "  Use: tipo(escopo opcional): descrição no imperativo, minúscula, sem ponto final"
+  echo "  Tipos: feat, fix, docs, style, refactor, test, chore, perf"
+  echo "  Ex.:   fix(rota): corrige congelamento de pedagio na viagem"
+  exit 1
+fi
+
+if grep -v '^#' "$arquivo" | grep -Eiq '^Co-Authored-By:.*(claude|anthropic|copilot|chatgpt|openai|gemini)'; then
+  echo "✖ Rodapé de coautoria de IA não é permitido (CONVENTIONS.md §3)."
+  exit 1
+fi

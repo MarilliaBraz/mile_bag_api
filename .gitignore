@@ -17,3 +17,8 @@ Thumbs.db
 /storage/
 tessdata/
 *.log
+# --- Backups do padronizar-projeto.sh e ambiente local ---
+*.bak
+.env
+.env.local
+.env.*.local

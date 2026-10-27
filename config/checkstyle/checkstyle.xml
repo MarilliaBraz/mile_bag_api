@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+  "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+  "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Nomenclatura de CONVENTIONS.md §4.1 e limites de tamanho/complexidade.
+  Tudo como aviso (severity=warning): mostra o desvio sem quebrar o build.
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="warning"/>
+
+  <module name="FileLength"><property name="max" value="400"/></module>
+  <module name="LineLength"><property name="max" value="140"/></module>
+  <module name="NewlineAtEndOfFile"/>
+
+  <module name="TreeWalker">
+    <!-- Nomenclatura (§4.1) -->
+    <module name="TypeName"/>                       <!-- PascalCase: EntregaService -->
+    <module name="MethodName"/>                     <!-- camelCase: calcularQuilometragemComplementar -->
+    <module name="LocalVariableName">
+      <property name="allowOneCharVarInForLoop" value="true"/>
+    </module>
+    <module name="MemberName"/>
+    <module name="ParameterName"/>
+    <module name="ConstantName">                    <!-- SCREAMING_SNAKE_CASE -->
+      <!-- "log" é o nome do Logger em todo o projeto (private static final Logger log) -->
+      <property name="format" value="^(log|[A-Z][A-Z0-9]*(_[A-Z0-9]+)*)$"/>
+    </module>
+    <module name="PackageName">                     <!-- lowercase, sem underscore -->
+      <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+    </module>
+
+    <!-- Simplicidade -->
+    <module name="MethodLength"><property name="max" value="60"/></module>
+    <module name="ParameterNumber">
+      <property name="max" value="7"/>
+      <property name="ignoreOverriddenMethods" value="true"/>
+    </module>
+    <module name="CyclomaticComplexity"><property name="max" value="10"/></module>
+    <module name="NestedIfDepth"><property name="max" value="2"/></module>
+
+    <!-- Organização -->
+    <module name="AvoidStarImport"/>
+    <module name="UnusedImports"/>
+    <module name="OneStatementPerLine"/>
+
+    <!-- Comentários: TODO precisa de responsável -->
+    <module name="TodoComment">
+      <property name="format" value="TODO(?!\(\w+\))"/>
+      <message key="todo.match" value="Use TODO(responsavel): descricao"/>
+    </module>
+  </module>
+</module>
