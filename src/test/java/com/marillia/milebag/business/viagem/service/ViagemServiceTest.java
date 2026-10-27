@@ -251,8 +251,8 @@ class ViagemServiceTest {
     @Test
     void registrarCheckpointRepetidoNaoNotificaDeNovo() {
         UUID entregaId = UUID.randomUUID();
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
-        when(trajetoRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(trajeto));
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
         when(checkpointGpsRepository.existsByTrajetoIdAndTipo(trajeto.getId(), TipoCheckpoint.A_CAMINHO)).thenReturn(true);
         when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.A_CAMINHO, null, null, Instant.now(), false));
 
