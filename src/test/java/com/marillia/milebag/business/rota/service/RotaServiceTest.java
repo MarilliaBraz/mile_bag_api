@@ -136,15 +136,32 @@ class RotaServiceTest {
         Coordenada destino = new Coordenada(-23.6, -46.7);
         List<RotaAlternativa> alternativas = List.of(new RotaAlternativa("principal", 5000.0, 600, false));
         when(routingClient.calcularAlternativasComTracado(origem, destino))
-                .thenReturn(List.of(new RoutingClient.RotaComTracado(alternativas.get(0), List.of(origem, destino))));
+                .thenReturn(new RoutingClient.ResultadoRotas(true, List.of(new RoutingClient.RotaComTracado(alternativas.get(0), List.of(origem, destino)))));
 
         CalcularRotaResponse resposta = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino));
 
         assertThat(resposta.origem()).isEqualTo(origem);
         assertThat(resposta.destino()).isEqualTo(destino);
         assertThat(resposta.alternativas()).isEqualTo(alternativas);
+        assertThat(resposta.motorRotasDisponivel()).isTrue();
         verify(propostaRotaRepository).save(any(PropostaRota.class));
         verify(geocodingClient, never()).geocodificar(anyString());
+    }
+
+    @Test
+    void calcularInformaQuandoOMotorDeRotasEstaIndisponivel() {
+        UUID entregaId = UUID.randomUUID();
+        prepararCalculo(entregaId);
+        Coordenada origem = new Coordenada(-16.0, -49.0);
+        Coordenada destino = new Coordenada(-16.0, -48.0);
+        when(routingClient.calcularAlternativasComTracado(origem, destino))
+                .thenReturn(new RoutingClient.ResultadoRotas(false, List.of()));
+
+        CalcularRotaResponse resposta = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino));
+
+        assertThat(resposta.alternativas()).isEmpty();
+        assertThat(resposta.motorRotasDisponivel()).isFalse();
+        verify(propostaRotaRepository).save(any(PropostaRota.class));
     }
 
     @Test
@@ -247,7 +264,7 @@ class RotaServiceTest {
         Coordenada destino = new Coordenada(-16.0, -48.0);
         // O motor de rotas diz "sem pedagio" (falta a tag no OpenStreetMap), mas ha uma praca cadastrada em cima do tracado.
         when(routingClient.calcularAlternativasComTracado(origem, destino))
-                .thenReturn(List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, false), List.of(origem, destino))));
+                .thenReturn(new RoutingClient.ResultadoRotas(true, List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, false), List.of(origem, destino)))));
         PracaLocalizada naRota = new PracaLocalizada(UUID.randomUUID(), "Praca da BR", new Coordenada(-16.0, -48.5), new java.math.BigDecimal("12.40"));
         PracaLocalizada longe = new PracaLocalizada(UUID.randomUUID(), "Praca longe", new Coordenada(-15.0, -48.5), new java.math.BigDecimal("9.00"));
         when(pracaPedagioService.listarLocalizadas(any())).thenReturn(List.of(naRota, longe));
@@ -268,7 +285,7 @@ class RotaServiceTest {
         Coordenada origem = new Coordenada(-16.0, -49.0);
         Coordenada destino = new Coordenada(-16.0, -48.0);
         when(routingClient.calcularAlternativasComTracado(origem, destino))
-                .thenReturn(List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, true), List.of(origem, destino))));
+                .thenReturn(new RoutingClient.ResultadoRotas(true, List.of(new RoutingClient.RotaComTracado(new RotaAlternativa("principal", 100_000, 3600, true), List.of(origem, destino)))));
         when(pracaPedagioService.listarLocalizadas(any())).thenReturn(List.of());
 
         RotaAlternativa principal = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, destino)).alternativas().get(0);
