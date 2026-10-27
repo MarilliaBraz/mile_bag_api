@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.bdo.model;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.marillia.milebag.core.base.BaseEntity;
 
@@ -72,4 +73,9 @@ public class Bdo extends BaseEntity {
 
     @Column(name = "data_captura", nullable = false)
     private Instant dataCaptura;
+
+    /** RN15/HU28: so sinaliza - nunca usado para bloquear um fluxo. */
+    public List<PendenciaContatoBdo> pendenciasDeContato() {
+        return CompletudeContatoBdo.avaliar(enderecoEntrega, telefonePassageiro);
+    }
 }

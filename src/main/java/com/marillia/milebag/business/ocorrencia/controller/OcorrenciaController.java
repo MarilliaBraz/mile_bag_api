@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.ocorrencia.model.OcorrenciaResponse;
 import com.marillia.milebag.business.ocorrencia.model.RegistrarOcorrenciaRequest;
 import com.marillia.milebag.business.ocorrencia.service.OcorrenciaService;
@@ -31,7 +32,11 @@ public class OcorrenciaController {
     @PostMapping
     public ResponseEntity<OcorrenciaResponse> registrar(@PathVariable UUID entregaId, @RequestBody RegistrarOcorrenciaRequest request) {
         var resultado = ocorrenciaService.registrarComResultado(
-                entregaId, request.motivoOcorrenciaId(), request.descricaoAdicional(), request.idLocal());
+                entregaId,
+                request.motivoOcorrenciaId(),
+                request.descricaoAdicional(),
+                request.idLocal(),
+                JanelaReagendamento.deCampos(request.janelaInicio(), request.janelaFim()));
         return ResponseEntity.status(resultado.novo() ? HttpStatus.CREATED : HttpStatus.OK).body(resultado.ocorrencia());
     }
 

@@ -7,9 +7,9 @@ import java.util.UUID;
  * so os motivos ativos (consumido pelo app do motorista, HU07) - por isso
  * nao carrega {@code ativo} (sempre {@code true} nessa lista).
  */
-public record MotivoOcorrenciaResponse(UUID id, String descricao) {
+public record MotivoOcorrenciaResponse(UUID id, String descricao, boolean reagendamento) {
 
     public static MotivoOcorrenciaResponse de(MotivoOcorrencia motivo) {
-        return new MotivoOcorrenciaResponse(motivo.getId(), motivo.getDescricao());
+        return new MotivoOcorrenciaResponse(motivo.getId(), motivo.getDescricao(), motivo.isReagendamento());
     }
 }

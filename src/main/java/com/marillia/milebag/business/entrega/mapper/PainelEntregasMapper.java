@@ -32,7 +32,8 @@ public class PainelEntregasMapper {
                 toBagagensResumo(bagagensCarona, etiquetaDoBdo),
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
-                marcoMaisRecente);
+                marcoMaisRecente,
+                entrega.janelaReagendamento());
     }
 
     public ItemPainelDetalheResponse toDetalhe(
@@ -49,10 +50,13 @@ public class PainelEntregasMapper {
                 toBagagensResumo(bagagensCarona, etiquetaDoBdo),
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
-                marcoMaisRecente);
+                marcoMaisRecente,
+                bdo.pendenciasDeContato(),
+                entrega.janelaReagendamento());
     }
 
-    public ItemBdoDisponivelResponse toItemDisponivel(Bdo bdo) {
+    /** {@code entregaReaberta}: a entrega reaberta deste BDO (RN05), ou nulo se o BDO ainda nao tem entrega. */
+    public ItemBdoDisponivelResponse toItemDisponivel(Bdo bdo, Entrega entregaReaberta) {
         return new ItemBdoDisponivelResponse(
                 bdo.getId(),
                 bdo.getOrigem(),
@@ -60,7 +64,10 @@ public class PainelEntregasMapper {
                 bdo.getPassageiroNome(),
                 bdo.getEnderecoEntrega(),
                 bdo.getEtiquetaBagagem(),
-                bdo.getDataCaptura());
+                bdo.getDataCaptura(),
+                bdo.pendenciasDeContato(),
+                entregaReaberta != null,
+                entregaReaberta == null ? null : entregaReaberta.janelaReagendamento());
     }
 
     private List<BagagemCaronaResumo> toBagagensResumo(List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo) {

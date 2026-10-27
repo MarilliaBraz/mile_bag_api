@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +26,7 @@ import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaReposito
 import com.marillia.milebag.business.entrega.mapper.EntregaMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
@@ -89,11 +91,26 @@ class EntregaServiceTest {
         entrega.setMotoristaResponsavel(UUID.randomUUID());
         when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
 
-        entregaService.reabrirParaNovaTentativa(entregaId);
+        entregaService.reabrirParaNovaTentativa(entregaId, null);
 
         assertThat(entrega.getStatus()).isEqualTo(EntregaStatus.REABERTA);
         assertThat(entrega.getMotoristaResponsavel()).isNull();
         verify(entregaRepository).save(entrega);
+    }
+
+    @Test
+    void reabrirComReagendamentoGuardaJanelaENovaOcorrenciaSemJanelaADescarta() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = novaEntrega(entregaId, EntregaStatus.EM_ANDAMENTO);
+        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        JanelaReagendamento janela =
+                new JanelaReagendamento(Instant.parse("2026-10-23T17:00:00Z"), Instant.parse("2026-10-23T19:00:00Z"));
+
+        entregaService.reabrirParaNovaTentativa(entregaId, janela);
+        assertThat(entrega.janelaReagendamento()).isEqualTo(janela);
+
+        entregaService.reabrirParaNovaTentativa(entregaId, null);
+        assertThat(entrega.janelaReagendamento()).isNull();
     }
 
     @Test

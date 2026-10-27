@@ -12,5 +12,7 @@ public enum TipoEventoNotificacao {
     A_CAMINHO,
     CHEGADA,
     COMPROVANTE_REGISTRADO,
-    OCORRENCIA_REGISTRADA
+    OCORRENCIA_REGISTRADA,
+    /** HU29: a nova tentativa ja tem data e horario combinados - o texto leva a janela. */
+    REAGENDAMENTO_REGISTRADO
 }

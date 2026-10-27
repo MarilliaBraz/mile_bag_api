@@ -27,22 +27,32 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
     /**
      * Lista de BDOs disponiveis para autoatribuicao (HU19, FR-007): ja
      * confirmados, de qualquer {@code origem} (inclusive {@code
-     * EMAIL_AUTOMATICO}, RF21), mas ainda sem uma {@code Entrega}
-     * associada. Nativa (nao JPQL) para o {@code NOT EXISTS} contra a
-     * tabela de outro dominio ficar explicito, mesmo padrao ja usado em
-     * {@code EntregaRepository.autoatribuirSeDisponivel} - a policy de RLS
-     * de {@code entrega} tambem se aplica dentro da subquery, entao so
-     * enxerga entregas do mesmo tenant (irrelevante aqui: um bdo_id so
-     * pertence a entregas do proprio tenant do BDO).
+     * EMAIL_AUTOMATICO}, RF21), sem motorista responsavel - ou seja, sem
+     * {@code Entrega} ainda, ou com uma entrega reaberta por ocorrencia
+     * (RN05: {@code REABERTA} e sem motorista). Antes de HU29 a entrega
+     * reaberta ficava fora desta lista e tambem fora do painel (que exige
+     * motorista), invisivel para todos. BDO vinculado como bagagem carona
+     * viaja com outra entrega e nunca aparece.
+     *
+     * <p>Nativa (nao JPQL) para o {@code NOT EXISTS} contra a tabela de outro
+     * dominio ficar explicito, mesmo padrao de {@code
+     * EntregaRepository.autoatribuirSeDisponivel} - a policy de RLS de
+     * {@code entrega} tambem se aplica dentro da subquery.</p>
      */
-    @Query(value = """
+    @Query(value = CONSULTA_DISPONIVEIS_PARA_AUTOATRIBUICAO, nativeQuery = true)
+    List<Bdo> findDisponiveisParaAutoatribuicao();
+
+    /** Constante para o teste contra PostgreSQL real exercitar exatamente este SQL (BdosDisponiveisConsultaTest). */
+    String CONSULTA_DISPONIVEIS_PARA_AUTOATRIBUICAO = """
             SELECT b.* FROM bdo b
             WHERE b.status_conferencia = 'CONFIRMADO'
-              AND NOT EXISTS (SELECT 1 FROM entrega e WHERE e.bdo_id = b.id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM entrega e
+                  WHERE e.bdo_id = b.id
+                    AND NOT (e.status = 'REABERTA' AND e.motorista_responsavel IS NULL))
               AND NOT EXISTS (SELECT 1 FROM bagagem_carona bc WHERE bc.bdo_id = b.id)
             ORDER BY b.data_captura ASC
-            """, nativeQuery = true)
-    List<Bdo> findConfirmadosSemEntrega();
+            """;
 
     /** "Volume mensal de BDOs" do tenant (HU16, uso atual contra o limite do plano) - contagem por data de captura, mes corrente. */
     long countByDataCapturaBetween(Instant inicio, Instant fim);

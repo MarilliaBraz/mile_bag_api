@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.EntregaResponse;
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
@@ -170,8 +171,12 @@ public class SincronizacaoEventoDispatcher {
     private UUID despacharOcorrenciaRegistrada(EventoSincronizacaoRequest evento, Map<UUID, UUID> resolvidos) {
         PayloadOcorrenciaRegistrada payload = converter(evento, PayloadOcorrenciaRegistrada.class);
         UUID entregaId = resolverReferencia(payload.entregaId(), resolvidos);
-        OcorrenciaResponse resposta =
-                ocorrenciaService.registrar(entregaId, payload.motivoOcorrenciaId(), payload.descricaoAdicional(), evento.idLocal().toString());
+        OcorrenciaResponse resposta = ocorrenciaService.registrar(
+                entregaId,
+                payload.motivoOcorrenciaId(),
+                payload.descricaoAdicional(),
+                evento.idLocal().toString(),
+                JanelaReagendamento.deCampos(payload.janelaInicio(), payload.janelaFim()));
         return resposta.id();
     }
 

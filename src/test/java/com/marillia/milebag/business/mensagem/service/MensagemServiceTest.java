@@ -27,6 +27,7 @@ import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.mensagem.channel.EmailChannel;
 import com.marillia.milebag.business.mensagem.channel.TelegramClient;
@@ -65,7 +66,8 @@ class MensagemServiceTest {
 
     @BeforeEach
     void setUp() {
-        mensagemService = new MensagemService(mensagemRepository, vinculoTelegramRepository, entregaService, bdoService, telegramClient, emailChannel);
+        mensagemService = new MensagemService(
+                mensagemRepository, vinculoTelegramRepository, entregaService, bdoService, telegramClient, emailChannel, "America/Sao_Paulo");
         org.mockito.Mockito.lenient().when(mensagemRepository.save(any(Mensagem.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -215,6 +217,25 @@ class MensagemServiceTest {
         verify(mensagemRepository).save(captor.capture());
         assertThat(captor.getValue().getAutor()).isEqualTo(AutorMensagem.SISTEMA);
         assertThat(captor.getValue().getTipoEvento()).isEqualTo(TipoEventoNotificacao.CHEGADA);
+    }
+
+    @Test
+    void notificarReagendamentoInformaAJanelaNoFusoDoTenant() {
+        UUID entregaId = UUID.randomUUID();
+        UUID bdoId = UUID.randomUUID();
+        Entrega entrega = entregaDe(entregaId, null, bdoId);
+        entrega.definirJanelaReagendamento(
+                new JanelaReagendamento(Instant.parse("2026-10-23T17:00:00Z"), Instant.parse("2026-10-23T19:00:00Z")));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdoComEmail(bdoId, "passageiro@exemplo.com")));
+        when(vinculoTelegramRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
+        when(emailChannel.enviar(any(), any(), any(), any(), anyBoolean())).thenReturn(true);
+
+        mensagemService.notificarAutomatica(entregaId, TipoEventoNotificacao.REAGENDAMENTO_REGISTRADO);
+
+        ArgumentCaptor<Mensagem> captor = ArgumentCaptor.forClass(Mensagem.class);
+        verify(mensagemRepository).save(captor.capture());
+        assertThat(captor.getValue().getConteudo()).contains("foi reagendada para 23/10/2026, entre 14:00 e 16:00, como combinado.");
     }
 
     @Test

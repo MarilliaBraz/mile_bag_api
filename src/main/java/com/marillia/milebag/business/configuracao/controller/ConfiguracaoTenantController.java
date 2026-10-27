@@ -70,7 +70,8 @@ public class ConfiguracaoTenantController {
     @PostMapping("/motivos-ocorrencia")
     @ResponseStatus(HttpStatus.CREATED)
     public MotivoOcorrenciaResponse criarMotivoOcorrencia(@RequestBody CriarMotivoOcorrenciaRequest request) {
-        return MotivoOcorrenciaResponse.de(motivoOcorrenciaService.criar(request.descricao()));
+        return MotivoOcorrenciaResponse.de(
+                motivoOcorrenciaService.criar(request.descricao(), Boolean.TRUE.equals(request.reagendamento())));
     }
 
     @PatchMapping("/motivos-ocorrencia/{id}")

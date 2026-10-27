@@ -12,5 +12,11 @@ import com.marillia.milebag.business.entrega.model.EntregaStatus;
  * status "congelado" por ocorrencia individual.
  */
 public record OcorrenciaResponse(
-        UUID id, UUID entregaId, UUID motivoOcorrenciaId, Instant dataHora, EntregaStatus entregaStatus) {
+        UUID id,
+        UUID entregaId,
+        UUID motivoOcorrenciaId,
+        Instant dataHora,
+        EntregaStatus entregaStatus,
+        Instant janelaInicio,
+        Instant janelaFim) {
 }

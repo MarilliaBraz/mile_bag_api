@@ -3,6 +3,7 @@ package com.marillia.milebag.business.ocorrencia.model;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.core.base.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -41,6 +42,13 @@ public class Ocorrencia extends BaseEntity {
     @Column(name = "id_local", updatable = false, length = 100)
     private String idLocal;
 
+    /** Janela combinada com o passageiro (HU29) - so em ocorrencia de motivo de reagendamento. */
+    @Column(name = "janela_inicio", updatable = false)
+    private Instant janelaInicio;
+
+    @Column(name = "janela_fim", updatable = false)
+    private Instant janelaFim;
+
     public Ocorrencia(
             UUID entregaId,
             UUID motivoOcorrenciaId,
@@ -48,6 +56,19 @@ public class Ocorrencia extends BaseEntity {
             Instant dataHora,
             boolean registradoOffline,
             String idLocal) {
+        this(entregaId, motivoOcorrenciaId, descricaoAdicional, dataHora, registradoOffline, idLocal, null);
+    }
+
+    public Ocorrencia(
+            UUID entregaId,
+            UUID motivoOcorrenciaId,
+            String descricaoAdicional,
+            Instant dataHora,
+            boolean registradoOffline,
+            String idLocal,
+            JanelaReagendamento janela) {
+        this.janelaInicio = janela == null ? null : janela.inicio();
+        this.janelaFim = janela == null ? null : janela.fim();
         this.entregaId = entregaId;
         this.motivoOcorrenciaId = motivoOcorrenciaId;
         this.descricaoAdicional = descricaoAdicional;

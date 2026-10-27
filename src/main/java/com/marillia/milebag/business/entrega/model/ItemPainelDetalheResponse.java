@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.marillia.milebag.business.bdo.model.PendenciaContatoBdo;
+
 /**
  * Detalhe completo de uma entrega (HU19, FR-003) - superset de {@link
  * ItemPainelResponse}: alem do resumo do painel, inclui os demais campos
@@ -22,5 +24,7 @@ public record ItemPainelDetalheResponse(
         List<BagagemCaronaResumo> bagagensCarona,
         Instant dataAutoatribuicao,
         boolean temTrajetoIniciado,
-        String marcoMaisRecente) {
+        String marcoMaisRecente,
+        List<PendenciaContatoBdo> pendenciasContato,
+        JanelaReagendamento janelaReagendamento) {
 }
