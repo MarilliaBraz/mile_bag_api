@@ -185,6 +185,11 @@ public class ViagemService {
             throw new ConflitoException("O trajeto desta entrega ja esta encerrado; nao aceita novos checkpoints.");
         }
 
+        // HU20: repetir um marco fica no historico, mas o passageiro so e avisado na primeira vez.
+        TipoEventoNotificacao evento = eventoDoMarco(request.tipo());
+        boolean marcoJaRegistrado = evento != null
+                && checkpointGpsRepository.existsByTrajetoIdAndTipo(trajeto.getId(), request.tipo());
+
         boolean semCoordenadas = request.lat() == null || request.lng() == null;
         CheckpointGps checkpoint = checkpointGpsRepository.save(new CheckpointGps(
                 trajeto.getId(),
@@ -195,8 +200,7 @@ public class ViagemService {
                 semCoordenadas));
 
         log.info("Checkpoint {} registrado no trajeto {}", request.tipo(), trajeto.getId());
-        TipoEventoNotificacao evento = eventoDoMarco(request.tipo());
-        if (evento != null) {
+        if (evento != null && !marcoJaRegistrado) {
             notificarAutomaticaComSeguranca(entregaId, evento);
         }
         return trajetoMapper.toResponse(checkpoint);
