@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.tenant.model.Tenant;
 import com.marillia.milebag.business.tenant.repository.PlanoAssinaturaRepository;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
@@ -25,16 +26,19 @@ public class TenantService {
     private final PlanoAssinaturaRepository planoAssinaturaRepository;
     private final TenantPlanoService tenantPlanoService;
     private final ConviteAdministradorService conviteAdministradorService;
+    private final MotivoOcorrenciaService motivoOcorrenciaService;
 
     public TenantService(
             TenantRepository tenantRepository,
             PlanoAssinaturaRepository planoAssinaturaRepository,
             TenantPlanoService tenantPlanoService,
-            ConviteAdministradorService conviteAdministradorService) {
+            ConviteAdministradorService conviteAdministradorService,
+            MotivoOcorrenciaService motivoOcorrenciaService) {
         this.tenantRepository = tenantRepository;
         this.planoAssinaturaRepository = planoAssinaturaRepository;
         this.tenantPlanoService = tenantPlanoService;
         this.conviteAdministradorService = conviteAdministradorService;
+        this.motivoOcorrenciaService = motivoOcorrenciaService;
     }
 
     /**
@@ -69,6 +73,8 @@ public class TenantService {
         // HistoricoPlanoTenant, nunca num campo direto em Tenant.
         tenantPlanoService.associarInicial(tenant.getId(), planoId);
         conviteAdministradorService.criarEEnviar(tenant.getId(), emailAdministrador);
+        // Por ultimo: define o tenant da conexao (RLS) para o resto desta transacao.
+        motivoOcorrenciaService.criarPadroesSeAusentes(tenant.getId());
         log.info("Tenant {} cadastrado (plano {})", tenant.getId(), planoId);
         return tenant;
     }

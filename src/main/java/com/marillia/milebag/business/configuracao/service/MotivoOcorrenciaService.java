@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
 import com.marillia.milebag.business.configuracao.repository.MotivoOcorrenciaRepository;
+import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 
@@ -22,6 +23,16 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 public class MotivoOcorrenciaService {
 
     private static final Logger log = LoggerFactory.getLogger(MotivoOcorrenciaService.class);
+
+    /** Catalogo inicial de toda empresa nova - sem ele o motorista nao consegue registrar ocorrencia (HU07). Mesma lista de V35. */
+    static final List<MotivoPadrao> MOTIVOS_PADRAO = List.of(
+            new MotivoPadrao("Ausência do recebedor", false),
+            new MotivoPadrao("Endereço não localizado", false),
+            new MotivoPadrao("Recusa de recebimento", false),
+            new MotivoPadrao("Reagendada com o passageiro", true));
+
+    record MotivoPadrao(String descricao, boolean reagendamento) {
+    }
 
     private final MotivoOcorrenciaRepository motivoOcorrenciaRepository;
 
@@ -42,6 +53,31 @@ public class MotivoOcorrenciaService {
         MotivoOcorrencia motivo = motivoOcorrenciaRepository.save(new MotivoOcorrencia(descricao, reagendamento));
         log.info("Motivo de ocorrencia {} criado", motivo.getId());
         return motivo;
+    }
+
+    /**
+     * Cria o catalogo padrao no tenant indicado, se ele ainda nao tiver nenhum
+     * motivo (ativo ou nao). Chamado no cadastro da empresa (HU14), fora do
+     * contexto de tenant - por isso define o tenant para o RLS de
+     * motivo_ocorrencia aceitar os INSERTs.
+     */
+    @Transactional
+    public void criarPadroesSeAusentes(UUID tenantId) {
+        UUID tenantAnterior = TenantContext.get();
+        TenantContext.set(tenantId);
+        try {
+            if (motivoOcorrenciaRepository.count() > 0) {
+                return;
+            }
+            MOTIVOS_PADRAO.forEach(padrao -> motivoOcorrenciaRepository.save(new MotivoOcorrencia(padrao.descricao(), padrao.reagendamento())));
+            log.info("Motivos de ocorrencia padrao criados para o tenant {}", tenantId);
+        } finally {
+            if (tenantAnterior == null) {
+                TenantContext.clear();
+            } else {
+                TenantContext.set(tenantAnterior);
+            }
+        }
     }
 
     @Transactional(readOnly = true)
