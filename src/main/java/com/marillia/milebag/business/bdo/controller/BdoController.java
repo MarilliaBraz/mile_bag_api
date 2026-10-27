@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +41,13 @@ public class BdoController {
     @PatchMapping("/{id}/conferencia")
     public BdoResponse confirmarConferencia(@PathVariable UUID id, @RequestBody CamposExtraidosBdo camposExtraidos) {
         return bdoService.confirmarConferencia(id, camposExtraidos);
+    }
+
+    /** Descarta uma captura por foto ainda nao confirmada (HU01) - 409 para BDO confirmado ou recebido por e-mail. */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void descartarCaptura(@PathVariable UUID id) {
+        bdoService.descartarCaptura(id);
     }
 
     @GetMapping(params = "possivelDuplicidade=true")

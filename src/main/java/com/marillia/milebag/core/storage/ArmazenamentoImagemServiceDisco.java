@@ -47,6 +47,11 @@ public class ArmazenamentoImagemServiceDisco implements ArmazenamentoImagemServi
         return Files.readAllBytes(diretorioBase.resolve(caminhoRelativo));
     }
 
+    @Override
+    public void remover(String caminhoRelativo) throws IOException {
+        Files.deleteIfExists(diretorioBase.resolve(caminhoRelativo));
+    }
+
     private String detectarExtensaoOuFalhar(MultipartFile imagem) throws IOException {
         try (ImageInputStream entrada = ImageIO.createImageInputStream(imagem.getInputStream())) {
             if (entrada == null) {
