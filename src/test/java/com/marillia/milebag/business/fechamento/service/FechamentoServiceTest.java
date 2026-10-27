@@ -89,7 +89,7 @@ class FechamentoServiceTest {
         when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaEncerrada(entregaId, motoristaId)));
 
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("10.000"), new BigDecimal("10.000"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
 
@@ -107,6 +107,37 @@ class FechamentoServiceTest {
         assertThat(item.getValorPagamentoEntrega()).isEqualByComparingTo("90.00");
     }
 
+    /** HU07 (decisao de 2026-10-24): a viagem da tentativa sem sucesso e paga a quem dirigiu; sem motorista registrado, fica de fora. */
+    @Test
+    void gerarPagaAViagemDaTentativaSemSucessoAQuemDirigiu() {
+        LocalDate inicio = LocalDate.of(2026, 5, 1);
+        LocalDate fim = LocalDate.of(2026, 5, 15);
+        when(fechamentoRepository.findByPeriodoInicioAndPeriodoFim(inicio, fim)).thenReturn(Optional.empty());
+        when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of());
+
+        UUID quemDirigiu = UUID.randomUUID();
+        Trajeto tentativa = new Trajeto(UUID.randomUUID(), quemDirigiu, Instant.parse("2026-05-03T10:00:00Z"));
+        tentativa.consolidar(new BigDecimal("8.000"), new BigDecimal("8.000"), "[]", 900L, null);
+        tentativa.vincularOcorrencia(UUID.randomUUID(), Instant.parse("2026-05-03T11:00:00Z"));
+        Trajeto semMotorista = new Trajeto(UUID.randomUUID(), null, Instant.parse("2026-05-04T10:00:00Z"));
+        semMotorista.vincularOcorrencia(UUID.randomUUID(), Instant.parse("2026-05-04T11:00:00Z"));
+        when(viagemService.listarEncerradosPorOcorrencia(any(), any())).thenReturn(List.of(tentativa, semMotorista));
+        when(ajusteViagemService.resolverValorVigente(tentativa.getId(), CampoAjusteViagem.TARIFA_APLICADA))
+                .thenReturn(Optional.of(new BigDecimal("72.00")));
+        when(ajusteViagemService.resolverValorVigente(tentativa.getId(), CampoAjusteViagem.VALOR_PEDAGIO))
+                .thenReturn(Optional.of(BigDecimal.ZERO));
+
+        fechamentoService.gerar(inicio, fim);
+
+        ArgumentCaptor<ItemFechamento> captor = ArgumentCaptor.forClass(ItemFechamento.class);
+        org.mockito.Mockito.verify(itemFechamentoRepository).save(captor.capture());
+        ItemFechamento item = captor.getValue();
+        assertThat(item.isTentativaSemSucesso()).isTrue();
+        assertThat(item.getMotoristaId()).isEqualTo(quemDirigiu);
+        assertThat(item.getTrajetoId()).isEqualTo(tentativa.getId());
+        assertThat(item.getValorPagamentoEntrega()).isEqualByComparingTo("72.00");
+    }
+
     /** HU17 FR-006: um AjusteViagem mais recente que o valor original passa a ser o valor usado no fechamento. */
     @Test
     void gerarUsaValorAjustadoPeloMotoristaQuandoExiste() {
@@ -121,7 +152,7 @@ class FechamentoServiceTest {
         when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaEncerrada(entregaId, motoristaId)));
 
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("10.000"), new BigDecimal("10.000"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
 
@@ -150,7 +181,7 @@ class FechamentoServiceTest {
         when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaEncerrada(entregaId, motoristaId)));
 
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("10.000"), new BigDecimal("10.000"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
 
@@ -219,7 +250,7 @@ class FechamentoServiceTest {
                 entregaId, "foto.jpg", "Fulano", Instant.parse("2026-05-05T12:00:00Z"), 0, 0, false, null);
         when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaEncerrada(entregaId, UUID.randomUUID())));
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("58.300"), new BigDecimal("58.300"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
         when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).thenReturn(Optional.of(new BigDecimal("233.216")));

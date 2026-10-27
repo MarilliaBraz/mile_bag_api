@@ -11,7 +11,8 @@ public record ItemFechamentoResponse(
         BigDecimal valorPagamentoEntrega,
         BigDecimal valorReembolsoPedagio,
         StatusItemFechamento statusItem,
-        String motivoPendencia) {
+        String motivoPendencia,
+        boolean tentativaSemSucesso) {
 
     public static ItemFechamentoResponse de(ItemFechamento item) {
         return new ItemFechamentoResponse(
@@ -21,6 +22,7 @@ public record ItemFechamentoResponse(
                 item.getValorPagamentoEntrega(),
                 item.getValorReembolsoPedagio(),
                 item.getStatusItem(),
-                item.getMotivoPendencia());
+                item.getMotivoPendencia(),
+                item.isTentativaSemSucesso());
     }
 }

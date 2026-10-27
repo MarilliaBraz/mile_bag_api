@@ -1,5 +1,7 @@
 package com.marillia.milebag.business.viagem.repository;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,5 +15,9 @@ import com.marillia.milebag.core.base.BaseRepository;
  */
 public interface TrajetoRepository extends BaseRepository<Trajeto, UUID> {
 
-    Optional<Trajeto> findByEntregaId(UUID entregaId);
+    /** A viagem mais recente da entrega - a da tentativa atual, a menos que uma ocorrencia a tenha encerrado (ver ViagemService). */
+    Optional<Trajeto> findFirstByEntregaIdOrderByDataInicioDesc(UUID entregaId);
+
+    /** Viagens de tentativas sem sucesso encerradas no periodo (pagas no fechamento a quem dirigiu). */
+    List<Trajeto> findByOcorrenciaIdIsNotNullAndEncerradoEmGreaterThanEqualAndEncerradoEmLessThan(Instant inicio, Instant fim);
 }

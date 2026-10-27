@@ -163,7 +163,7 @@ public class AjusteViagemService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal kmTotal = kmIda.get().add(kmVolta.get()).add(kmComplementar);
 
-        return tabelaTarifaService.resolverTarifaAplicavel(entrega.getMotoristaResponsavel(), null).map(tarifa -> valorPagamento(tarifa, kmTotal));
+        return tabelaTarifaService.resolverTarifaAplicavel(motoristaDoTrajeto(trajeto, entrega), null).map(tarifa -> valorPagamento(tarifa, kmTotal));
     }
 
     private BigDecimal valorPagamento(TabelaTarifa tarifa, BigDecimal kmTotal) {
@@ -209,8 +209,16 @@ public class AjusteViagemService {
                 .orElseThrow(() -> new IllegalStateException("Trajeto " + trajeto.getId() + " sem entrega associada."));
     }
 
+    /**
+     * Quem dirigiu (V37). Viagens anteriores a V37 sem esse dado caem no motorista responsavel da entrega, como
+     * antes; a de uma tentativa sem sucesso continua sendo de quem a fez, mesmo com a entrega ja reaberta.
+     */
+    private UUID motoristaDoTrajeto(Trajeto trajeto, Entrega entrega) {
+        return trajeto.getMotoristaId() != null ? trajeto.getMotoristaId() : entrega.getMotoristaResponsavel();
+    }
+
     private void validarPertenceAoMotorista(Trajeto trajeto, UUID motoristaId) {
-        if (!motoristaId.equals(entregaDoTrajeto(trajeto).getMotoristaResponsavel())) {
+        if (!motoristaId.equals(motoristaDoTrajeto(trajeto, entregaDoTrajeto(trajeto)))) {
             throw new AcessoNegadoException("Este trajeto nao pertence a uma entrega do motorista autenticado.");
         }
     }

@@ -93,20 +93,27 @@ public class FechamentoService {
         Fechamento fechamento = fechamentoRepository.save(new Fechamento(periodoInicio, periodoFim));
 
         List<Entrega> entregasElegiveis = buscarEntregasElegiveis(periodoInicio, periodoFim);
-        boolean algumPendente = false;
+        List<ItemFechamento> itens = new ArrayList<>();
         for (Entrega entrega : entregasElegiveis) {
-            ItemFechamento item = itemFechamentoRepository.save(calcularItem(fechamento.getId(), entrega));
-            if (item.getStatusItem() == StatusItemFechamento.PENDENTE) {
-                algumPendente = true;
-            }
+            itens.add(itemFechamentoRepository.save(calcularItem(fechamento.getId(), entrega)));
         }
+        // Tentativas sem sucesso (HU07) encerradas no periodo: a viagem e paga a quem dirigiu.
+        for (Trajeto tentativa : viagemService.listarEncerradosPorOcorrencia(inicioDoPeriodo(periodoInicio), fimDoPeriodo(periodoFim))) {
+            if (tentativa.getMotoristaId() == null) {
+                // Viagem anterior a V37 sem registro de quem dirigiu: nao ha a quem pagar.
+                log.warn("Trajeto {} de tentativa sem sucesso sem motorista registrado - fora do fechamento {}.", tentativa.getId(), fechamento.getId());
+                continue;
+            }
+            itens.add(itemFechamentoRepository.save(calcularItemTentativaSemSucesso(fechamento.getId(), tentativa)));
+        }
+        boolean algumPendente = itens.stream().anyMatch(item -> item.getStatusItem() == StatusItemFechamento.PENDENTE);
 
         fechamento.atualizarStatus(algumPendente ? StatusFechamento.COM_PENDENCIAS : StatusFechamento.COMPLETO);
         fechamento = fechamentoRepository.save(fechamento);
 
         log.info(
                 "Fechamento {} gerado para {} a {} ({} entrega(s), status {})",
-                fechamento.getId(), periodoInicio, periodoFim, entregasElegiveis.size(), fechamento.getStatus());
+                fechamento.getId(), periodoInicio, periodoFim, itens.size(), fechamento.getStatus());
         return new GeracaoResultado(montarResumo(fechamento), true);
     }
 
@@ -142,10 +149,7 @@ public class FechamentoService {
 
     /** FR-004: so entregas encerradas com comprovante cuja data/hora cai dentro do periodo. */
     private List<Entrega> buscarEntregasElegiveis(LocalDate periodoInicio, LocalDate periodoFim) {
-        Instant inicioInstant = periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant fimInstant = periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-
-        return comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
+        return comprovanteEntregaService.listarPorPeriodo(inicioDoPeriodo(periodoInicio), fimDoPeriodo(periodoFim)).stream()
                 .map(ComprovanteEntrega::getEntregaId)
                 .map(entregaService::buscarPorId)
                 .flatMap(Optional::stream)
@@ -170,7 +174,15 @@ public class FechamentoService {
             return new ItemFechamento(
                     fechamentoId, entrega.getId(), motoristaId, null, null, StatusItemFechamento.PENDENTE, "trajeto da viagem nao consolidado");
         }
+        return calcularValores(fechamentoId, entrega.getId(), motoristaId, trajeto, false);
+    }
 
+    /** Mesma resolucao de valores da entrega concluida, para a viagem de quem dirigiu na tentativa sem sucesso. */
+    private ItemFechamento calcularItemTentativaSemSucesso(UUID fechamentoId, Trajeto trajeto) {
+        return calcularValores(fechamentoId, trajeto.getEntregaId(), trajeto.getMotoristaId(), trajeto, true);
+    }
+
+    private ItemFechamento calcularValores(UUID fechamentoId, UUID entregaId, UUID motoristaId, Trajeto trajeto, boolean tentativaSemSucesso) {
         List<String> problemas = new ArrayList<>();
         Optional<BigDecimal> valorPagamento = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
         if (valorPagamento.isEmpty()) {
@@ -182,14 +194,21 @@ public class FechamentoService {
         }
 
         if (!problemas.isEmpty()) {
-            return new ItemFechamento(
-                    fechamentoId, entrega.getId(), motoristaId, null, null, StatusItemFechamento.PENDENTE, String.join("; ", problemas));
+            return new ItemFechamento(fechamentoId, entregaId, motoristaId, trajeto.getId(), tentativaSemSucesso, null, null,
+                    StatusItemFechamento.PENDENTE, String.join("; ", problemas));
         }
         // Dinheiro em 2 casas ja aqui: a coluna arredonda ao gravar, e sem isto o resumo devolvido por POST (valores em
         // memoria, ex.: 233,216) divergia das consultas seguintes (233,22) e do total dos PDFs.
-        return new ItemFechamento(
-                fechamentoId, entrega.getId(), motoristaId, dinheiro(valorPagamento.get()), dinheiro(valorPedagio.get()),
-                StatusItemFechamento.CALCULADO, null);
+        return new ItemFechamento(fechamentoId, entregaId, motoristaId, trajeto.getId(), tentativaSemSucesso,
+                dinheiro(valorPagamento.get()), dinheiro(valorPedagio.get()), StatusItemFechamento.CALCULADO, null);
+    }
+
+    private static Instant inicioDoPeriodo(LocalDate periodoInicio) {
+        return periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private static Instant fimDoPeriodo(LocalDate periodoFim) {
+        return periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     private static BigDecimal dinheiro(BigDecimal valor) {

@@ -55,10 +55,37 @@ public class Trajeto extends BaseEntity {
     @Column(name = "justificativa_divergencia")
     private String justificativaDivergencia;
 
-    public Trajeto(UUID entregaId, Instant dataInicio) {
+    /** Quem dirigiu (V37): a entrega reaberta por ocorrencia fica sem motorista, mas a viagem continua sendo dele. */
+    @Column(name = "motorista_id", updatable = false)
+    private UUID motoristaId;
+
+    @Column(name = "encerrado_em")
+    private Instant encerradoEm;
+
+    /**
+     * Ocorrencia que encerrou esta viagem (HU07): uma tentativa sem sucesso. A viagem fica no historico, paga
+     * a quem dirigiu, e deixa de ser a viagem da tentativa atual - a nova tentativa comeca uma viagem nova.
+     */
+    @Column(name = "ocorrencia_id")
+    private UUID ocorrenciaId;
+
+    public Trajeto(UUID entregaId, UUID motoristaId, Instant dataInicio) {
         this.entregaId = entregaId;
+        this.motoristaId = motoristaId;
         this.status = TrajetoStatus.EM_EXECUCAO;
         this.dataInicio = dataInicio;
+    }
+
+    /** Tentativa sem sucesso (HU07): a viagem ja encerrada (ou encerrada agora, por quem chama) passa a pertencer a ocorrencia. */
+    public void vincularOcorrencia(UUID ocorrenciaId, Instant quando) {
+        this.ocorrenciaId = ocorrenciaId;
+        if (this.encerradoEm == null) {
+            this.encerradoEm = quando;
+        }
+    }
+
+    public boolean encerradoPorOcorrencia() {
+        return ocorrenciaId != null;
     }
 
     /**
@@ -76,5 +103,6 @@ public class Trajeto extends BaseEntity {
         this.tempoFinal = tempoFinal;
         this.justificativaDivergencia = justificativaDivergencia;
         this.status = TrajetoStatus.ENCERRADO;
+        this.encerradoEm = Instant.now();
     }
 }

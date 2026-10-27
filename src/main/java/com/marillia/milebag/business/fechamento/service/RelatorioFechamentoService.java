@@ -75,6 +75,9 @@ public class RelatorioFechamentoService {
             totalPorMotorista.merge(item.getMotoristaId(), extrator.apply(item), BigDecimal::add);
         }
         long pendentes = itens.stream().filter(item -> item.getStatusItem() == StatusItemFechamento.PENDENTE).count();
+        long tentativas = itens.stream()
+                .filter(item -> item.getStatusItem() == StatusItemFechamento.CALCULADO && item.isTentativaSemSucesso())
+                .count();
         ParaRelatorio identidade = identidadeVisualTenantService.carregarParaRelatorio();
 
         try (PDDocument documento = new PDDocument()) {
@@ -99,6 +102,16 @@ public class RelatorioFechamentoService {
                 for (Map.Entry<UUID, BigDecimal> entrada : totalPorMotorista.entrySet()) {
                     String linha = "Motorista " + entrada.getKey() + ": R$ " + entrada.getValue().setScale(2, RoundingMode.HALF_UP);
                     y = escreverLinha(conteudo, linha, PDType1Font.HELVETICA, 11, y);
+                }
+
+                if (tentativas > 0) {
+                    y -= 10;
+                    y = escreverLinha(
+                            conteudo,
+                            "Inclui " + tentativas + " viagem(ns) de tentativa sem sucesso (ocorrencia), paga(s) a quem dirigiu.",
+                            PDType1Font.HELVETICA_OBLIQUE,
+                            10,
+                            y);
                 }
 
                 if (pendentes > 0) {

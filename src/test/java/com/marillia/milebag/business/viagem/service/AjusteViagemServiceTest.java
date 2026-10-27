@@ -59,7 +59,7 @@ class AjusteViagemServiceTest {
     }
 
     private Trajeto trajetoConsolidado(UUID entregaId, String kmIda, String kmVolta, String pracasPedagioFinal) {
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal(kmIda), new BigDecimal(kmVolta), pracasPedagioFinal, 600L, null);
         return trajeto;
     }
@@ -184,7 +184,7 @@ class AjusteViagemServiceTest {
     void registrarAjusteRecusaQuandoTrajetoAindaNaoConsolidado() {
         UUID entregaId = UUID.randomUUID();
         UUID motoristaId = UUID.randomUUID();
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
 

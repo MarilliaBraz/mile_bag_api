@@ -21,6 +21,7 @@ import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.ocorrencia.model.Ocorrencia;
 import com.marillia.milebag.business.ocorrencia.model.OcorrenciaResponse;
 import com.marillia.milebag.business.ocorrencia.repository.OcorrenciaRepository;
+import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -38,16 +39,19 @@ public class OcorrenciaService {
     private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final EntregaService entregaService;
     private final MensagemService mensagemService;
+    private final ViagemService viagemService;
 
     public OcorrenciaService(
             OcorrenciaRepository ocorrenciaRepository,
             MotivoOcorrenciaService motivoOcorrenciaService,
             EntregaService entregaService,
-            MensagemService mensagemService) {
+            MensagemService mensagemService,
+            ViagemService viagemService) {
         this.ocorrenciaRepository = ocorrenciaRepository;
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.entregaService = entregaService;
         this.mensagemService = mensagemService;
+        this.viagemService = viagemService;
     }
 
     /** {@code novo}: distingue um registro recem-criado de um reenvio idempotente (mesmo idLocal), para o controller escolher 201 ou 200. */
@@ -87,6 +91,8 @@ public class OcorrenciaService {
         Ocorrencia ocorrencia = ocorrenciaRepository.save(
                 new Ocorrencia(entregaId, motivo.getId(), descricaoAdicional, Instant.now(), temIdLocal, idLocal, janela));
 
+        // A viagem desta tentativa termina aqui (e e paga a quem dirigiu); a nova tentativa comeca outra.
+        viagemService.encerrarPorOcorrencia(entregaId, ocorrencia.getId());
         entregaService.reabrirParaNovaTentativa(entregaId, janela);
 
         log.info(

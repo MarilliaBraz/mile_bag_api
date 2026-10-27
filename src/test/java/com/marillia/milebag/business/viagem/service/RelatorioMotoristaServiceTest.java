@@ -122,7 +122,7 @@ class RelatorioMotoristaServiceTest {
         entrega.setBdoId(bdoId);
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
 
-        Trajeto trajeto = new Trajeto(entregaId, Instant.now());
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("10.000"), new BigDecimal("10.000"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
 

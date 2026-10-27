@@ -106,19 +106,48 @@ public class ViagemService {
         this.mensagemService = mensagemService;
     }
 
-    /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1). */
+    /**
+     * Ponto de leitura publico para outros dominios (fechamento) - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1).
+     * Devolve a viagem da tentativa atual: a de uma tentativa sem sucesso so aparece em {@link #listarEncerradosPorOcorrencia}.
+     */
     @Transactional(readOnly = true)
     public Optional<Trajeto> buscarTrajetoPorEntrega(UUID entregaId) {
-        return trajetoRepository.findByEntregaId(entregaId);
+        return trajetoDaTentativaAtual(entregaId);
+    }
+
+    /** Viagens de tentativas sem sucesso encerradas no periodo [inicio, fim) - pagas a quem dirigiu (fechamento, relatorio). */
+    @Transactional(readOnly = true)
+    public List<Trajeto> listarEncerradosPorOcorrencia(Instant inicio, Instant fim) {
+        return trajetoRepository.findByOcorrenciaIdIsNotNullAndEncerradoEmGreaterThanEqualAndEncerradoEmLessThan(inicio, fim);
+    }
+
+    /**
+     * HU07: a ocorrencia encerra a viagem da tentativa (com o ultimo calculo de rota, sem exigir justificativa de
+     * divergencia - quem chegou ao endereco e nao entregou nao "desviou") e a vincula a ocorrencia. A entrega
+     * reaberta comeca, na nova tentativa, uma viagem nova. Sem viagem iniciada, nao faz nada.
+     */
+    @Transactional
+    public void encerrarPorOcorrencia(UUID entregaId, UUID ocorrenciaId) {
+        trajetoDaTentativaAtual(entregaId).ifPresent(trajeto -> {
+            if (trajeto.getStatus() == TrajetoStatus.EM_EXECUCAO) {
+                CalculoRota calculoFinal = ultimoCalculo(trajeto);
+                trajeto.consolidar(
+                        calculoFinal.getKmIda(), calculoFinal.getKmVolta(), calculoFinal.getPracasPedagio(), calculoFinal.getTempoEstimado(), null);
+            }
+            trajeto.vincularOcorrencia(ocorrenciaId, Instant.now());
+            trajetoRepository.save(trajeto);
+            log.info("Trajeto {} encerrado pela ocorrencia {} (tentativa sem sucesso)", trajeto.getId(), ocorrenciaId);
+        });
     }
 
     @Transactional
     public TrajetoIniciadoResponse iniciarViagem(UUID entregaId, IniciarViagemRequest request) {
-        if (entregaService.buscarPorId(entregaId).isEmpty()) {
-            throw new RecursoNaoEncontradoException("Entrega nao encontrada.");
-        }
+        UUID motoristaId = entregaService.buscarPorId(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."))
+                .getMotoristaResponsavel();
 
-        if (trajetoRepository.findByEntregaId(entregaId).isPresent()) {
+        // Uma viagem por tentativa: a de uma tentativa sem sucesso (encerrada por ocorrencia) nao impede a nova.
+        if (trajetoDaTentativaAtual(entregaId).isPresent()) {
             throw new ConflitoException("Esta entrega ja possui um trajeto iniciado.");
         }
 
@@ -128,7 +157,7 @@ public class ViagemService {
 
         Instant agora = Instant.now();
 
-        Trajeto trajeto = trajetoRepository.save(new Trajeto(entregaId, agora));
+        Trajeto trajeto = trajetoRepository.save(new Trajeto(entregaId, motoristaId, agora));
 
         CalculoRota calculoInicial = calculoRotaRepository.save(
                 criarCalculoRota(trajeto.getId(), selecionada.rotaEscolhida(), selecionada.tipoSelecao(), agora, true));
@@ -163,7 +192,7 @@ public class ViagemService {
      */
     @Transactional
     public boolean registrarCalculoRotaSeTrajetoExistir(UUID entregaId, RotaAlternativa alternativa, TipoSelecao tipoSelecao) {
-        Trajeto trajeto = trajetoRepository.findByEntregaId(entregaId).orElse(null);
+        Trajeto trajeto = trajetoDaTentativaAtual(entregaId).orElse(null);
         if (trajeto == null) {
             return false;
         }
@@ -218,7 +247,7 @@ public class ViagemService {
     /** HU20, FR-006: o marco (a_caminho/chegada) mais recente da entrega, para o painel (HU19) - null quando nenhum foi registrado ainda. */
     @Transactional(readOnly = true)
     public Optional<String> marcoMaisRecente(UUID entregaId) {
-        return trajetoRepository.findByEntregaId(entregaId)
+        return trajetoDaTentativaAtual(entregaId)
                 .flatMap(trajeto -> checkpointGpsRepository.findFirstByTrajetoIdAndTipoInOrderByDataHoraDesc(
                         trajeto.getId(), TIPOS_MARCO_PROGRESSO))
                 .map(checkpoint -> checkpoint.getTipo().name());
@@ -329,8 +358,21 @@ public class ViagemService {
     }
 
     private Trajeto buscarTrajetoOuFalhar(UUID entregaId) {
-        return trajetoRepository.findByEntregaId(entregaId)
+        return trajetoDaTentativaAtual(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Esta entrega nao tem um trajeto iniciado."));
+    }
+
+    /** A viagem mais recente, a menos que uma ocorrencia a tenha encerrado: ai a tentativa atual ainda nao tem viagem. */
+    private Optional<Trajeto> trajetoDaTentativaAtual(UUID entregaId) {
+        return trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId).filter(trajeto -> !trajeto.encerradoPorOcorrencia());
+    }
+
+    private CalculoRota ultimoCalculo(Trajeto trajeto) {
+        List<CalculoRota> historico = calculoRotaRepository.findByTrajetoIdOrderByDataHoraAsc(trajeto.getId());
+        if (historico.isEmpty()) {
+            throw new IllegalStateException("Trajeto " + trajeto.getId() + " nao tem calculo de rota.");
+        }
+        return historico.get(historico.size() - 1);
     }
 
     private String escrever(Object valor) {
