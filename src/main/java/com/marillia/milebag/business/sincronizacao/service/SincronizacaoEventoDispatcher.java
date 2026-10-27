@@ -100,7 +100,7 @@ public class SincronizacaoEventoDispatcher {
     @Transactional
     public UUID despachar(EventoSincronizacaoRequest evento, UUID motoristaId, Map<UUID, UUID> resolvidosNesteLote) {
         UUID idServidor = switch (evento.tipoEvento()) {
-            case BDO_CAPTURADO -> despacharBdoCapturado(evento);
+            case BDO_CAPTURADO -> despacharBdoCapturado(evento, motoristaId);
             case ENTREGA_AUTOATRIBUIDA -> despacharEntregaAutoatribuida(evento, motoristaId, resolvidosNesteLote);
             case ROTA_ESCOLHIDA -> despacharRotaEscolhida(evento, resolvidosNesteLote);
             case VIAGEM_INICIADA -> despacharViagemIniciada(evento, resolvidosNesteLote);
@@ -113,10 +113,10 @@ public class SincronizacaoEventoDispatcher {
         return idServidor;
     }
 
-    private UUID despacharBdoCapturado(EventoSincronizacaoRequest evento) {
+    private UUID despacharBdoCapturado(EventoSincronizacaoRequest evento, UUID motoristaId) {
         PayloadBdoCapturado payload = converter(evento, PayloadBdoCapturado.class);
         MultipartFile imagem = new ByteArrayMultipartFile("imagem", payload.nomeArquivo(), decodificar(payload.imagemBase64()));
-        BdoResponse resposta = bdoService.capturar(imagem);
+        BdoResponse resposta = bdoService.capturar(imagem, motoristaId);
         return resposta.id();
     }
 

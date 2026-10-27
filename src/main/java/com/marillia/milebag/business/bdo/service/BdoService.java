@@ -68,7 +68,7 @@ public class BdoService {
     }
 
     @Transactional
-    public BdoResponse capturar(MultipartFile imagem) {
+    public BdoResponse capturar(MultipartFile imagem, UUID capturadoPor) {
         if (imagem == null || imagem.isEmpty()) {
             throw new RegraNegocioException("A fotografia do BDO e obrigatoria.");
         }
@@ -80,6 +80,7 @@ public class BdoService {
         bdo.setOrigem(BdoOrigem.FOTO_MANUAL);
         bdo.setStatusConferencia(StatusConferencia.PENDENTE);
         bdo.setDataCaptura(Instant.now());
+        bdo.setCapturadoPor(capturadoPor);
         bdo.setImagemOriginal(salvarImagem(tenantId, imagem));
         aplicarCamposExtraidos(bdo, camposExtraidos);
 
@@ -137,6 +138,19 @@ public class BdoService {
         }
         excluirComImagem(bdo);
         log.info("Captura de BDO {} descartada na conferencia", id);
+    }
+
+    /**
+     * Fotos do motorista que ainda esperam conferencia (HU01/HU08). A captura
+     * feita sem internet so vira BDO na sincronizacao, depois que o motorista
+     * saiu da tela de captura: e por esta lista que ele chega a conferencia.
+     */
+    @Transactional(readOnly = true)
+    public List<BdoResponse> listarPendentesDeConferencia(UUID motoristaId) {
+        return bdoRepository.findByCapturadoPorAndOrigemAndStatusConferenciaOrderByDataCapturaAsc(
+                        motoristaId, BdoOrigem.FOTO_MANUAL, StatusConferencia.PENDENTE).stream()
+                .map(bdoMapper::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)

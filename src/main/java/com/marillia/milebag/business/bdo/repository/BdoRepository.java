@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.Query;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.core.base.BaseRepository;
 
@@ -24,6 +25,10 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
      * (campo-chave, ver spec.md "Assumptions").
      */
     List<Bdo> findByNumero(String numero);
+
+    /** Capturas por foto do motorista ainda sem conferencia - inclusive as tiradas sem internet e enviadas na sincronizacao (HU08). */
+    List<Bdo> findByCapturadoPorAndOrigemAndStatusConferenciaOrderByDataCapturaAsc(
+            UUID capturadoPor, BdoOrigem origem, StatusConferencia statusConferencia);
 
     /**
      * Lista de BDOs disponiveis para autoatribuicao (HU19, FR-007): ja

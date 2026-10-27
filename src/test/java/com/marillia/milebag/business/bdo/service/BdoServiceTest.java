@@ -9,18 +9,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import com.marillia.milebag.business.bdo.mapper.BdoMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
+import com.marillia.milebag.business.bdo.model.BdoResponse;
+import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -62,6 +67,34 @@ class BdoServiceTest {
         when(bdoRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThat(bdoService.buscarPorId(id)).isEmpty();
+    }
+
+    @Test
+    void capturarGuardaQuemFotografou() throws IOException {
+        UUID motoristaId = UUID.randomUUID();
+        MockMultipartFile foto = new MockMultipartFile("imagem", "bdo.png", "image/png", new byte[] {1, 2, 3});
+        when(bdoOcrService.extrair(foto)).thenReturn(new CamposExtraidosBdo("GYN1", null, null, null, null, null, null));
+        when(armazenamentoImagemService.salvar(any(), eq(foto))).thenReturn("tenant/bdo.png");
+        when(bdoRepository.save(any(Bdo.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
+
+        bdoService.capturar(foto, motoristaId);
+
+        ArgumentCaptor<Bdo> salvo = ArgumentCaptor.forClass(Bdo.class);
+        verify(bdoRepository).save(salvo.capture());
+        assertThat(salvo.getValue().getCapturadoPor()).isEqualTo(motoristaId);
+        assertThat(salvo.getValue().getStatusConferencia()).isEqualTo(StatusConferencia.PENDENTE);
+    }
+
+    @Test
+    void listarPendentesDeConferenciaTrazSoAsFotosPendentesDoMotorista() {
+        UUID motoristaId = UUID.randomUUID();
+        Bdo pendente = bdo(BdoOrigem.FOTO_MANUAL, StatusConferencia.PENDENTE, "tenant/foto.png");
+        BdoResponse resposta = new BdoResponse(pendente.getId(), BdoOrigem.FOTO_MANUAL, null, "tenant/foto.png", StatusConferencia.PENDENTE, null, List.of());
+        when(bdoRepository.findByCapturadoPorAndOrigemAndStatusConferenciaOrderByDataCapturaAsc(
+                motoristaId, BdoOrigem.FOTO_MANUAL, StatusConferencia.PENDENTE)).thenReturn(List.of(pendente));
+        when(bdoMapper.toResponse(pendente)).thenReturn(resposta);
+
+        assertThat(bdoService.listarPendentesDeConferencia(motoristaId)).containsExactly(resposta);
     }
 
     @Test
