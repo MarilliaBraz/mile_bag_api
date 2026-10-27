@@ -66,8 +66,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtException ex) {
             // Token ausente/invalido/expirado: segue sem autenticacao: o
-            // Spring Security responde 401 nos endpoints protegidos
-            // (SecurityConfig) - nunca lancar 500 por causa de um token ruim.
+            // Spring Security responde 401 sessao-expirada nos endpoints
+            // protegidos (RespostaErroSeguranca) - nunca lancar 500 por causa
+            // de um token ruim.
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
