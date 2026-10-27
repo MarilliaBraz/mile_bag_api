@@ -38,6 +38,7 @@ import com.marillia.milebag.core.geo.PracaNaRota;
 import com.marillia.milebag.core.geo.RotaAlternativa;
 import com.marillia.milebag.core.geo.RoutingClient;
 import com.marillia.milebag.core.geo.TipoSelecao;
+import com.marillia.milebag.core.geo.TracadoAlternativa;
 
 /**
  * Orquestra o calculo e a selecao de rota (US1 desta HU) - ver
@@ -61,6 +62,9 @@ public class RotaService implements SelecaoRotaProvider {
     private final ViagemService viagemService;
     private final ObjectMapper objectMapper;
     private final PracaPedagioService pracaPedagioService;
+    /** Desvio maximo do traçado desenhado em relacao ao do motor de rotas: invisivel no zoom de cidade, e corta a maior parte dos pontos. */
+    private static final double TOLERANCIA_TRACADO_MAPA_METROS = 5.0;
+
     private final double raioDeteccaoPedagioMetros;
 
     public RotaService(
@@ -129,7 +133,11 @@ public class RotaService implements SelecaoRotaProvider {
         propostaRotaRepository.save(proposta);
 
         log.info("Rota calculada para a entrega {} ({} alternativa(s))", entregaId, alternativas.size());
-        return new CalcularRotaResponse(entregaId, origem, destino, alternativas, resultado.motorDisponivel());
+        List<TracadoAlternativa> tracados = resultado.alternativas().stream()
+                .map(rota -> new TracadoAlternativa(rota.alternativa().id(),
+                        GeometriaRota.simplificar(rota.tracado(), TOLERANCIA_TRACADO_MAPA_METROS)))
+                .toList();
+        return new CalcularRotaResponse(entregaId, origem, destino, alternativas, resultado.motorDisponivel(), tracados);
     }
 
     @Transactional
