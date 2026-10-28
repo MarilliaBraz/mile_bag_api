@@ -94,7 +94,7 @@ class NotificadorBdoNovoTest {
         String conteudo = notificador.conteudo(evento);
 
         assertThat(conteudo).contains("\"titulo\":\"Nova bagagem para retirar no aeroporto\"");
-        assertThat(conteudo).contains("BDO GYNLA12342 chegou por e-mail");
+        assertThat(conteudo).contains("BDO GYNLA12342 chegou por e-mail e está disponível para assumir.");
         assertThat(conteudo).contains("\"url\":\"/motorista\"");
     }
 

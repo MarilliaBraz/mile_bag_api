@@ -69,9 +69,10 @@ public class NotificadorBdoNovo {
     String conteudo(BdoRecebidoPorEmail evento) {
         Map<String, String> notificacao = new LinkedHashMap<>();
         notificacao.put("titulo", "Nova bagagem para retirar no aeroporto");
+        // Com acentos, ao contrario das mensagens da API: este texto aparece direto na notificacao do celular.
         notificacao.put("corpo", evento.numero() == null
-                ? "Um BDO novo chegou por e-mail e esta disponivel para assumir."
-                : "BDO " + evento.numero() + " chegou por e-mail e esta disponivel para assumir.");
+                ? "Um BDO novo chegou por e-mail e está disponível para assumir."
+                : "BDO " + evento.numero() + " chegou por e-mail e está disponível para assumir.");
         notificacao.put("url", "/motorista");
         notificacao.put("bdoId", evento.bdoId().toString());
         try {
