@@ -229,13 +229,13 @@ class MotoristaServiceTest {
         });
 
         var resultados = service.criarEmLote(java.util.List.of(
-                new MotoristaService.NovoMotorista("Ana", "ana", null),
-                new MotoristaService.NovoMotorista("Bia", "bia", "senha-forte-1"),
-                new MotoristaService.NovoMotorista("Caio", "caio", "senha-forte-2")));
+                new MotoristaService.NovaConta("Ana", "ana", null),
+                new MotoristaService.NovaConta("Bia", "bia", "senha-forte-1"),
+                new MotoristaService.NovaConta("Caio", "caio", "senha-forte-2")));
 
         assertThat(resultados).extracting(MotoristaService.ResultadoLote::criado).containsExactly(true, false, true);
         assertThat(resultados.get(0).senhaGerada()).hasSize(12).matches("[a-zA-Z2-9]+");
-        assertThat(passwordEncoder.matches(resultados.get(0).senhaGerada(), resultados.get(0).motorista().getSenhaHash())).isTrue();
+        assertThat(passwordEncoder.matches(resultados.get(0).senhaGerada(), resultados.get(0).conta().getSenhaHash())).isTrue();
         assertThat(resultados.get(1).mensagem()).contains("Ja existe");
         assertThat(resultados.get(2).senhaGerada()).as("senha informada nao volta na resposta").isNull();
     }
@@ -246,10 +246,10 @@ class MotoristaServiceTest {
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> chamada.getArgument(0));
 
         var resultados = service.criarEmLote(java.util.List.of(
-                new MotoristaService.NovoMotorista("Ana", "ana", "senha-forte-1"),
-                new MotoristaService.NovoMotorista("Ana 2", "ANA", "senha-forte-1"),
-                new MotoristaService.NovoMotorista("", "sem-nome", "senha-forte-1"),
-                new MotoristaService.NovoMotorista("Curta", "curta", "abc")));
+                new MotoristaService.NovaConta("Ana", "ana", "senha-forte-1"),
+                new MotoristaService.NovaConta("Ana 2", "ANA", "senha-forte-1"),
+                new MotoristaService.NovaConta("", "sem-nome", "senha-forte-1"),
+                new MotoristaService.NovaConta("Curta", "curta", "abc")));
 
         assertThat(resultados).extracting(MotoristaService.ResultadoLote::criado).containsExactly(true, false, false, false);
         assertThat(resultados.get(1).mensagem()).contains("repetido neste lote");
@@ -262,7 +262,7 @@ class MotoristaServiceTest {
     void loteVazioOuGrandeDemaisERecusado() {
         assertThatThrownBy(() -> service.criarEmLote(java.util.List.of())).isInstanceOf(RegraNegocioException.class);
         assertThatThrownBy(() -> service.criarEmLote(null)).isInstanceOf(RegraNegocioException.class);
-        var demais = java.util.Collections.nCopies(MotoristaService.MAXIMO_POR_LOTE + 1, new MotoristaService.NovoMotorista("X", "x", "senha-forte-1"));
+        var demais = java.util.Collections.nCopies(MotoristaService.MAXIMO_POR_LOTE + 1, new MotoristaService.NovaConta("X", "x", "senha-forte-1"));
         assertThatThrownBy(() -> service.criarEmLote(demais)).isInstanceOf(RegraNegocioException.class);
     }
 

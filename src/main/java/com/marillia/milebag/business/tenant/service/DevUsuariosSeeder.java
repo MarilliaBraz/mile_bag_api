@@ -35,7 +35,9 @@ import com.marillia.milebag.core.config.security.TenantContext;
  * <p>Cria (se ainda nao existirem): o administrador da plataforma {@code admin},
  * a empresa {@code dev} (no plano de desenvolvimento) e, nela, o administrador
  * {@code empresa} e o {@code motorista} - este ultimo porque nenhuma HU cria
- * motoristas ainda, e sem ele o app do motorista nao teria como entrar.</p>
+ * motoristas ainda, e sem ele o app do motorista nao teria como entrar. E a
+ * companhia aerea {@code companhia-dev} (codigo ZZ, HU33), com o administrador
+ * {@code companhia} e o {@code funcionario}.</p>
  */
 @Component
 @ConditionalOnProperty(name = "milebag.dev.seed-usuarios", havingValue = "true")
@@ -45,6 +47,7 @@ public class DevUsuariosSeeder implements ApplicationRunner {
 
     static final String SENHA_DEV = "12345678";
     static final String IDENTIFICADOR_EMPRESA_DEV = "dev";
+    static final String IDENTIFICADOR_COMPANHIA_DEV = "companhia-dev";
     /** Plano criado por V22__seed_dev_plano_assinatura.sql. */
     /** Igual ao de application-dev.yml. */
     static final String SEGREDO_JWT_DEV = "dev-only-secret-nao-usar-em-producao-0123456789abcdef";
@@ -97,6 +100,13 @@ public class DevUsuariosSeeder implements ApplicationRunner {
         motivoOcorrenciaService.criarPadroesSeAusentes(tenantId);
         criarUsuarioSeAusente(tenantId, "empresa", Papeis.ADMINISTRADOR_TENANT, "Administrador Dev");
         criarUsuarioSeAusente(tenantId, "motorista", Papeis.MOTORISTA, "Motorista Dev");
+
+        // HU33: companhia aerea de teste, com o administrador e um funcionario.
+        UUID companhiaId = transacao.execute(status -> tenantRepository.findByIdentificadorEmpresa(IDENTIFICADOR_COMPANHIA_DEV)
+                .map(Tenant::getId)
+                .orElseGet(() -> tenantRepository.save(Tenant.companhiaAerea(IDENTIFICADOR_COMPANHIA_DEV, "Companhia Aerea Dev", "ZZ")).getId()));
+        criarUsuarioSeAusente(companhiaId, "companhia", Papeis.ADMINISTRADOR_COMPANHIA, "Administrador Companhia Dev");
+        criarUsuarioSeAusente(companhiaId, "funcionario", Papeis.FUNCIONARIO_COMPANHIA, "Funcionario Dev");
     }
 
     private void criarUsuarioSeAusente(UUID tenantId, String login, String papel, String nome) {

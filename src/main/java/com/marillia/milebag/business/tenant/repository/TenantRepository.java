@@ -1,11 +1,13 @@
 package com.marillia.milebag.business.tenant.repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.marillia.milebag.business.tenant.model.Tenant;
+import com.marillia.milebag.business.tenant.model.TipoTenant;
 
 /**
  * Diferente de todo outro repositorio do sistema, NAO estende {@code
@@ -15,4 +17,8 @@ import com.marillia.milebag.business.tenant.model.Tenant;
 public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
     Optional<Tenant> findByIdentificadorEmpresa(String identificadorEmpresa);
+
+    boolean existsByCodigoIata(String codigoIata);
+
+    List<Tenant> findByTipoOrderByNomeAsc(TipoTenant tipo);
 }

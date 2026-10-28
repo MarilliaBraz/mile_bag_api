@@ -16,6 +16,10 @@ public final class Papeis {
     // confundir com ADMINISTRADOR_TENANT, que administra UM tenant). Token
     // deste perfil nao carrega claim de tenant (JwtService) - ver Tenant.java.
     public static final String ADMINISTRADOR_PLATAFORMA = "ADMINISTRADOR_PLATAFORMA";
+    // HU33 (RD19): perfis de uma companhia aerea - o administrador cadastra os
+    // funcionarios; o funcionario registra as bagagens encontradas.
+    public static final String ADMINISTRADOR_COMPANHIA = "ADMINISTRADOR_COMPANHIA";
+    public static final String FUNCIONARIO_COMPANHIA = "FUNCIONARIO_COMPANHIA";
 
     private Papeis() {
     }

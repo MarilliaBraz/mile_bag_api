@@ -123,6 +123,15 @@ public class SecurityConfig {
                         .hasRole(Papeis.MOTORISTA)
                         .requestMatchers(HttpMethod.GET, "/api/v1/emergencias/minha").hasRole(Papeis.MOTORISTA)
                         .requestMatchers("/api/v1/emergencias/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // HU33 (RD19): a companhia aerea tem area propria; o administrador
+                        // dela e quem cadastra os funcionarios.
+                        .requestMatchers("/api/v1/companhia/funcionarios/**").hasRole(Papeis.ADMINISTRADOR_COMPANHIA)
+                        .requestMatchers("/api/v1/companhia/**").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA)
+                        // HU33: o que antes so exigia login e e das empresas de entrega fica
+                        // fechado aos perfis da companhia (a RLS ja isolava os dados; isto
+                        // tira as funcoes de vista).
+                        .requestMatchers("/api/v1/bdos/**", "/api/v1/entregas/**", "/api/v1/motorista/**", "/api/v1/sync/**")
+                        .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
                         .anyRequest().authenticated())
                 // Sessao invalida (401) e falta de permissao (403) com o mesmo contrato de erro do resto da API.
                 .exceptionHandling(erros -> erros

@@ -141,12 +141,14 @@ public class ConviteAdministradorService {
             throw new RegraNegocioException("senha e obrigatoria e deve ter ao menos 8 caracteres.");
         }
         ConviteAdministrador convite = buscarAtivo(token);
+        // HU33: o primeiro administrador de uma companhia aerea administra a companhia, nao uma empresa de entrega.
+        String papel = papelDoAdministrador(convite.getTenantId());
 
         TenantContext.set(convite.getTenantId());
         try {
             try {
                 // saveAndFlush: o indice unico de login (V29) tem que disparar aqui, dentro do try, e nao so no commit.
-                usuarioRepository.saveAndFlush(new Usuario(convite.getEmailDestinatario(), passwordEncoder.encode(senha), Papeis.ADMINISTRADOR_TENANT));
+                usuarioRepository.saveAndFlush(new Usuario(convite.getEmailDestinatario(), passwordEncoder.encode(senha), papel));
             } catch (DataIntegrityViolationException e) {
                 throw new ConflitoException("Ja existe uma conta com este e-mail.");
             }
@@ -179,10 +181,17 @@ public class ConviteAdministradorService {
     private boolean possuiAdministradorAtivo(UUID tenantId) {
         TenantContext.set(tenantId);
         try {
-            return usuarioRepository.findAll().stream().anyMatch(u -> Papeis.ADMINISTRADOR_TENANT.equals(u.getPapel()));
+            return usuarioRepository.findAll().stream()
+                    .anyMatch(u -> Papeis.ADMINISTRADOR_TENANT.equals(u.getPapel()) || Papeis.ADMINISTRADOR_COMPANHIA.equals(u.getPapel()));
         } finally {
             TenantContext.clear();
         }
+    }
+
+    private String papelDoAdministrador(UUID tenantId) {
+        return tenantRepository.findById(tenantId).filter(Tenant::ehCompanhiaAerea).isPresent()
+                ? Papeis.ADMINISTRADOR_COMPANHIA
+                : Papeis.ADMINISTRADOR_TENANT;
     }
 
     private void enviarEmailBestEffort(ConviteAdministrador convite) {
