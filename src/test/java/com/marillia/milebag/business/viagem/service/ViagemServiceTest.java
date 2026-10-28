@@ -69,6 +69,8 @@ class ViagemServiceTest {
     private MensagemService mensagemService;
     @Mock
     private PracaPedagioService pracaPedagioService;
+    @Mock
+    private AcompanhamentoViagem acompanhamentoViagem;
 
     private ViagemService viagemService;
 
@@ -76,7 +78,7 @@ class ViagemServiceTest {
     void setUp() {
         viagemService = new ViagemService(
                 entregaService, selecaoRotaProvider, trajetoRepository, calculoRotaRepository,
-                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService);
+                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService, acompanhamentoViagem);
         // lenient: nem todo teste chega a exercitar os tres saves (ex.: os
         // testes de erro em iniciarViagem retornam antes deles).
         org.mockito.Mockito.lenient().when(trajetoRepository.save(any(Trajeto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -95,12 +97,58 @@ class ViagemServiceTest {
         when(trajetoMapper.toIniciadoResponse(any(), any(), any()))
                 .thenReturn(new TrajetoIniciadoResponse(UUID.randomUUID(), TrajetoStatus.EM_EXECUCAO, Instant.now(), null, null));
 
+        when(acompanhamentoViagem.criarLink(any(Trajeto.class))).thenReturn("https://app/acompanhar/abc");
+
         viagemService.iniciarViagem(entregaId, new IniciarViagemRequest(-23.5, -46.6));
 
         verify(entregaService).marcarEmAndamento(entregaId);
         verify(trajetoRepository).save(any(Trajeto.class));
         verify(calculoRotaRepository).save(any(CalculoRota.class));
-        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA);
+        // HU31: o link vai ao passageiro no aviso de viagem iniciada e aos administradores.
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA, "https://app/acompanhar/abc");
+        verify(acompanhamentoViagem).avisarAdministradores(entregaId, "https://app/acompanhar/abc");
+    }
+
+    /** HU31: a posicao vai para a viagem em andamento do proprio motorista. */
+    @Test
+    void registrarPosicaoAtualizaAViagemEmAndamentoDoMotorista() {
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(UUID.randomUUID(), motoristaId, Instant.now());
+        when(trajetoRepository.findFirstByMotoristaIdAndStatusOrderByDataInicioDesc(motoristaId, TrajetoStatus.EM_EXECUCAO))
+                .thenReturn(Optional.of(trajeto));
+
+        assertThat(viagemService.registrarPosicao(motoristaId, -16.68, -49.26)).isTrue();
+
+        assertThat(trajeto.getPosicaoLatitude()).isEqualTo(-16.68);
+        assertThat(trajeto.getPosicaoLongitude()).isEqualTo(-49.26);
+        assertThat(trajeto.getPosicaoRegistradaEm()).isNotNull();
+        verify(trajetoRepository).save(trajeto);
+    }
+
+    @Test
+    void registrarPosicaoSemViagemEmAndamentoNaoGravaNada() {
+        UUID motoristaId = UUID.randomUUID();
+        when(trajetoRepository.findFirstByMotoristaIdAndStatusOrderByDataInicioDesc(motoristaId, TrajetoStatus.EM_EXECUCAO))
+                .thenReturn(Optional.empty());
+
+        assertThat(viagemService.registrarPosicao(motoristaId, -16.68, -49.26)).isFalse();
+        verify(trajetoRepository, never()).save(any());
+    }
+
+    /** RN16: encerrar a tentativa, com sucesso ou por ocorrencia, apaga a ultima posicao. */
+    @Test
+    void encerrarATentativaApagaAPosicao() {
+        Trajeto entregue = new Trajeto(UUID.randomUUID(), UUID.randomUUID(), Instant.now());
+        entregue.atualizarPosicao(-16.68, -49.26, Instant.now());
+        entregue.consolidar(java.math.BigDecimal.ONE, java.math.BigDecimal.ONE, "[]", 60, null);
+        Trajeto naoEntregue = new Trajeto(UUID.randomUUID(), UUID.randomUUID(), Instant.now());
+        naoEntregue.atualizarPosicao(-16.68, -49.26, Instant.now());
+        naoEntregue.vincularOcorrencia(UUID.randomUUID(), Instant.now());
+
+        assertThat(entregue.temPosicao()).isFalse();
+        assertThat(entregue.getPosicaoLatitude()).isNull();
+        assertThat(naoEntregue.temPosicao()).isFalse();
+        assertThat(naoEntregue.getPosicaoLongitude()).isNull();
     }
 
     @Test
@@ -244,7 +292,7 @@ class ViagemServiceTest {
 
         viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, -23.5, -46.6));
 
-        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.A_CAMINHO);
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.A_CAMINHO, null);
     }
 
     /** HU20: repetir o marco registra de novo, mas nao reenvia o aviso ao passageiro. */
@@ -259,7 +307,7 @@ class ViagemServiceTest {
         viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, -23.5, -46.6));
 
         verify(checkpointGpsRepository).save(any(CheckpointGps.class));
-        verify(mensagemService, never()).notificarAutomatica(any(), any());
+        verify(mensagemService, never()).notificarAutomatica(any(), any(), any());
     }
 
     @Test
@@ -271,7 +319,7 @@ class ViagemServiceTest {
 
         viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.PARTIDA, -23.5, -46.6));
 
-        verify(mensagemService, never()).notificarAutomatica(any(), any());
+        verify(mensagemService, never()).notificarAutomatica(any(), any(), any());
     }
 
     /** HU20, FR-005: a notificacao nunca bloqueia nem falha o registro do checkpoint. */
@@ -282,7 +330,7 @@ class ViagemServiceTest {
         when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
         when(trajetoMapper.toResponse(any(CheckpointGps.class))).thenReturn(new CheckpointResponse(UUID.randomUUID(), TipoCheckpoint.CHEGADA, null, null, Instant.now(), false));
         org.mockito.Mockito.doThrow(new RuntimeException("falha simulada"))
-                .when(mensagemService).notificarAutomatica(any(), any());
+                .when(mensagemService).notificarAutomatica(any(), any(), any());
 
         assertThat(viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.CHEGADA, null, null))).isNotNull();
     }

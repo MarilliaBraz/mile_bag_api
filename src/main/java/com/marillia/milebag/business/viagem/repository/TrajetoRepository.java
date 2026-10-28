@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.marillia.milebag.business.viagem.model.Trajeto;
+import com.marillia.milebag.business.viagem.model.TrajetoStatus;
 import com.marillia.milebag.core.base.BaseRepository;
 
 /**
@@ -20,4 +21,7 @@ public interface TrajetoRepository extends BaseRepository<Trajeto, UUID> {
 
     /** Viagens de tentativas sem sucesso encerradas no periodo (pagas no fechamento a quem dirigiu). */
     List<Trajeto> findByOcorrenciaIdIsNotNullAndEncerradoEmGreaterThanEqualAndEncerradoEmLessThan(Instant inicio, Instant fim);
+
+    /** HU31: a viagem em andamento do motorista, que recebe a posicao enviada pelo app. */
+    Optional<Trajeto> findFirstByMotoristaIdAndStatusOrderByDataInicioDesc(UUID motoristaId, TrajetoStatus status);
 }
