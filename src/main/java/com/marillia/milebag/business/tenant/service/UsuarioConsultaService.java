@@ -45,4 +45,13 @@ public class UsuarioConsultaService {
                 .filter(login -> login != null && login.contains("@"))
                 .toList();
     }
+
+    /** HU32: motoristas ativos do tenant, que recebem o aviso de BDO novo. */
+    @Transactional(readOnly = true)
+    public List<UUID> idsDosMotoristasAtivos() {
+        return usuarioRepository.findByPapelOrderByNomeAscEmailAsc(Papeis.MOTORISTA).stream()
+                .filter(Usuario::isAtivo)
+                .map(Usuario::getId)
+                .toList();
+    }
 }

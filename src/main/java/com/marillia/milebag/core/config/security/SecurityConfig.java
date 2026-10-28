@@ -69,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/acompanhamento/**").permitAll()
                         // HU31: so o motorista envia a propria posicao.
                         .requestMatchers("/api/v1/motorista/posicao").hasRole(Papeis.MOTORISTA)
+                        // HU32: so o aparelho do motorista se inscreve para o aviso de BDO novo.
+                        .requestMatchers("/api/v1/notificacoes/**").hasRole(Papeis.MOTORISTA)
                         // HU09: "perfil exigido: administrador do tenant"
                         // (contracts/tarifas-api.md) - primeiro endpoint
                         // deste projeto restrito por perfil, nao so por

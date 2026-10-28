@@ -81,6 +81,13 @@ milebag:
     usuario: ${MILEBAG_IMAP_USUARIO:}
     senha: ${MILEBAG_IMAP_SENHA:}
     intervalo-consulta-ms: ${MILEBAG_IMAP_INTERVALO_MS:60000}
+  push:
+    # Web Push do aviso de BDO novo (HU32) - par VAPID por ambiente, gerado pelo
+    # implantar.sh (mile_bag_infra). Vazio = push desligado; o aviso continua
+    # valendo com o app aberto.
+    chave-publica: ${MILEBAG_PUSH_CHAVE_PUBLICA:}
+    chave-privada: ${MILEBAG_PUSH_CHAVE_PRIVADA:}
+    assunto: ${MILEBAG_PUSH_ASSUNTO:mailto:noreply@milebag.local}
   telegram:
     # Bot unico da plataforma (HU18, FR-010) - criado via @BotFather, sem
     # processo de aprovacao. Desabilitado por padrao ate o token existir.

@@ -102,6 +102,18 @@
       <artifactId>jakarta.mail</artifactId>
     </dependency>
 
+    <!-- Notificacao Web Push com VAPID para o aviso de BDO novo (HU32, RF25); a criptografia usa BouncyCastle -->
+    <dependency>
+      <groupId>nl.martijndwars</groupId>
+      <artifactId>web-push</artifactId>
+      <version>5.1.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>1.78.1</version>
+    </dependency>
+
     <!-- Documentacao da API -->
     <dependency>
       <groupId>org.springdoc</groupId>

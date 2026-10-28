@@ -18,11 +18,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.marillia.milebag.business.bdo.mapper.BdoMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
@@ -47,6 +49,8 @@ class BdoServiceTest {
     private BdoOcrService bdoOcrService;
     @Mock
     private BdoMapper bdoMapper;
+    @Mock
+    private ApplicationEventPublisher eventos;
 
     @InjectMocks
     private BdoService bdoService;
@@ -69,6 +73,23 @@ class BdoServiceTest {
         assertThat(bdoService.buscarPorId(id)).isEmpty();
     }
 
+    /** HU32: so a via por e-mail avisa os motoristas (o evento e o gatilho do aviso). */
+    @Test
+    void criarAutomaticoPublicaOBdoRecebidoPorEmail() {
+        when(bdoRepository.save(any(Bdo.class))).thenAnswer(invocacao -> {
+            Bdo salvo = invocacao.getArgument(0);
+            salvo.setId(UUID.randomUUID());
+            return salvo;
+        });
+
+        bdoService.criarAutomatico(new CamposExtraidosBdo("GYNLA12342", null, null, null, null, null, null));
+
+        org.mockito.ArgumentCaptor<BdoRecebidoPorEmail> evento = org.mockito.ArgumentCaptor.forClass(BdoRecebidoPorEmail.class);
+        org.mockito.Mockito.verify(eventos).publishEvent(evento.capture());
+        assertThat(evento.getValue().numero()).isEqualTo("GYNLA12342");
+        assertThat(evento.getValue().bdoId()).isNotNull();
+    }
+
     @Test
     void capturarGuardaQuemFotografou() throws IOException {
         UUID motoristaId = UUID.randomUUID();
@@ -83,6 +104,8 @@ class BdoServiceTest {
         verify(bdoRepository).save(salvo.capture());
         assertThat(salvo.getValue().getCapturadoPor()).isEqualTo(motoristaId);
         assertThat(salvo.getValue().getStatusConferencia()).isEqualTo(StatusConferencia.PENDENTE);
+        // HU32: BDO por fotografia nao avisa os motoristas - quem fotografou ja sabe dele.
+        org.mockito.Mockito.verifyNoInteractions(eventos);
     }
 
     @Test
