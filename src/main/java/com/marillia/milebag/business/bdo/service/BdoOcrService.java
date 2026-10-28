@@ -1,20 +1,11 @@
 package com.marillia.milebag.business.bdo.service;
 
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-
-import javax.imageio.ImageIO;
-
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
-import com.marillia.milebag.core.config.OcrProperties;
-import com.marillia.milebag.core.exception.RegraNegocioException;
-
-import net.sourceforge.tess4j.ITesseract;
-import net.sourceforge.tess4j.Tesseract;
-import net.sourceforge.tess4j.TesseractException;
+import com.marillia.milebag.core.ocr.Imagens;
+import com.marillia.milebag.core.ocr.LeitorTexto;
 
 /**
  * Extracao automatica dos campos do BDO a partir da fotografia (FR-002),
@@ -31,40 +22,13 @@ import net.sourceforge.tess4j.TesseractException;
 @Service
 public class BdoOcrService {
 
-    private final ITesseract tesseract;
+    private final LeitorTexto leitorTexto;
 
-    public BdoOcrService(OcrProperties ocrProperties) {
-        Tesseract tesseractInstance = new Tesseract();
-        tesseractInstance.setDatapath(ocrProperties.tessdataPath());
-        // Portugues primeiro: rotulos e enderecos tem acento e cedilha; ingles cobre os rotulos do WorldTracer.
-        tesseractInstance.setLanguage("por+eng");
-        this.tesseract = tesseractInstance;
+    public BdoOcrService(LeitorTexto leitorTexto) {
+        this.leitorTexto = leitorTexto;
     }
 
     public CamposExtraidosBdo extrair(MultipartFile imagem) {
-        BufferedImage imagemDecodificada = decodificar(imagem);
-        String textoBruto = reconhecerTexto(imagemDecodificada);
-
-        return CamposBdoExtractor.extrair(textoBruto);
-    }
-
-    private BufferedImage decodificar(MultipartFile imagem) {
-        try {
-            BufferedImage imagemDecodificada = ImageIO.read(imagem.getInputStream());
-            if (imagemDecodificada == null) {
-                throw new RegraNegocioException("Formato de imagem nao suportado.");
-            }
-            return imagemDecodificada;
-        } catch (IOException e) {
-            throw new RegraNegocioException("Nao foi possivel ler a fotografia enviada.");
-        }
-    }
-
-    private String reconhecerTexto(BufferedImage imagem) {
-        try {
-            return tesseract.doOCR(imagem);
-        } catch (TesseractException e) {
-            throw new IllegalStateException("Falha ao processar o OCR da fotografia do BDO.", e);
-        }
+        return CamposBdoExtractor.extrair(leitorTexto.ler(Imagens.decodificar(imagem)));
     }
 }
