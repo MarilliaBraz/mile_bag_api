@@ -4,6 +4,7 @@ import java.net.URI;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -11,8 +12,10 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -102,6 +105,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .orElse("Um ou mais campos obrigatorios estao ausentes ou invalidos.");
         ProblemDetail problema = problema(HttpStatus.BAD_REQUEST, "campo-invalido", detalhe);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problema);
+    }
+
+    /**
+     * Valor que nao converte para o tipo do parametro (ex.: token de convite que nao e UUID). Sem isto o
+     * Spring responde com o texto tecnico em ingles ("Failed to convert 'token'..."), que a tela mostraria
+     * ao usuario. Identificador malformado no caminho nao aponta para registro nenhum: 404, como o de um
+     * identificador valido que nao existe.
+     */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(
+            TypeMismatchException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        if (ex instanceof MethodArgumentTypeMismatchException argumento
+                && argumento.getParameter().hasParameterAnnotation(PathVariable.class)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problema(
+                    HttpStatus.NOT_FOUND, "recurso-nao-encontrado", "Endereco incompleto ou incorreto: confira o link."));
+        }
+        String campo = ex.getPropertyName() != null ? ex.getPropertyName() : "informado";
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problema(
+                HttpStatus.BAD_REQUEST, "campo-invalido", "Valor invalido para o campo " + campo + "."));
     }
 
     @ExceptionHandler(Exception.class)
