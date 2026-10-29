@@ -74,6 +74,10 @@ final class FichaBagagemPdf {
                 String identificador = b.descricao() != null ? b.descricao().codigoSid() : b.etiqueta().numeroEtiqueta();
                 texto(conteudo, CODIGO, 16, Color.BLACK, MARGEM, y, identificador);
                 texto(conteudo, NORMAL, 10, CINZA, MARGEM + CODIGO.getStringWidth(identificador) / 1000 * 16 + 12, y + 2, RotulosBagagem.tipo(b.tipo()));
+                y -= 18;
+                // A autoria fica no cabecalho: embaixo, a descricao longa e o mapa a empurrariam para cima do rodape.
+                texto(conteudo, NORMAL, 10, Color.BLACK, MARGEM, y, "Registrada por " + (b.registradoPor() == null ? "-" : b.registradoPor()) + " em "
+                        + RotulosBagagem.dataHora(b.registradaEm()) + " (horário de Brasília).");
                 y -= 12;
                 linhaHorizontal(conteudo, y);
                 y -= 12;
@@ -96,18 +100,17 @@ final class FichaBagagemPdf {
                         : RotulosBagagem.origemLocalizacao(local.origem()));
                 y -= 6;
                 if (dados.mapa() != null) {
+                    // Com observacoes longas sobra menos pagina: o mapa diminui, sem distorcer, e nunca invade o rodape.
+                    float altura = Math.min(ALTURA_MAPA, y - 10 - (MARGEM + 20));
                     PDImageXObject mapa = LosslessFactory.createFromImage(documento, dados.mapa());
-                    conteudo.drawImage(mapa, MARGEM, y - ALTURA_MAPA, LARGURA, ALTURA_MAPA);
-                    y -= ALTURA_MAPA + 10;
+                    conteudo.drawImage(mapa, MARGEM, y - altura, altura * LARGURA / ALTURA_MAPA, altura);
+                    y -= altura + 10;
                     texto(conteudo, NORMAL, 7, CINZA, MARGEM, y, "Mapa: © colaboradores do OpenStreetMap (openstreetmap.org/copyright)");
                 } else {
                     texto(conteudo, NORMAL, 9, CINZA, MARGEM, y - 10,
                             temPosicao ? "Mapa indisponível no momento da emissão." : "Sem mapa: o registro não tem coordenadas.");
                     y -= 10;
                 }
-                y -= 24;
-                texto(conteudo, NORMAL, 10, Color.BLACK, MARGEM, y, "Registrada por " + (b.registradoPor() == null ? "-" : b.registradoPor()) + " em "
-                        + RotulosBagagem.dataHora(b.registradaEm()) + " (horário de Brasília).");
                 texto(conteudo, NORMAL, 8, CINZA, MARGEM, MARGEM, "Emitida pelo Milebag em " + RotulosBagagem.dataHora(dados.emitidaEm()) + ".");
             }
             ByteArrayOutputStream saida = new ByteArrayOutputStream();

@@ -53,6 +53,25 @@ class FichaBagagemPdfTest {
         }
     }
 
+    @Test
+    void observacoesNoLimiteCabemNumaPaginaSemInvadirORodape() throws IOException {
+        byte[] pdf = FichaBagagemPdf.gerar(new FichaBagagemPdf.Dados(
+                PlanilhaBagagensTest.semEtiqueta("Bagagem com muitos detalhes anotados. ".repeat(13).trim()), "Linhas Aéreas Exemplo (ZZ)",
+                imagem("jpg", 900, 1200), imagem("png", 360, 360),
+                new BufferedImage(FichaBagagemPdf.LARGURA_MAPA_PX, FichaBagagemPdf.ALTURA_MAPA_PX, BufferedImage.TYPE_INT_RGB), EMISSAO));
+
+        try (PDDocument documento = PDDocument.load(pdf)) {
+            assertThat(documento.getNumberOfPages()).isEqualTo(1);
+            PDFTextStripper leitor = new PDFTextStripper();
+            leitor.setSortByPosition(true);
+            String[] linhas = leitor.getText(documento).strip().split("\\R");
+            // De cima para baixo: o credito do mapa e o rodape sao as ultimas linhas, cada uma sozinha.
+            assertThat(linhas[linhas.length - 2]).startsWith("Mapa: ©");
+            assertThat(linhas[linhas.length - 1]).isEqualTo("Emitida pelo Milebag em 29/10/2026 15:00.");
+            assertThat(linhas[3]).isEqualTo("Registrada por Ana Souza em 29/10/2026 14:05 (horário de Brasília).");
+        }
+    }
+
     private static byte[] imagem(String formato, int largura, int altura) throws IOException {
         BufferedImage imagem = new BufferedImage(largura, altura, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = imagem.createGraphics();
