@@ -1,5 +1,6 @@
 package com.marillia.milebag.core.ocr;
 
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 
@@ -25,5 +26,18 @@ public final class Imagens {
         } catch (IOException e) {
             throw new RegraNegocioException("Nao foi possivel ler a fotografia enviada.");
         }
+    }
+
+    /** Gira a imagem 90 graus (foto tirada de lado), no sentido horario ou anti-horario. */
+    public static BufferedImage girar90(BufferedImage imagem, boolean horario) {
+        int largura = imagem.getWidth();
+        int altura = imagem.getHeight();
+        BufferedImage girada = new BufferedImage(altura, largura, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = girada.createGraphics();
+        g.translate(horario ? altura : 0, horario ? 0 : largura);
+        g.rotate(Math.toRadians(horario ? 90 : -90));
+        g.drawImage(imagem, 0, 0, null);
+        g.dispose();
+        return girada;
     }
 }

@@ -2,6 +2,7 @@ package com.marillia.milebag.business.bagagemencontrada.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +54,22 @@ class LeitorEtiquetaTest {
         assertThat(lida.destino()).isEqualTo("GYN");
         assertThat(lida.companhia()).isEqualTo("LA");
         assertThat(lida.nomePassageiro()).isEqualTo("SILVA/MARIA");
+    }
+
+    /** Foto de lado: o texto tambem esta de lado, e o OCR recebe a foto endireitada (deitada, como a etiqueta). */
+    @Test
+    void etiquetaDeLadoLeOTextoNaFotoEndireitada() {
+        LeitorTexto leitorTexto = mock(LeitorTexto.class);
+        when(leitorTexto.ler(argThat(imagem -> imagem != null && imagem.getWidth() > imagem.getHeight())))
+                .thenReturn("GYN\nSOUZA/MARIA\nG3 123456");
+        AeroportoService aeroportos = mock(AeroportoService.class);
+        when(aeroportos.codigos()).thenReturn(Set.of("GYN"));
+
+        LeituraEtiqueta lida = new LeitorEtiqueta(leitorTexto, aeroportos).ler(girar90(etiqueta("0127654321")));
+
+        assertThat(lida.numeroEtiqueta()).isEqualTo("0127654321");
+        assertThat(lida.destino()).isEqualTo("GYN");
+        assertThat(lida.nomePassageiro()).isEqualTo("SOUZA/MARIA");
     }
 
     @Test

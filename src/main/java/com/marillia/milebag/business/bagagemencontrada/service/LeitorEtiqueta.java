@@ -15,10 +15,13 @@ import com.google.zxing.DecodeHintType;
 import com.google.zxing.LuminanceSource;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.NotFoundException;
+import com.google.zxing.Result;
+import com.google.zxing.ResultMetadataType;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import com.marillia.milebag.business.bagagemencontrada.model.LeituraEtiqueta;
 import com.marillia.milebag.business.bagagemencontrada.model.OrigemLeitura;
+import com.marillia.milebag.core.ocr.Imagens;
 import com.marillia.milebag.core.ocr.LeitorTexto;
 
 /**
@@ -45,36 +48,68 @@ public class LeitorEtiqueta {
     }
 
     public LeituraEtiqueta ler(BufferedImage foto) {
-        Optional<String> codigoDeBarras = lerCodigoDeBarras(foto);
-        String texto;
-        try {
-            texto = leitorTexto.ler(foto);
-        } catch (RuntimeException e) {
-            // Sem texto ainda vale o codigo de barras; a conferencia completa o resto.
-            log.warn("OCR da etiqueta falhou - seguindo so com o codigo de barras.", e);
-            texto = null;
+        Optional<CodigoLido> codigoDeBarras = lerCodigo(foto);
+        // Codigo achado so de lado: o texto tambem esta de lado, e o OCR le a foto endireitada - primeiro no giro que
+        // achou o codigo, depois no outro (a foto pode ter sido tirada de qualquer um dos lados).
+        List<BufferedImage> paraOTexto = codigoDeBarras.filter(CodigoLido::deLado)
+                .map(c -> List.of(Imagens.girar90(foto, false), Imagens.girar90(foto, true)))
+                .orElse(List.of(foto));
+        String texto = null;
+        LeituraEtiqueta doTexto = null;
+        for (BufferedImage imagem : paraOTexto) {
+            texto = lerTexto(imagem);
+            doTexto = EtiquetaTextoParser.extrair(texto, aeroportoService.codigos());
+            if (temDadosDoTexto(doTexto)) {
+                break;
+            }
         }
-        LeituraEtiqueta doTexto = EtiquetaTextoParser.extrair(texto, aeroportoService.codigos());
         if (codigoDeBarras.isEmpty()) {
             return doTexto;
         }
         return new LeituraEtiqueta(
-                codigoDeBarras.get(), doTexto.companhia(), doTexto.destino(), doTexto.voo(), doTexto.nomePassageiro(),
-                OrigemLeitura.CODIGO_BARRAS, texto);
+                codigoDeBarras.get().numero(), doTexto.companhia(), doTexto.destino(), doTexto.voo(),
+                doTexto.nomePassageiro(), OrigemLeitura.CODIGO_BARRAS, texto);
     }
 
     static Optional<String> lerCodigoDeBarras(BufferedImage foto) {
+        return lerCodigo(foto).map(CodigoLido::numero);
+    }
+
+    private String lerTexto(BufferedImage imagem) {
+        try {
+            return leitorTexto.ler(imagem);
+        } catch (RuntimeException e) {
+            // Sem texto ainda vale o codigo de barras; a conferencia completa o resto.
+            log.warn("OCR da etiqueta falhou - seguindo so com o codigo de barras.", e);
+            return null;
+        }
+    }
+
+    private static boolean temDadosDoTexto(LeituraEtiqueta lida) {
+        return lida.companhia() != null || lida.destino() != null || lida.voo() != null || lida.nomePassageiro() != null;
+    }
+
+    private static Optional<CodigoLido> lerCodigo(BufferedImage foto) {
         LuminanceSource fonte = new BufferedImageLuminanceSource(foto);
-        for (LuminanceSource tentativa : List.of(fonte, fonte.rotateCounterClockwise())) {
+        List<LuminanceSource> tentativas = List.of(fonte, fonte.rotateCounterClockwise());
+        for (int i = 0; i < tentativas.size(); i++) {
             try {
-                String lido = new MultiFormatReader().decode(new BinaryBitmap(new HybridBinarizer(tentativa)), DICAS).getText();
+                Result resultado = new MultiFormatReader().decode(new BinaryBitmap(new HybridBinarizer(tentativas.get(i))), DICAS);
+                String lido = resultado.getText();
                 if (lido != null && lido.matches("[0-9]{10}")) {
-                    return Optional.of(lido);
+                    // Com TRY_HARDER o proprio ZXing gira a imagem e conta o giro em ORIENTATION (90 ou 270 = de lado).
+                    Object giro = resultado.getResultMetadata() == null ? null : resultado.getResultMetadata().get(ResultMetadataType.ORIENTATION);
+                    boolean giradoPeloZxing = giro instanceof Integer graus && graus % 180 != 0;
+                    return Optional.of(new CodigoLido(lido, (i > 0) != giradoPeloZxing));
                 }
             } catch (NotFoundException e) {
                 // Nao achou nesta orientacao: tenta a proxima.
             }
         }
         return Optional.empty();
+    }
+
+    /** Numero do codigo de barras e se ele so foi achado com a foto girada. */
+    private record CodigoLido(String numero, boolean deLado) {
     }
 }
