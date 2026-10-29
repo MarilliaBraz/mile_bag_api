@@ -58,12 +58,12 @@ public class BagagemEncontradaService {
     /** Acima disto a tela pede para confirmar o aeroporto sugerido. */
     static final int DISTANCIA_MAXIMA_SUGESTAO_METROS = 50_000;
     /** RD20: 10 digitos do codigo de barras, ou a placa (2 posicoes da companhia + 6 digitos). */
-    private static final Pattern NUMERO_ETIQUETA = Pattern.compile("[0-9]{10}|([A-Z]{2}|[A-Z][0-9]|[0-9][A-Z])[0-9]{6}");
+    static final Pattern NUMERO_ETIQUETA = Pattern.compile("[0-9]{10}|([A-Z]{2}|[A-Z][0-9]|[0-9][A-Z])[0-9]{6}");
     private static final Pattern CODIGO_COMPANHIA = Pattern.compile("[A-Z]{2}|[A-Z][0-9]|[0-9][A-Z]");
     private static final Pattern DESTINO = Pattern.compile("[A-Z]{3}");
     private static final Pattern VOO = Pattern.compile("([A-Z]{2}|[A-Z][0-9]|[0-9][A-Z])[0-9]{1,4}");
-    /** RD21: o ano do codigo SID e o de Brasilia. */
-    private static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
+    /** RD21: o ano do codigo SID e o de Brasilia; as datas da consulta e da ficha (HU36) tambem. */
+    static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
     private static final int LADO_QR = 360;
 
     private final BagagemEncontradaRepository repository;
@@ -272,7 +272,7 @@ public class BagagemEncontradaService {
                 : null;
     }
 
-    private BagagemEncontradaResponse resposta(BagagemEncontrada b) {
+    BagagemEncontradaResponse resposta(BagagemEncontrada b) {
         BagagemEncontradaResponse.Etiqueta etiqueta = b.rascunho() || b.semEtiqueta() ? null
                 : new BagagemEncontradaResponse.Etiqueta(b.getNumeroEtiqueta(), b.getCompanhia(), b.getDestino(), b.getVoo(), b.getNomePassageiro());
         BagagemEncontradaResponse.Descricao descricao = b.rascunho() || !b.semEtiqueta() ? null
