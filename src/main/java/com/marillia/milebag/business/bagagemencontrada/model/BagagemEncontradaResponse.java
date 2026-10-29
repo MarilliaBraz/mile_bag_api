@@ -21,7 +21,8 @@ public record BagagemEncontradaResponse(
         Instant registradaEm,
         Instant criadoEm,
         String fotoUrl,
-        String qrUrl) {
+        String qrUrl,
+        Encaminhamento encaminhamento) {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Lido(String numeroEtiqueta, String companhia, String destino, String voo, String nomePassageiro, OrigemLeitura origemLeitura, CorBagagem cor) {
@@ -44,5 +45,15 @@ public record BagagemEncontradaResponse(
     /** {@code distante}: mais de 50 km - a tela pede para confirmar o aeroporto. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record AeroportoRegistro(String codigo, String nome, String cidade, String uf, Integer distanciaMetros, Boolean distante) {
+    }
+
+    /**
+     * Encaminhamento ativo para entrega (HU37): so a etapa da entrega, sem o motorista (RD23). {@code etapa}:
+     * AGUARDANDO_MOTORISTA, MOTORISTA_DESIGNADO, A_CAMINHO, ENTREGUE ou NAO_ENTREGUE.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Encaminhamento(
+            String empresa, String numeroProcesso, String passageiroNome, String endereco, String etapa, String encaminhadoPor,
+            Instant encaminhadoEm, Instant atualizadoEm) {
     }
 }

@@ -71,15 +71,17 @@ public class BagagemEncontradaService {
     private final AeroportoService aeroportoService;
     private final ArmazenamentoImagemService armazenamento;
     private final UsuarioConsultaService usuarioConsultaService;
+    private final EncaminhamentosDaBagagem encaminhamentos;
 
     public BagagemEncontradaService(
             BagagemEncontradaRepository repository, LeitorEtiqueta leitorEtiqueta, AeroportoService aeroportoService,
-            ArmazenamentoImagemService armazenamento, UsuarioConsultaService usuarioConsultaService) {
+            ArmazenamentoImagemService armazenamento, UsuarioConsultaService usuarioConsultaService, EncaminhamentosDaBagagem encaminhamentos) {
         this.repository = repository;
         this.leitorEtiqueta = leitorEtiqueta;
         this.aeroportoService = aeroportoService;
         this.armazenamento = armazenamento;
         this.usuarioConsultaService = usuarioConsultaService;
+        this.encaminhamentos = encaminhamentos;
     }
 
     /**
@@ -296,7 +298,8 @@ public class BagagemEncontradaService {
                 b.getRegistradaEm(),
                 b.getCriadoEm(),
                 "/api/v1/companhia/bagagens/" + b.getId() + "/foto",
-                b.getCodigoSid() == null ? null : "/api/v1/companhia/bagagens/" + b.getId() + "/qr");
+                b.getCodigoSid() == null ? null : "/api/v1/companhia/bagagens/" + b.getId() + "/qr",
+                b.rascunho() ? null : encaminhamentos.ativo(b.getId()).orElse(null));
     }
 
     private static Coordenada posicaoValida(Double latitude, Double longitude) {
