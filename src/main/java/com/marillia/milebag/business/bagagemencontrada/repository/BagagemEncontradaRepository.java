@@ -3,6 +3,8 @@ package com.marillia.milebag.business.bagagemencontrada.repository;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.Query;
+
 import com.marillia.milebag.business.bagagemencontrada.model.BagagemEncontrada;
 import com.marillia.milebag.business.bagagemencontrada.model.SituacaoBagagemEncontrada;
 import com.marillia.milebag.core.base.BaseRepository;
@@ -14,4 +16,8 @@ public interface BagagemEncontradaRepository extends BaseRepository<BagagemEncon
 
     /** Os mais recentes da companhia (RLS), para o inicio do funcionario. */
     List<BagagemEncontrada> findTop20BySituacaoOrderByRegistradaEmDesc(SituacaoBagagemEncontrada situacao);
+
+    /** RD21: numero nacional do codigo SID (sequencia fora da RLS, unica entre as companhias). */
+    @Query(value = "SELECT nextval('bagagem_sid_seq')", nativeQuery = true)
+    long proximoNumeroSid();
 }
