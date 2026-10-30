@@ -11,12 +11,14 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.bdo.mapper.BdoMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoEncaminhadoPorCompanhia;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
@@ -114,6 +116,44 @@ public class BdoService {
         log.info("BDO {} criado automaticamente por e-mail (tenant {})", salvo.getId(), TenantContext.get());
         // HU32: os motoristas sao avisados depois do commit (NotificadorBdoNovo).
         eventos.publishEvent(new BdoRecebidoPorEmail(salvo.getId(), salvo.getNumero()));
+    }
+
+    /**
+     * Terceiro caminho de criacao do BDO (HU37, RF30): a companhia aerea encaminha uma bagagem encontrada para esta
+     * empresa. Nasce {@code CONFIRMADO}, como o do e-mail, e entra na lista de disponiveis. Pressupoe o tenant da
+     * empresa em {@link TenantContext} (ver {@code EncaminhamentoService}); grava na hora para o INSERT sair com ele.
+     */
+    @Transactional
+    public UUID criarPorCompanhia(CamposExtraidosBdo campos) {
+        Bdo bdo = new Bdo();
+        bdo.setOrigem(BdoOrigem.COMPANHIA_AEREA);
+        bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
+        bdo.setDataCaptura(Instant.now());
+        aplicarCamposExtraidos(bdo, campos);
+
+        Bdo salvo = bdoRepository.saveAndFlush(bdo);
+        log.info("BDO {} criado pela companhia {} (tenant {})", salvo.getId(), campos.companhiaAerea(), TenantContext.get());
+        eventos.publishEvent(new BdoEncaminhadoPorCompanhia(salvo.getId(), salvo.getNumero(), TenantContext.get(), campos.companhiaAerea()));
+        return salvo.getId();
+    }
+
+    /**
+     * Cancelamento do encaminhamento (HU37): o BDO criado pela companhia sai, se ninguem o assumiu. A entrega e a
+     * bagagem carona apontam para o BDO, entao a chave estrangeira tambem recusa numa corrida com o motorista.
+     * Pressupoe o tenant da empresa em {@link TenantContext}.
+     */
+    @Transactional
+    public void removerCriadoPorCompanhia(UUID id) {
+        Bdo bdo = bdoRepository.findById(id)
+                .filter(b -> b.getOrigem() == BdoOrigem.COMPANHIA_AEREA)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
+        try {
+            bdoRepository.delete(bdo);
+            bdoRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflitoException("A entrega desta bagagem ja tem motorista.");
+        }
+        log.info("BDO {} da companhia {} removido no cancelamento (tenant {})", id, bdo.getCompanhiaAerea(), TenantContext.get());
     }
 
     @Transactional

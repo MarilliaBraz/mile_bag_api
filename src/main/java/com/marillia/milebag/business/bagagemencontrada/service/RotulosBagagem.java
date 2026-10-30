@@ -29,6 +29,18 @@ final class RotulosBagagem {
         return situacao == SituacaoBagagemEncontrada.REGISTRADA ? "Registrada" : "Rascunho";
     }
 
+    /** Etapa da entrega da bagagem encaminhada (HU37), que chega como texto do dominio {@code encaminhamento}. */
+    static String etapa(String etapa) {
+        return etapa == null ? "" : switch (etapa) {
+            case "AGUARDANDO_MOTORISTA" -> "Aguardando motorista";
+            case "MOTORISTA_DESIGNADO" -> "Motorista designado";
+            case "A_CAMINHO" -> "A caminho";
+            case "ENTREGUE" -> "Entregue";
+            case "NAO_ENTREGUE" -> "Não entregue";
+            default -> etapa;
+        };
+    }
+
     static String tipoVolume(TipoVolume tipo) {
         return tipo == null ? "" : switch (tipo) {
             case MALA_RIGIDA -> "Mala rígida";

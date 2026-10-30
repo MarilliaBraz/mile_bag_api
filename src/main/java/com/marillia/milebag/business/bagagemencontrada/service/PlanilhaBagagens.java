@@ -18,7 +18,7 @@ final class PlanilhaBagagens {
     private static final List<String> COLUNAS = List.of(
             "Tipo", "Situação", "Número da etiqueta", "Código SID", "Companhia", "Destino", "Voo", "Passageiro", "Tipo de volume", "Tamanho",
             "Cor", "Sinais particulares", "Marca", "Observações", "Aeroporto", "Distância do aeroporto", "Latitude", "Longitude",
-            "Origem da localização", "Registrada em", "Fotografada em", "Registrado por");
+            "Origem da localização", "Registrada em", "Fotografada em", "Registrado por", "Empresa de entrega", "Processo", "Etapa da entrega");
 
     private PlanilhaBagagens() {
     }
@@ -52,6 +52,10 @@ final class PlanilhaBagagens {
             celulas.add(RotulosBagagem.dataHora(b.registradaEm()));
             celulas.add(RotulosBagagem.dataHora(b.criadoEm()));
             celulas.add(b.registradoPor());
+            BagagemEncontradaResponse.Encaminhamento encaminhamento = b.encaminhamento();
+            celulas.add(encaminhamento == null ? null : encaminhamento.empresa());
+            celulas.add(encaminhamento == null ? null : encaminhamento.numeroProcesso());
+            celulas.add(encaminhamento == null ? null : RotulosBagagem.etapa(encaminhamento.etapa()));
             csv.append(linha(celulas));
         }
         return csv.toString().getBytes(StandardCharsets.UTF_8);

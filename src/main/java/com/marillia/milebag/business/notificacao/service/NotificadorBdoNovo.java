@@ -3,6 +3,7 @@ package com.marillia.milebag.business.notificacao.service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +15,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marillia.milebag.business.bdo.model.BdoEncaminhadoPorCompanhia;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.notificacao.model.InscricaoPush;
+import com.marillia.milebag.core.config.security.TenantContext;
 
 /**
  * Avisa os aparelhos inscritos dos motoristas ativos do tenant quando um BDO chega por e-mail (HU32, RF25).
@@ -43,11 +46,34 @@ public class NotificadorBdoNovo {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void aoReceberBdoPorEmail(BdoRecebidoPorEmail evento) {
+        avisar(evento.bdoId(), conteudo(evento));
+    }
+
+    /**
+     * HU37: o BDO nasceu numa requisicao da companhia aerea, entao o tenant da empresa vem no evento e vale so durante
+     * o aviso (a transacao nova aplica o tenant a cada consulta, via TenantAspect).
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void aoReceberBdoDaCompanhia(BdoEncaminhadoPorCompanhia evento) {
+        UUID anterior = TenantContext.get();
+        TenantContext.set(evento.empresaId());
+        try {
+            avisar(evento.bdoId(), conteudo(evento));
+        } finally {
+            if (anterior == null) {
+                TenantContext.clear();
+            } else {
+                TenantContext.set(anterior);
+            }
+        }
+    }
+
+    private void avisar(UUID bdoId, String conteudo) {
         if (!enviadorPush.habilitado()) {
             return;
         }
         List<InscricaoPush> inscricoes = inscricaoPushService.listarDosMotoristasAtivos();
-        String conteudo = conteudo(evento);
         int enviados = 0;
         for (InscricaoPush inscricao : inscricoes) {
             try {
@@ -55,26 +81,37 @@ public class NotificadorBdoNovo {
                 if (status == 404 || status == 410) {
                     inscricaoPushService.removerExpirada(inscricao.getId());
                 } else if (status >= 400) {
-                    log.warn("Servico de push recusou o aviso do BDO {} (HTTP {}) para a inscricao {}.", evento.bdoId(), status, inscricao.getId());
+                    log.warn("Servico de push recusou o aviso do BDO {} (HTTP {}) para a inscricao {}.", bdoId, status, inscricao.getId());
                 } else {
                     enviados++;
                 }
             } catch (Exception e) {
-                log.warn("Falha ao enviar o aviso do BDO {} para a inscricao {} - seguindo com as demais.", evento.bdoId(), inscricao.getId(), e);
+                log.warn("Falha ao enviar o aviso do BDO {} para a inscricao {} - seguindo com as demais.", bdoId, inscricao.getId(), e);
             }
         }
-        log.info("Aviso de BDO novo {} enviado a {} de {} aparelho(s).", evento.bdoId(), enviados, inscricoes.size());
+        log.info("Aviso de BDO novo {} enviado a {} de {} aparelho(s).", bdoId, enviados, inscricoes.size());
     }
 
     String conteudo(BdoRecebidoPorEmail evento) {
-        Map<String, String> notificacao = new LinkedHashMap<>();
-        notificacao.put("titulo", "Nova bagagem para retirar no aeroporto");
         // Com acentos, ao contrario das mensagens da API: este texto aparece direto na notificacao do celular.
-        notificacao.put("corpo", evento.numero() == null
+        return json(evento.bdoId(), evento.numero() == null
                 ? "Um BDO novo chegou por e-mail e está disponível para assumir."
                 : "BDO " + evento.numero() + " chegou por e-mail e está disponível para assumir.");
+    }
+
+    String conteudo(BdoEncaminhadoPorCompanhia evento) {
+        String corpo = evento.numero() == null
+                ? "A " + evento.companhia() + " encaminhou uma bagagem encontrada, disponível para assumir."
+                : "A " + evento.companhia() + " encaminhou a bagagem do processo " + evento.numero() + ", disponível para assumir.";
+        return json(evento.bdoId(), corpo);
+    }
+
+    private String json(UUID bdoId, String corpo) {
+        Map<String, String> notificacao = new LinkedHashMap<>();
+        notificacao.put("titulo", "Nova bagagem para retirar no aeroporto");
+        notificacao.put("corpo", corpo);
         notificacao.put("url", "/motorista");
-        notificacao.put("bdoId", evento.bdoId().toString());
+        notificacao.put("bdoId", bdoId.toString());
         try {
             return objectMapper.writeValueAsString(notificacao);
         } catch (JsonProcessingException e) {

@@ -76,7 +76,8 @@ class BagagemEncontradaServiceTest {
     @BeforeEach
     void setUp() throws Exception {
         lenient().when(aeroportoRepository.findAllByOrderByCodigoAsc()).thenReturn(List.of(GRU, GYN));
-        service = new BagagemEncontradaService(repository, leitorEtiqueta, new AeroportoService(aeroportoRepository), armazenamento, usuarioConsultaService);
+        service = new BagagemEncontradaService(repository, leitorEtiqueta, new AeroportoService(aeroportoRepository), armazenamento, usuarioConsultaService,
+                bagagemId -> Optional.empty());
         lenient().when(repository.save(any(BagagemEncontrada.class))).thenAnswer(chamada -> chamada.getArgument(0));
         lenient().when(armazenamento.salvar(any(), any())).thenReturn("tenant/etiqueta.png");
         lenient().when(usuarioConsultaService.nomeParaExibicao(any())).thenReturn(Optional.of("Rita"));

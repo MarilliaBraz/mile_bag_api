@@ -19,8 +19,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marillia.milebag.business.bdo.model.BdoEncaminhadoPorCompanhia;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.notificacao.model.InscricaoPush;
+import com.marillia.milebag.core.config.security.TenantContext;
 
 @ExtendWith(MockitoExtension.class)
 class NotificadorBdoNovoTest {
@@ -96,6 +98,32 @@ class NotificadorBdoNovoTest {
         assertThat(conteudo).contains("\"titulo\":\"Nova bagagem para retirar no aeroporto\"");
         assertThat(conteudo).contains("BDO GYNLA12342 chegou por e-mail e está disponível para assumir.");
         assertThat(conteudo).contains("\"url\":\"/motorista\"");
+    }
+
+    @Test
+    void bdoDaCompanhiaAvisaOsMotoristasDaEmpresaComOTenantDelaSoDuranteOAviso() throws Exception {
+        UUID companhia = UUID.randomUUID();
+        UUID empresa = UUID.randomUUID();
+        TenantContext.set(companhia);
+        java.util.concurrent.atomic.AtomicReference<UUID> tenantNaLeitura = new java.util.concurrent.atomic.AtomicReference<>();
+        when(enviadorPush.habilitado()).thenReturn(true);
+        when(inscricaoPushService.listarDosMotoristasAtivos()).thenAnswer(i -> {
+            tenantNaLeitura.set(TenantContext.get());
+            return List.of(inscricao());
+        });
+        when(enviadorPush.enviar(any(), anyString())).thenReturn(201);
+        try {
+            BdoEncaminhadoPorCompanhia daCompanhia = new BdoEncaminhadoPorCompanhia(UUID.randomUUID(), "GRUZZ12345", empresa, "Linhas Aéreas Exemplo (ZZ)");
+
+            notificador.aoReceberBdoDaCompanhia(daCompanhia);
+
+            assertThat(tenantNaLeitura.get()).isEqualTo(empresa);
+            assertThat(TenantContext.get()).isEqualTo(companhia);
+            assertThat(notificador.conteudo(daCompanhia))
+                    .contains("A Linhas Aéreas Exemplo (ZZ) encaminhou a bagagem do processo GRUZZ12345, disponível para assumir.");
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     /** Com id: a entidade se compara pelo id, e duas sem id seriam "iguais" para o Mockito. */
