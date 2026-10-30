@@ -23,6 +23,7 @@ import com.marillia.milebag.business.configuracao.service.IdentidadeVisualTenant
 import com.marillia.milebag.business.fechamento.model.Fechamento;
 import com.marillia.milebag.business.fechamento.model.ItemFechamento;
 import com.marillia.milebag.business.fechamento.model.StatusItemFechamento;
+import com.marillia.milebag.core.pdf.TextoPdf;
 
 /**
  * Gera os dois relatorios em PDF do fechamento (FR-003/RN08, T015 de HU12)
@@ -162,23 +163,8 @@ public class RelatorioFechamentoService {
         conteudo.beginText();
         conteudo.setFont(fonte, tamanho);
         conteudo.newLineAtOffset(50, y);
-        conteudo.showText(somenteCaracteresDaFonte(fonte, texto));
+        conteudo.showText(TextoPdf.somenteCaracteresDaFonte(fonte, texto));
         conteudo.endText();
         return y - (tamanho + 6);
-    }
-
-    /** As fontes padrao do PDF so cobrem WinAnsi; texto livre do tenant (emoji, tab) derrubaria a geracao inteira. */
-    private String somenteCaracteresDaFonte(PDType1Font fonte, String texto) {
-        StringBuilder seguro = new StringBuilder(texto.length());
-        texto.codePoints().forEach(codigo -> {
-            String caractere = new String(Character.toChars(codigo));
-            try {
-                fonte.encode(caractere);
-                seguro.append(caractere);
-            } catch (IOException | IllegalArgumentException e) {
-                seguro.append(codigo == '\t' ? ' ' : '?');
-            }
-        });
-        return seguro.toString();
     }
 }

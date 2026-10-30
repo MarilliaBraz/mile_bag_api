@@ -149,7 +149,7 @@ class BagagemEncontradaServiceTest {
         when(repository.findById(deOutro.getId())).thenReturn(Optional.of(deOutro));
 
         assertThatThrownBy(() -> service.descartar(deOutro.getId(), funcionario)).isInstanceOf(RecursoNaoEncontradoException.class);
-        verify(repository, never()).delete(any());
+        verify(repository, never()).delete(any(BagagemEncontrada.class));
     }
 
     @Test

@@ -3,13 +3,15 @@ package com.marillia.milebag.business.bagagemencontrada.repository;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import com.marillia.milebag.business.bagagemencontrada.model.BagagemEncontrada;
 import com.marillia.milebag.business.bagagemencontrada.model.SituacaoBagagemEncontrada;
 import com.marillia.milebag.core.base.BaseRepository;
 
-public interface BagagemEncontradaRepository extends BaseRepository<BagagemEncontrada, UUID> {
+/** A consulta da HU36 (filtros opcionais) vai por {@link JpaSpecificationExecutor}, com a RLS por companhia. */
+public interface BagagemEncontradaRepository extends BaseRepository<BagagemEncontrada, UUID>, JpaSpecificationExecutor<BagagemEncontrada> {
 
     /** Rascunhos do proprio funcionario, por conferir. */
     List<BagagemEncontrada> findByCriadoPorAndSituacaoOrderByCriadoEmDesc(UUID criadoPor, SituacaoBagagemEncontrada situacao);

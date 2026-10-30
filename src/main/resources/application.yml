@@ -122,3 +122,8 @@ milebag:
       # real antes de qualquer uso fora de desenvolvimento (politica de uso
       # do servico).
       user-agent: ${MILEBAG_NOMINATIM_USER_AGENT:milebag-api/0.1 (dev@milebag.local)}
+    # Mapa impresso na ficha da bagagem encontrada (HU36): os mesmos tiles do mapa do app. Trocar pelo servidor
+    # proprio quando houver; o User-Agent identifica a aplicacao (politica de uso do OpenStreetMap).
+    tiles:
+      url: ${MILEBAG_TILES_URL:https://tile.openstreetmap.org/{z}/{x}/{y}.png}
+      user-agent: ${MILEBAG_NOMINATIM_USER_AGENT:milebag-api/0.1 (dev@milebag.local)}
