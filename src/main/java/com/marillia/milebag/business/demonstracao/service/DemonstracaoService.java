@@ -53,8 +53,9 @@ public class DemonstracaoService {
             return;
         }
 
-        String nome = obrigatorio(pedido.nome(), 2, 100, "Informe o nome (2 a 100 caracteres).");
-        String empresa = obrigatorio(pedido.empresa(), 2, 120, "Informe a empresa (2 a 120 caracteres).");
+        // Campos de uma linha: quebra de linha vira espaco - a empresa vai no assunto (cabecalho) do e-mail.
+        String nome = umaLinha(obrigatorio(pedido.nome(), 2, 100, "Informe o nome (2 a 100 caracteres)."));
+        String empresa = umaLinha(obrigatorio(pedido.empresa(), 2, 120, "Informe a empresa (2 a 120 caracteres)."));
         if (pedido.perfil() == null) {
             throw new RegraNegocioException("Informe se e empresa de entrega ou companhia aerea.");
         }
@@ -105,6 +106,10 @@ public class DemonstracaoService {
             throw new RegraNegocioException(mensagem);
         }
         return texto;
+    }
+
+    private static String umaLinha(String texto) {
+        return texto.replaceAll("\\s+", " ");
     }
 
     private static String aparado(String valor) {

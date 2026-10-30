@@ -66,6 +66,17 @@ class DemonstracaoServiceTest {
     }
 
     @Test
+    void quebraDeLinhaNaEmpresaNaoChegaAoAssunto() throws MessagingException {
+        PedidoDemonstracaoRequest comQuebra = new PedidoDemonstracaoRequest("Ana\nLima", "Exemplo\r\nBcc: alvo@exemplo.com", PerfilCliente.COMPANHIA_AEREA,
+                "ana@exemplo.com", null, null, true, "", 42_000L);
+
+        service.pedir(comQuebra, IP);
+
+        verify(emailSender).enviar(eq("marillia.dev@gmail.com"), eq("Pedido de demonstração - Exemplo Bcc: alvo@exemplo.com (Companhia aérea)"),
+                contains("Nome: Ana Lima\n"), eq("ana@exemplo.com"));
+    }
+
+    @Test
     void campoIscaPreenchidoNaoEnviaENaoFalha() throws MessagingException {
         service.pedir(pedido("ana@exemplo.com", null, null, true, "http://spam", 42_000L), IP);
 
