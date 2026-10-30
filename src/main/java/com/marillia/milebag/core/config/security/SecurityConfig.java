@@ -127,6 +127,8 @@ public class SecurityConfig {
                         // dela e quem cadastra os funcionarios.
                         .requestMatchers("/api/v1/companhia/funcionarios/**").hasRole(Papeis.ADMINISTRADOR_COMPANHIA)
                         .requestMatchers("/api/v1/companhia/**").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA)
+                        // HU34: lista de aeroportos para o registro de bagagem.
+                        .requestMatchers("/api/v1/aeroportos").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA)
                         // HU33: o que antes so exigia login e e das empresas de entrega fica
                         // fechado aos perfis da companhia (a RLS ja isolava os dados; isto
                         // tira as funcoes de vista).
