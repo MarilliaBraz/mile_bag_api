@@ -10,12 +10,14 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.bdo.mapper.BdoMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
@@ -41,16 +43,19 @@ public class BdoService {
     private final ArmazenamentoImagemService armazenamentoImagemService;
     private final BdoOcrService bdoOcrService;
     private final BdoMapper bdoMapper;
+    private final ApplicationEventPublisher eventos;
 
     public BdoService(
             BdoRepository bdoRepository,
             ArmazenamentoImagemService armazenamentoImagemService,
             BdoOcrService bdoOcrService,
-            BdoMapper bdoMapper) {
+            BdoMapper bdoMapper,
+            ApplicationEventPublisher eventos) {
         this.bdoRepository = bdoRepository;
         this.armazenamentoImagemService = armazenamentoImagemService;
         this.bdoOcrService = bdoOcrService;
         this.bdoMapper = bdoMapper;
+        this.eventos = eventos;
     }
 
     /** Ponto de leitura publico para outros dominios (rota, entrega, entrega.bagagemcarona) - nunca {@code BdoRepository} direto (CONVENTIONS.md 2.1). */
@@ -107,6 +112,8 @@ public class BdoService {
 
         Bdo salvo = bdoRepository.save(bdo);
         log.info("BDO {} criado automaticamente por e-mail (tenant {})", salvo.getId(), TenantContext.get());
+        // HU32: os motoristas sao avisados depois do commit (NotificadorBdoNovo).
+        eventos.publishEvent(new BdoRecebidoPorEmail(salvo.getId(), salvo.getNumero()));
     }
 
     @Transactional
