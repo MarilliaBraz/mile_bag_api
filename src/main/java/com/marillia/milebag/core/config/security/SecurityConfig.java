@@ -67,6 +67,10 @@ public class SecurityConfig {
                         // passageiro, que nao tem conta - o codigo aleatorio do
                         // link e a unica credencial (AcompanhamentoController).
                         .requestMatchers(HttpMethod.GET, "/api/v1/acompanhamento/**").permitAll()
+                        // HU38: o pedido de demonstracao vem de quem ainda nao e
+                        // cliente - protegido por campo-isca, tempo minimo e
+                        // limite por IP (DemonstracaoService), nao por JWT.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/publico/demonstracao").permitAll()
                         // HU31: so o motorista envia a propria posicao.
                         .requestMatchers("/api/v1/motorista/posicao").hasRole(Papeis.MOTORISTA)
                         // HU32: so o aparelho do motorista se inscreve para o aviso de BDO novo.
