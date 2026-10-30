@@ -1,11 +1,12 @@
 package com.marillia.milebag.business.bagagemencontrada.model;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-/** Ver specs/HU34-bagagem-com-etiqueta/contracts/bagagens-api.md. */
+/** Ver specs/HU34-bagagem-com-etiqueta/contracts/bagagens-api.md e specs/HU35-bagagem-sem-etiqueta/contracts/bagagens-sem-etiqueta-api.md. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record BagagemEncontradaResponse(
         UUID id,
@@ -13,19 +14,28 @@ public record BagagemEncontradaResponse(
         SituacaoBagagemEncontrada situacao,
         Lido lido,
         Etiqueta etiqueta,
+        Descricao descricao,
         Localizacao localizacao,
         AeroportoRegistro aeroporto,
         String registradoPor,
         Instant registradaEm,
         Instant criadoEm,
-        String fotoUrl) {
+        String fotoUrl,
+        String qrUrl) {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Lido(String numeroEtiqueta, String companhia, String destino, String voo, String nomePassageiro, OrigemLeitura origemLeitura) {
+    public record Lido(String numeroEtiqueta, String companhia, String destino, String voo, String nomePassageiro, OrigemLeitura origemLeitura, CorBagagem cor) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Etiqueta(String numeroEtiqueta, String companhia, String destino, String voo, String nomePassageiro) {
+    }
+
+    /** Bagagem sem etiqueta registrada (HU35). */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Descricao(
+            TipoVolume tipoVolume, TamanhoBagagem tamanho, CorBagagem cor, List<SinalParticular> sinais, String marca, String observacoes,
+            String codigoSid) {
     }
 
     public record Localizacao(Double latitude, Double longitude, OrigemLocalizacao origem) {

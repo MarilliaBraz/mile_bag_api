@@ -1,10 +1,14 @@
 package com.marillia.milebag.business.bagagemencontrada.service;
 
-import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -15,13 +19,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.qrcode.QRCodeWriter;
 import com.marillia.milebag.business.bagagemencontrada.model.Aeroporto;
 import com.marillia.milebag.business.bagagemencontrada.model.BagagemEncontrada;
 import com.marillia.milebag.business.bagagemencontrada.model.BagagemEncontradaResponse;
 import com.marillia.milebag.business.bagagemencontrada.model.ConfirmarEtiquetaRequest;
+import com.marillia.milebag.business.bagagemencontrada.model.CorBagagem;
+import com.marillia.milebag.business.bagagemencontrada.model.DescreverBagagemRequest;
 import com.marillia.milebag.business.bagagemencontrada.model.LeituraEtiqueta;
 import com.marillia.milebag.business.bagagemencontrada.model.OrigemLocalizacao;
+import com.marillia.milebag.business.bagagemencontrada.model.SinalParticular;
 import com.marillia.milebag.business.bagagemencontrada.model.SituacaoBagagemEncontrada;
+import com.marillia.milebag.business.bagagemencontrada.model.TamanhoBagagem;
+import com.marillia.milebag.business.bagagemencontrada.model.TipoVolume;
 import com.marillia.milebag.business.bagagemencontrada.repository.BagagemEncontradaRepository;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.core.config.security.TenantContext;
@@ -33,8 +47,9 @@ import com.marillia.milebag.core.ocr.Imagens;
 import com.marillia.milebag.core.storage.ArmazenamentoImagemService;
 
 /**
- * Registro de bagagens encontradas pelos funcionarios da companhia aerea (HU34, RF27, RD20). A foto vira um rascunho
- * com a leitura e a localizacao; a conferencia o registra. Filtrado por companhia pela RLS.
+ * Registro de bagagens encontradas pelos funcionarios da companhia aerea (RD20): com etiqueta (HU34, RF27) ou sem
+ * etiqueta (HU35, RF28). A foto vira um rascunho com a leitura (ou a cor sugerida) e a localizacao; a conferencia - ou
+ * a descricao, com o codigo SID (RD21) - o registra. Filtrado por companhia pela RLS.
  */
 @Service
 public class BagagemEncontradaService {
@@ -47,6 +62,9 @@ public class BagagemEncontradaService {
     private static final Pattern CODIGO_COMPANHIA = Pattern.compile("[A-Z]{2}|[A-Z][0-9]|[0-9][A-Z]");
     private static final Pattern DESTINO = Pattern.compile("[A-Z]{3}");
     private static final Pattern VOO = Pattern.compile("([A-Z]{2}|[A-Z][0-9]|[0-9][A-Z])[0-9]{1,4}");
+    /** RD21: o ano do codigo SID e o de Brasilia. */
+    private static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
+    private static final int LADO_QR = 360;
 
     private final BagagemEncontradaRepository repository;
     private final LeitorEtiqueta leitorEtiqueta;
@@ -73,32 +91,82 @@ public class BagagemEncontradaService {
         if (foto == null || foto.isEmpty()) {
             throw new RegraNegocioException("Envie a foto da etiqueta.");
         }
-        BufferedImage imagem = Imagens.decodificar(foto);
-        LeituraEtiqueta leitura = leitorEtiqueta.ler(imagem);
-
-        Optional<Coordenada> daFoto = LocalizacaoFoto.ler(bytes(foto));
-        Coordenada posicao = daFoto.orElse(posicaoValida(latitudeAparelho, longitudeAparelho));
-        OrigemLocalizacao origem = daFoto.isPresent() ? OrigemLocalizacao.FOTO : posicao != null ? OrigemLocalizacao.APARELHO : OrigemLocalizacao.NENHUMA;
-        Optional<AeroportoService.AeroportoProximo> proximo =
-                posicao == null ? Optional.empty() : aeroportoService.maisProximo(posicao.latitude(), posicao.longitude());
-
-        String caminho;
-        try {
-            caminho = armazenamento.salvar(TenantContext.get(), foto);
-        } catch (IOException e) {
-            throw new IllegalStateException("Falha ao guardar a foto da etiqueta.", e);
-        }
+        LeituraEtiqueta leitura = leitorEtiqueta.ler(Imagens.decodificar(foto));
+        Local local = localizar(foto, latitudeAparelho, longitudeAparelho);
         BagagemEncontrada rascunho = repository.save(BagagemEncontrada.rascunhoComEtiqueta(
-                funcionarioId, caminho, leitura,
-                posicao == null ? null : posicao.latitude(), posicao == null ? null : posicao.longitude(), origem,
-                proximo.map(p -> p.aeroporto().getCodigo()).orElse(null), proximo.map(AeroportoService.AeroportoProximo::distanciaMetros).orElse(null)));
-        log.info("Etiqueta lida ({}), localizacao {}: rascunho {}", leitura.origem(), origem, rascunho.getId());
+                funcionarioId, guardarFoto(foto), leitura, local.latitude(), local.longitude(), local.origem(), local.aeroporto(), local.distancia()));
+        log.info("Etiqueta lida ({}), localizacao {}: rascunho {}", leitura.origem(), local.origem(), rascunho.getId());
         return resposta(rascunho);
+    }
+
+    /** Foto de bagagem sem etiqueta (RF28): o rascunho com a cor sugerida pela foto e o local, como na etiqueta. */
+    @Transactional
+    public BagagemEncontradaResponse lerSemEtiqueta(MultipartFile foto, Double latitudeAparelho, Double longitudeAparelho, UUID funcionarioId) {
+        if (foto == null || foto.isEmpty()) {
+            throw new RegraNegocioException("Envie a foto da bagagem.");
+        }
+        CorBagagem cor = CorPredominante.sugerir(Imagens.decodificar(foto)).orElse(null);
+        Local local = localizar(foto, latitudeAparelho, longitudeAparelho);
+        BagagemEncontrada rascunho = repository.save(BagagemEncontrada.rascunhoSemEtiqueta(
+                funcionarioId, guardarFoto(foto), cor, local.latitude(), local.longitude(), local.origem(), local.aeroporto(), local.distancia()));
+        log.info("Bagagem sem etiqueta fotografada (cor sugerida {}), localizacao {}: rascunho {}", cor, local.origem(), rascunho.getId());
+        return resposta(rascunho);
+    }
+
+    /** A descricao da bagagem sem etiqueta (RF28) a registra com o codigo SID do aeroporto escolhido (RD21). */
+    @Transactional
+    public BagagemEncontradaResponse registrarSemEtiqueta(UUID id, DescreverBagagemRequest request, UUID funcionarioId) {
+        BagagemEncontrada bagagem = buscarRascunhoDoAutor(id, funcionarioId);
+        if (!bagagem.semEtiqueta()) {
+            throw new ConflitoException("Bagagem com etiqueta: confira os dados da etiqueta.");
+        }
+        if (request == null) {
+            throw new RegraNegocioException("Descreva a bagagem.");
+        }
+        TipoVolume tipoVolume = opcao(TipoVolume.class, request.tipoVolume(), "tipoVolume");
+        TamanhoBagagem tamanho = opcao(TamanhoBagagem.class, request.tamanho(), "tamanho");
+        CorBagagem cor = opcao(CorBagagem.class, request.cor(), "cor");
+        Set<SinalParticular> sinais = EnumSet.noneOf(SinalParticular.class);
+        for (String sinal : request.sinais() == null ? List.<String>of() : request.sinais()) {
+            sinais.add(opcao(SinalParticular.class, sinal, "sinais"));
+        }
+        String marca = textoLivre(request.marca(), 60, "marca");
+        String observacoes = textoLivre(request.observacoes(), 500, "observacoes");
+        Aeroporto aeroporto = aeroportoService.buscar(request.aeroportoCodigo())
+                .orElseThrow(() -> new RegraNegocioException("Escolha um aeroporto da lista."));
+        Instant agora = Instant.now();
+        String codigoSid = String.format(
+                Locale.ROOT, "SID-%s-%d-%06d", aeroporto.getCodigo(), agora.atZone(BRASILIA).getYear(), repository.proximoNumeroSid());
+        bagagem.registrarDescricao(
+                tipoVolume, tamanho, cor, sinais, marca, observacoes, aeroporto.getCodigo(), distanciaAte(bagagem, aeroporto), codigoSid, agora);
+        log.info("Bagagem sem etiqueta {} registrada: {}", id, codigoSid);
+        return resposta(repository.save(bagagem));
+    }
+
+    /** QR code do codigo SID (RD21), para a etiqueta impressa. So existe na bagagem sem etiqueta registrada. */
+    @Transactional(readOnly = true)
+    public byte[] qrSid(UUID id) {
+        BagagemEncontrada bagagem = buscarOuFalhar(id);
+        if (bagagem.getCodigoSid() == null) {
+            throw new RecursoNaoEncontradoException("Esta bagagem nao tem codigo SID.");
+        }
+        try {
+            ByteArrayOutputStream png = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(
+                    new QRCodeWriter().encode(bagagem.getCodigoSid(), BarcodeFormat.QR_CODE, LADO_QR, LADO_QR, Map.of(EncodeHintType.MARGIN, 2)),
+                    "png", png);
+            return png.toByteArray();
+        } catch (WriterException | IOException e) {
+            throw new IllegalStateException("Falha ao gerar o QR code do codigo SID.", e);
+        }
     }
 
     @Transactional
     public BagagemEncontradaResponse confirmarEtiqueta(UUID id, ConfirmarEtiquetaRequest request, UUID funcionarioId) {
         BagagemEncontrada bagagem = buscarRascunhoDoAutor(id, funcionarioId);
+        if (bagagem.semEtiqueta()) {
+            throw new ConflitoException("Bagagem sem etiqueta: registre pela descricao.");
+        }
         if (request == null) {
             throw new RegraNegocioException("Informe os dados da etiqueta.");
         }
@@ -115,11 +183,7 @@ public class BagagemEncontradaService {
         }
         Aeroporto aeroporto = aeroportoService.buscar(request.aeroportoCodigo())
                 .orElseThrow(() -> new RegraNegocioException("Escolha um aeroporto da lista."));
-        // A distancia so tem sentido para a posicao do registro; trocar o aeroporto recalcula.
-        Integer distancia = bagagem.temLocalizacao()
-                ? (int) Math.round(AeroportoService.distanciaMetros(bagagem.getLatitude(), bagagem.getLongitude(), aeroporto.getLatitude(), aeroporto.getLongitude()))
-                : null;
-        bagagem.registrarEtiqueta(numero, companhia, destino, voo, nome, aeroporto.getCodigo(), distancia, Instant.now());
+        bagagem.registrarEtiqueta(numero, companhia, destino, voo, nome, aeroporto.getCodigo(), distanciaAte(bagagem, aeroporto), Instant.now());
         return resposta(repository.save(bagagem));
     }
 
@@ -178,9 +242,42 @@ public class BagagemEncontradaService {
         return bagagem;
     }
 
+    /** Onde a bagagem foi fotografada e o aeroporto sugerido; a posicao da foto vale mais que a do aparelho. */
+    private Local localizar(MultipartFile foto, Double latitudeAparelho, Double longitudeAparelho) {
+        Optional<Coordenada> daFoto = LocalizacaoFoto.ler(bytes(foto));
+        Coordenada posicao = daFoto.orElse(posicaoValida(latitudeAparelho, longitudeAparelho));
+        OrigemLocalizacao origem = daFoto.isPresent() ? OrigemLocalizacao.FOTO : posicao != null ? OrigemLocalizacao.APARELHO : OrigemLocalizacao.NENHUMA;
+        Optional<AeroportoService.AeroportoProximo> proximo =
+                posicao == null ? Optional.empty() : aeroportoService.maisProximo(posicao.latitude(), posicao.longitude());
+        return new Local(
+                posicao == null ? null : posicao.latitude(), posicao == null ? null : posicao.longitude(), origem,
+                proximo.map(p -> p.aeroporto().getCodigo()).orElse(null), proximo.map(AeroportoService.AeroportoProximo::distanciaMetros).orElse(null));
+    }
+
+    private record Local(Double latitude, Double longitude, OrigemLocalizacao origem, String aeroporto, Integer distancia) {
+    }
+
+    private String guardarFoto(MultipartFile foto) {
+        try {
+            return armazenamento.salvar(TenantContext.get(), foto);
+        } catch (IOException e) {
+            throw new IllegalStateException("Falha ao guardar a foto da bagagem.", e);
+        }
+    }
+
+    /** A distancia so tem sentido para a posicao do registro; trocar o aeroporto recalcula. */
+    private static Integer distanciaAte(BagagemEncontrada bagagem, Aeroporto aeroporto) {
+        return bagagem.temLocalizacao()
+                ? (int) Math.round(AeroportoService.distanciaMetros(bagagem.getLatitude(), bagagem.getLongitude(), aeroporto.getLatitude(), aeroporto.getLongitude()))
+                : null;
+    }
+
     private BagagemEncontradaResponse resposta(BagagemEncontrada b) {
-        BagagemEncontradaResponse.Etiqueta etiqueta = b.rascunho() ? null
+        BagagemEncontradaResponse.Etiqueta etiqueta = b.rascunho() || b.semEtiqueta() ? null
                 : new BagagemEncontradaResponse.Etiqueta(b.getNumeroEtiqueta(), b.getCompanhia(), b.getDestino(), b.getVoo(), b.getNomePassageiro());
+        BagagemEncontradaResponse.Descricao descricao = b.rascunho() || !b.semEtiqueta() ? null
+                : new BagagemEncontradaResponse.Descricao(
+                        b.getTipoVolume(), b.getTamanho(), b.getCor(), List.copyOf(b.getSinais()), b.getMarca(), b.getObservacoes(), b.getCodigoSid());
         BagagemEncontradaResponse.AeroportoRegistro aeroporto = aeroportoService.buscar(b.getAeroportoCodigo())
                 .map(a -> new BagagemEncontradaResponse.AeroportoRegistro(
                         a.getCodigo(), a.getNome(), a.getCidade(), a.getUf(), b.getDistanciaAeroportoMetros(),
@@ -189,14 +286,17 @@ public class BagagemEncontradaService {
         return new BagagemEncontradaResponse(
                 b.getId(), b.getTipo(), b.getSituacao(),
                 new BagagemEncontradaResponse.Lido(
-                        b.getLidoNumeroEtiqueta(), b.getLidoCompanhia(), b.getLidoDestino(), b.getLidoVoo(), b.getLidoNomePassageiro(), b.getOrigemLeitura()),
+                        b.getLidoNumeroEtiqueta(), b.getLidoCompanhia(), b.getLidoDestino(), b.getLidoVoo(), b.getLidoNomePassageiro(), b.getOrigemLeitura(),
+                        b.getLidoCor()),
                 etiqueta,
+                descricao,
                 new BagagemEncontradaResponse.Localizacao(b.getLatitude(), b.getLongitude(), b.getOrigemLocalizacao()),
                 aeroporto,
                 usuarioConsultaService.nomeParaExibicao(b.getCriadoPor()).orElse(null),
                 b.getRegistradaEm(),
                 b.getCriadoEm(),
-                "/api/v1/companhia/bagagens/" + b.getId() + "/foto");
+                "/api/v1/companhia/bagagens/" + b.getId() + "/foto",
+                b.getCodigoSid() == null ? null : "/api/v1/companhia/bagagens/" + b.getId() + "/qr");
     }
 
     private static Coordenada posicaoValida(Double latitude, Double longitude) {
@@ -216,6 +316,28 @@ public class BagagemEncontradaService {
 
     private static String maiusculoSemEspacos(String valor) {
         return valor == null || valor.isBlank() ? null : valor.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+    }
+
+    private static <E extends Enum<E>> E opcao(Class<E> opcoes, String valor, String campo) {
+        if (valor == null || valor.isBlank()) {
+            throw new RegraNegocioException(campo + " e obrigatorio.");
+        }
+        try {
+            return Enum.valueOf(opcoes, valor.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new RegraNegocioException(campo + " fora das opcoes: " + valor + ".");
+        }
+    }
+
+    private static String textoLivre(String valor, int maximo, String campo) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+        String limpo = valor.trim();
+        if (limpo.length() > maximo) {
+            throw new RegraNegocioException(campo + " deve ter no maximo " + maximo + " caracteres.");
+        }
+        return limpo;
     }
 
     private static String opcional(String valor, Pattern formato, String mensagem) {

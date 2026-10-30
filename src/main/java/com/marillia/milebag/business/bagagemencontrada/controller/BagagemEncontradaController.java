@@ -21,12 +21,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.bagagemencontrada.model.BagagemEncontradaResponse;
 import com.marillia.milebag.business.bagagemencontrada.model.ConfirmarEtiquetaRequest;
+import com.marillia.milebag.business.bagagemencontrada.model.DescreverBagagemRequest;
 import com.marillia.milebag.business.bagagemencontrada.model.SituacaoBagagemEncontrada;
 import com.marillia.milebag.business.bagagemencontrada.service.BagagemEncontradaService;
 import com.marillia.milebag.core.config.security.AuthenticatedUser;
 
 /**
- * Bagagens encontradas (HU34) - ver specs/HU34-bagagem-com-etiqueta/contracts/bagagens-api.md. Restrito aos perfis da
+ * Bagagens encontradas (HU34, HU35) - ver specs/HU34-bagagem-com-etiqueta/contracts/bagagens-api.md e
+ * specs/HU35-bagagem-sem-etiqueta/contracts/bagagens-sem-etiqueta-api.md. Restrito aos perfis da
  * companhia aerea ({@code /api/v1/companhia/**} no SecurityConfig).
  */
 @RestController
@@ -47,6 +49,27 @@ public class BagagemEncontradaController {
             @RequestParam(value = "longitude", required = false) Double longitude,
             @AuthenticationPrincipal AuthenticatedUser usuario) {
         return service.lerEtiqueta(foto, latitude, longitude, usuario.userId());
+    }
+
+    @PostMapping(value = "/sem-etiqueta", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public BagagemEncontradaResponse lerSemEtiqueta(
+            @RequestParam("foto") MultipartFile foto,
+            @RequestParam(value = "latitude", required = false) Double latitude,
+            @RequestParam(value = "longitude", required = false) Double longitude,
+            @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return service.lerSemEtiqueta(foto, latitude, longitude, usuario.userId());
+    }
+
+    @PutMapping("/{id}/descricao")
+    public BagagemEncontradaResponse descrever(
+            @PathVariable UUID id, @RequestBody DescreverBagagemRequest request, @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return service.registrarSemEtiqueta(id, request, usuario.userId());
+    }
+
+    @GetMapping(value = "/{id}/qr", produces = MediaType.IMAGE_PNG_VALUE)
+    public byte[] qr(@PathVariable UUID id) {
+        return service.qrSid(id);
     }
 
     @PutMapping("/{id}/confirmacao")
