@@ -97,6 +97,20 @@ public class RotaService implements SelecaoRotaProvider {
                 .map(p -> new RotaSelecionada(p.getTipoSelecao(), lerRotaEscolhida(p.getRotaEscolhida())));
     }
 
+    /** HU31: destino da rota calculada para a entrega, mostrado no link de acompanhamento - vazio se nao houver. */
+    @Transactional(readOnly = true)
+    public Optional<Coordenada> buscarDestino(UUID entregaId) {
+        return propostaRotaRepository.findById(entregaId)
+                .map(PropostaRota::getDestino)
+                .map(json -> {
+                    try {
+                        return objectMapper.readValue(json, Coordenada.class);
+                    } catch (JsonProcessingException e) {
+                        throw new IllegalStateException("Falha ao ler o destino persistido.", e);
+                    }
+                });
+    }
+
     @Transactional
     public CalcularRotaResponse calcular(UUID entregaId, CalcularRotaRequest request) {
         if (request == null || request.origemAtual() == null) {

@@ -139,6 +139,12 @@ public class MensagemService {
      */
     @Transactional
     public void notificarAutomatica(UUID entregaId, TipoEventoNotificacao tipoEvento) {
+        notificarAutomatica(entregaId, tipoEvento, null);
+    }
+
+    /** HU31: {@code linkAcompanhamento} (so em VIAGEM_INICIADA) vai ao fim do texto, em e-mail e Telegram. */
+    @Transactional
+    public void notificarAutomatica(UUID entregaId, TipoEventoNotificacao tipoEvento, String linkAcompanhamento) {
         Optional<Entrega> entregaOpt = entregaService.buscarPorId(entregaId);
         if (entregaOpt.isEmpty()) {
             log.warn("notificarAutomatica chamado para uma entrega inexistente ({}) - ignorado.", entregaId);
@@ -152,6 +158,9 @@ public class MensagemService {
         }
 
         String conteudo = textoDoEvento(tipoEvento, bdo, entrega);
+        if (linkAcompanhamento != null) {
+            conteudo += "\n\nAcompanhe sua bagagem: " + linkAcompanhamento;
+        }
         Optional<VinculoTelegram> vinculo = vinculoTelegramRepository.findByEntregaId(entregaId);
         enviarPorEmail(entregaId, bdo, AutorMensagem.SISTEMA, TipoMensagem.AUTOMATICA, conteudo, tipoEvento, vinculo.isEmpty());
         if (vinculo.isPresent()) {

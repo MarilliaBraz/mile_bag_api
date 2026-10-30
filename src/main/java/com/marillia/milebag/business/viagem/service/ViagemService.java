@@ -79,6 +79,7 @@ public class ViagemService {
     private final ObjectMapper objectMapper;
     private final MensagemService mensagemService;
     private final PracaPedagioService pracaPedagioService;
+    private final AcompanhamentoViagem acompanhamentoViagem;
 
     // @Lazy: a inversao por SelecaoRotaProvider tira a dependencia de PACOTE
     // (viagem nao importa nada de rota), mas em runtime o Spring ainda ve o
@@ -94,8 +95,10 @@ public class ViagemService {
             TrajetoMapper trajetoMapper,
             ObjectMapper objectMapper,
             MensagemService mensagemService,
-            PracaPedagioService pracaPedagioService) {
+            PracaPedagioService pracaPedagioService,
+            AcompanhamentoViagem acompanhamentoViagem) {
         this.pracaPedagioService = pracaPedagioService;
+        this.acompanhamentoViagem = acompanhamentoViagem;
         this.entregaService = entregaService;
         this.selecaoRotaProvider = selecaoRotaProvider;
         this.trajetoRepository = trajetoRepository;
@@ -172,9 +175,12 @@ public class ViagemService {
                 semCoordenadas));
 
         entregaService.marcarEmAndamento(entregaId);
+        // HU31: o link nasce antes do aviso, que o leva ao passageiro.
+        String linkAcompanhamento = acompanhamentoViagem.criarLink(trajeto);
 
         log.info("Viagem iniciada: trajeto {} para a entrega {}", trajeto.getId(), entregaId);
-        notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA);
+        notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA, linkAcompanhamento);
+        acompanhamentoViagem.avisarAdministradores(entregaId, linkAcompanhamento);
         return trajetoMapper.toIniciadoResponse(trajeto, calculoInicial, checkpointPartida);
     }
 
@@ -247,10 +253,35 @@ public class ViagemService {
     /** HU20, FR-006: o marco (a_caminho/chegada) mais recente da entrega, para o painel (HU19) - null quando nenhum foi registrado ainda. */
     @Transactional(readOnly = true)
     public Optional<String> marcoMaisRecente(UUID entregaId) {
-        return trajetoDaTentativaAtual(entregaId)
-                .flatMap(trajeto -> checkpointGpsRepository.findFirstByTrajetoIdAndTipoInOrderByDataHoraDesc(
-                        trajeto.getId(), TIPOS_MARCO_PROGRESSO))
+        return trajetoDaTentativaAtual(entregaId).flatMap(trajeto -> marcoMaisRecenteDoTrajeto(trajeto.getId()));
+    }
+
+    /** HU31: o marco mais recente de uma tentativa especifica (a do link de acompanhamento). */
+    @Transactional(readOnly = true)
+    public Optional<String> marcoMaisRecenteDoTrajeto(UUID trajetoId) {
+        return checkpointGpsRepository.findFirstByTrajetoIdAndTipoInOrderByDataHoraDesc(trajetoId, TIPOS_MARCO_PROGRESSO)
                 .map(checkpoint -> checkpoint.getTipo().name());
+    }
+
+    /** HU31: ponto de leitura para o acompanhamento publico - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1). */
+    @Transactional(readOnly = true)
+    public Optional<Trajeto> buscarTrajetoPorId(UUID trajetoId) {
+        return trajetoRepository.findById(trajetoId);
+    }
+
+    /**
+     * HU31 (RN16): substitui a ultima posicao da viagem em andamento do motorista. Sem viagem em andamento,
+     * devolve {@code false} e nada e gravado - o app para de enviar.
+     */
+    @Transactional
+    public boolean registrarPosicao(UUID motoristaId, double latitude, double longitude) {
+        Optional<Trajeto> emAndamento = trajetoRepository.findFirstByMotoristaIdAndStatusOrderByDataInicioDesc(
+                motoristaId, TrajetoStatus.EM_EXECUCAO);
+        emAndamento.ifPresent(trajeto -> {
+            trajeto.atualizarPosicao(latitude, longitude, Instant.now());
+            trajetoRepository.save(trajeto);
+        });
+        return emAndamento.isPresent();
     }
 
     /**
@@ -259,8 +290,12 @@ public class ViagemService {
      * fica aqui (chamador), nao dentro de {@link MensagemService}.
      */
     private void notificarAutomaticaComSeguranca(UUID entregaId, TipoEventoNotificacao tipoEvento) {
+        notificarAutomaticaComSeguranca(entregaId, tipoEvento, null);
+    }
+
+    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoEventoNotificacao tipoEvento, String linkAcompanhamento) {
         try {
-            mensagemService.notificarAutomatica(entregaId, tipoEvento);
+            mensagemService.notificarAutomatica(entregaId, tipoEvento, linkAcompanhamento);
         } catch (RuntimeException e) {
             log.warn("Falha ao notificar automaticamente a entrega {} do marco {} - checkpoint ja registrado, seguindo.", entregaId, tipoEvento, e);
         }

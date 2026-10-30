@@ -69,6 +69,19 @@ public class Trajeto extends BaseEntity {
     @Column(name = "ocorrencia_id")
     private UUID ocorrenciaId;
 
+    /**
+     * Ultima posicao do motorista na tentativa em andamento (HU31, RN16): substituida a cada envio do app e
+     * apagada ao encerrar - excecao a "append-only" acima, porque nao e dado da viagem, so do acompanhamento.
+     */
+    @Column(name = "posicao_latitude")
+    private Double posicaoLatitude;
+
+    @Column(name = "posicao_longitude")
+    private Double posicaoLongitude;
+
+    @Column(name = "posicao_registrada_em")
+    private Instant posicaoRegistradaEm;
+
     public Trajeto(UUID entregaId, UUID motoristaId, Instant dataInicio) {
         this.entregaId = entregaId;
         this.motoristaId = motoristaId;
@@ -82,6 +95,23 @@ public class Trajeto extends BaseEntity {
         if (this.encerradoEm == null) {
             this.encerradoEm = quando;
         }
+        descartarPosicao();
+    }
+
+    public void atualizarPosicao(double latitude, double longitude, Instant quando) {
+        this.posicaoLatitude = latitude;
+        this.posicaoLongitude = longitude;
+        this.posicaoRegistradaEm = quando;
+    }
+
+    public boolean temPosicao() {
+        return posicaoRegistradaEm != null;
+    }
+
+    private void descartarPosicao() {
+        this.posicaoLatitude = null;
+        this.posicaoLongitude = null;
+        this.posicaoRegistradaEm = null;
     }
 
     public boolean encerradoPorOcorrencia() {
@@ -104,5 +134,6 @@ public class Trajeto extends BaseEntity {
         this.justificativaDivergencia = justificativaDivergencia;
         this.status = TrajetoStatus.ENCERRADO;
         this.encerradoEm = Instant.now();
+        descartarPosicao();
     }
 }

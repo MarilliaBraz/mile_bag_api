@@ -63,6 +63,12 @@ public class SecurityConfig {
                         // X-Telegram-Bot-Api-Secret-Token (TelegramWebhookController),
                         // nao por JWT de usuario.
                         .requestMatchers("/api/v1/webhooks/telegram").permitAll()
+                        // HU31: a pagina "Acompanhe sua bagagem" e aberta pelo
+                        // passageiro, que nao tem conta - o codigo aleatorio do
+                        // link e a unica credencial (AcompanhamentoController).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/acompanhamento/**").permitAll()
+                        // HU31: so o motorista envia a propria posicao.
+                        .requestMatchers("/api/v1/motorista/posicao").hasRole(Papeis.MOTORISTA)
                         // HU09: "perfil exigido: administrador do tenant"
                         // (contracts/tarifas-api.md) - primeiro endpoint
                         // deste projeto restrito por perfil, nao so por

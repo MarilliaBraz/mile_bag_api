@@ -219,6 +219,24 @@ class MensagemServiceTest {
         assertThat(captor.getValue().getTipoEvento()).isEqualTo(TipoEventoNotificacao.CHEGADA);
     }
 
+    /** HU31: o link "Acompanhe sua bagagem" vai no aviso de viagem iniciada, no e-mail e no Telegram. */
+    @Test
+    void notificarViagemIniciadaLevaOLinkDeAcompanhamentoNosDoisCanais() {
+        UUID entregaId = UUID.randomUUID();
+        UUID bdoId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, UUID.randomUUID(), bdoId)));
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdoComEmail(bdoId, "passageiro@exemplo.com")));
+        when(vinculoTelegramRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(new VinculoTelegram(entregaId, 777L)));
+        when(emailChannel.enviar(any(), any(), any(), any(), anyBoolean())).thenReturn(true);
+        when(telegramClient.enviar(eq(777L), any())).thenReturn(true);
+
+        mensagemService.notificarAutomatica(entregaId, TipoEventoNotificacao.VIAGEM_INICIADA, "https://app/acompanhar/abc");
+
+        String esperado = "\n\nAcompanhe sua bagagem: https://app/acompanhar/abc";
+        verify(emailChannel).enviar(eq(entregaId), eq("passageiro@exemplo.com"), any(), org.mockito.ArgumentMatchers.endsWith(esperado), eq(false));
+        verify(telegramClient).enviar(eq(777L), org.mockito.ArgumentMatchers.endsWith(esperado));
+    }
+
     @Test
     void notificarReagendamentoInformaAJanelaNoFusoDoTenant() {
         UUID entregaId = UUID.randomUUID();
