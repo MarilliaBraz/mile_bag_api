@@ -96,6 +96,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.FORBIDDEN, "acesso-negado", ex.getMessage());
     }
 
+    @ExceptionHandler(LimiteDemonstracaoException.class)
+    public ProblemDetail handleLimiteDemonstracao(LimiteDemonstracaoException ex) {
+        return problema(HttpStatus.TOO_MANY_REQUESTS, "limite-demonstracao", ex.getMessage());
+    }
+
+    @ExceptionHandler(EnvioIndisponivelException.class)
+    public ProblemDetail handleEnvioIndisponivel(EnvioIndisponivelException ex) {
+        return problema(HttpStatus.SERVICE_UNAVAILABLE, "envio-indisponivel", ex.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
