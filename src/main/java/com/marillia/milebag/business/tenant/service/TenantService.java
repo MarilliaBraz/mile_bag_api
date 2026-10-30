@@ -1,7 +1,9 @@
 package com.marillia.milebag.business.tenant.service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.tenant.model.Tenant;
+import com.marillia.milebag.business.tenant.model.TipoTenant;
 import com.marillia.milebag.business.tenant.repository.PlanoAssinaturaRepository;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -21,6 +24,7 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 public class TenantService {
 
     private static final Logger log = LoggerFactory.getLogger(TenantService.class);
+    private static final Pattern CODIGO_IATA = Pattern.compile("[A-Z][A-Z0-9]|[0-9][A-Z]");
 
     private final TenantRepository tenantRepository;
     private final PlanoAssinaturaRepository planoAssinaturaRepository;
@@ -77,6 +81,39 @@ public class TenantService {
         motivoOcorrenciaService.criarPadroesSeAusentes(tenant.getId());
         log.info("Tenant {} cadastrado (plano {})", tenant.getId(), planoId);
         return tenant;
+    }
+
+    /**
+     * HU33: companhia aerea - mesmo convite do primeiro administrador (HU15) e mesma regra de identificador unico
+     * (entre empresas e companhias), mas sem plano de assinatura nem motivos de ocorrencia, que sao das entregas.
+     */
+    @Transactional
+    public Tenant cadastrarCompanhia(String identificador, String nome, String codigoIata, String emailAdministrador) {
+        if (identificador == null || identificador.isBlank()) {
+            throw new RegraNegocioException("identificador e obrigatorio.");
+        }
+        if (nome == null || nome.isBlank()) {
+            throw new RegraNegocioException("nome e obrigatorio.");
+        }
+        String codigo = codigoIata == null ? "" : codigoIata.trim().toUpperCase(Locale.ROOT);
+        if (!CODIGO_IATA.matcher(codigo).matches()) {
+            throw new RegraNegocioException("codigoIata deve ter duas posicoes (letras ou letra e numero), ex.: LA, G3.");
+        }
+        if (tenantRepository.findByIdentificadorEmpresa(identificador.trim()).isPresent()) {
+            throw new ConflitoException("Ja existe uma empresa ou companhia cadastrada com este identificador.");
+        }
+        if (tenantRepository.existsByCodigoIata(codigo)) {
+            throw new ConflitoException("Ja existe uma companhia aerea com este codigo IATA.");
+        }
+        Tenant companhia = tenantRepository.save(Tenant.companhiaAerea(identificador.trim(), nome.trim(), codigo));
+        conviteAdministradorService.criarEEnviar(companhia.getId(), emailAdministrador);
+        log.info("Companhia aerea {} ({}) cadastrada", companhia.getId(), codigo);
+        return companhia;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Tenant> listarCompanhias() {
+        return tenantRepository.findByTipoOrderByNomeAsc(TipoTenant.COMPANHIA_AEREA);
     }
 
     @Transactional(readOnly = true)

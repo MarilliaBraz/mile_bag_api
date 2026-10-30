@@ -78,11 +78,11 @@ public class MotoristaController {
      */
     @PostMapping("/lote")
     public ResultadoLoteResponse criarEmLote(@RequestBody CriarLoteRequest request) {
-        var linhas = request.motoristas() == null ? List.<MotoristaService.NovoMotorista>of()
-                : request.motoristas().stream().map(l -> new MotoristaService.NovoMotorista(l.nome(), l.login(), l.senha())).toList();
+        var linhas = request.motoristas() == null ? List.<MotoristaService.NovaConta>of()
+                : request.motoristas().stream().map(l -> new MotoristaService.NovaConta(l.nome(), l.login(), l.senha())).toList();
         var resultados = motoristaService.criarEmLote(linhas).stream()
                 .map(r -> new ResultadoLinhaResponse(
-                        r.linha(), r.nome(), r.login(), r.criado(), r.mensagem(), r.motorista() == null ? null : r.motorista().getId(), r.senhaGerada()))
+                        r.linha(), r.nome(), r.login(), r.criado(), r.mensagem(), r.conta() == null ? null : r.conta().getId(), r.senhaGerada()))
                 .toList();
         int criados = (int) resultados.stream().filter(ResultadoLinhaResponse::criado).count();
         return new ResultadoLoteResponse(criados, resultados.size() - criados, resultados);

@@ -54,9 +54,31 @@ public class Tenant {
     @Column(name = "criado_em", updatable = false)
     private Instant criadoEm;
 
+    /** RD19 (HU33): empresa de entrega ou companhia aerea. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, updatable = false)
+    private TipoTenant tipo;
+
+    /** So nas companhias aereas: codigo IATA de duas posicoes, unico entre elas (V40). */
+    @Column(name = "codigo_iata", length = 2, updatable = false)
+    private String codigoIata;
+
     public Tenant(String identificadorEmpresa, String nome) {
         this.identificadorEmpresa = identificadorEmpresa;
         this.nome = nome;
         this.status = StatusTenant.ATIVO;
+        this.tipo = TipoTenant.EMPRESA_ENTREGA;
+    }
+
+    /** Companhia aerea (HU33). */
+    public static Tenant companhiaAerea(String identificador, String nome, String codigoIata) {
+        Tenant companhia = new Tenant(identificador, nome);
+        companhia.tipo = TipoTenant.COMPANHIA_AEREA;
+        companhia.codigoIata = codigoIata;
+        return companhia;
+    }
+
+    public boolean ehCompanhiaAerea() {
+        return tipo == TipoTenant.COMPANHIA_AEREA;
     }
 }
