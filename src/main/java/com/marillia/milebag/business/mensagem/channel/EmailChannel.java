@@ -52,7 +52,7 @@ public class EmailChannel {
         }
         String corpo = incluirConviteTelegram ? conteudo + "\n\n" + linkConvite(entregaId) : conteudo;
         try {
-            emailSender.enviar(destinatario, assunto, corpo, enderecoResposta(entregaId));
+            emailSender.enviar(mensageriaProperties.contaEnvio(), destinatario, assunto, corpo, enderecoResposta(entregaId));
             return true;
         } catch (MessagingException e) {
             log.warn("Falha ao enviar e-mail da conversa da entrega {} para {}.", entregaId, destinatario, e);
@@ -62,7 +62,8 @@ public class EmailChannel {
 
     /** {@code Reply-To} usado tanto no envio quanto para resolver o {@code entregaId} de uma resposta recebida ({@code EmailInboundListener}). */
     public String enderecoResposta(UUID entregaId) {
-        return "entrega-" + entregaId + "@" + mensageriaProperties.dominioEmail();
+        String prefixo = mensageriaProperties.prefixoEndereco() == null ? "" : mensageriaProperties.prefixoEndereco();
+        return prefixo + "entrega-" + entregaId + "@" + mensageriaProperties.dominioEmail();
     }
 
     private String linkConvite(UUID entregaId) {

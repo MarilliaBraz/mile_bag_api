@@ -41,7 +41,7 @@ milebag:
   fuso-horario: ${MILEBAG_FUSO_HORARIO:America/Sao_Paulo}
   demonstracao:
     # Para onde vai o pedido de demonstracao da pagina institucional (HU38).
-    destino: ${MILEBAG_DEMONSTRACAO_DESTINO:marillia.dev@gmail.com}
+    destino: ${MILEBAG_DEMONSTRACAO_DESTINO:contato@milebag.com.br}
   cors:
     # Origens do front-end autorizadas a chamar a API (CORS) - sempre
     # explicito por ambiente, nunca hardcoded. Valor de dev fica em
@@ -114,6 +114,13 @@ milebag:
     imap-intervalo-consulta-ms: ${MILEBAG_MENSAGERIA_IMAP_INTERVALO_MS:60000}
     # Base do Reply-To por entrega: entrega-{entregaId}@<dominio-email>.
     dominio-email: ${MILEBAG_MENSAGERIA_DOMINIO_EMAIL:mensagens.milebag.local}
+    # Antes de "entrega-{id}" no Reply-To (ex. mensagem.motorista+). Vazio = entrega-{id}@<dominio-email>.
+    prefixo-endereco: ${MILEBAG_MENSAGERIA_PREFIXO_ENDERECO:}
+    # Conta propria de envio da conversa, no mesmo servidor de milebag.smtp (o Google Workspace so aceita como remetente a
+    # conta autenticada). Vazio = sai pela conta padrao de milebag.smtp.
+    smtp-usuario: ${MILEBAG_MENSAGERIA_SMTP_USUARIO:}
+    smtp-senha: ${MILEBAG_MENSAGERIA_SMTP_SENHA:}
+    smtp-remetente: ${MILEBAG_MENSAGERIA_SMTP_REMETENTE:}
   rotas:
     # Motor de rotas/geocodificacao open source (HU03) - ver research.md da
     # feature 001, secao 5.

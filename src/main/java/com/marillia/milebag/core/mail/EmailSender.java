@@ -15,5 +15,10 @@ public interface EmailSender {
     }
 
     /** {@code replyTo}: nulo mantem o remetente padrao como endereco de resposta (comportamento do HU15). */
-    void enviar(String destinatario, String assunto, String corpo, String replyTo) throws MessagingException;
+    default void enviar(String destinatario, String assunto, String corpo, String replyTo) throws MessagingException {
+        enviar(null, destinatario, assunto, corpo, replyTo);
+    }
+
+    /** {@code conta}: nula usa a conta padrao de {@code milebag.smtp}. */
+    void enviar(ContaEnvioEmail conta, String destinatario, String assunto, String corpo, String replyTo) throws MessagingException;
 }
