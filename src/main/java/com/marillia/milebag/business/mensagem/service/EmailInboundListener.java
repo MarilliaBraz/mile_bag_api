@@ -88,7 +88,7 @@ public class EmailInboundListener {
     }
 
     private void consultarInbox(Store store) throws MessagingException {
-        Folder inbox = store.getFolder("INBOX");
+        Folder inbox = store.getFolder(mensageriaProperties.pastaLeitura());
         try {
             inbox.open(Folder.READ_WRITE);
             Message[] mensagensNaoLidas = inbox.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));

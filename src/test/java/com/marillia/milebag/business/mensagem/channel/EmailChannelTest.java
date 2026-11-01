@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.marillia.milebag.core.config.MensageriaProperties;
 import com.marillia.milebag.core.config.SmtpProperties;
 import com.marillia.milebag.core.config.TelegramProperties;
+import com.marillia.milebag.core.mail.ContaEnvioEmail;
 import com.marillia.milebag.core.mail.EmailSender;
 
 import jakarta.mail.MessagingException;
@@ -34,9 +35,13 @@ class EmailChannelTest {
     private EmailSender emailSender;
 
     private EmailChannel canal(boolean smtpHabilitado) {
+        return canal(smtpHabilitado, new MensageriaProperties(false, "", 993, "", "", 60000, "mensagens.milebag.local", "", "", "", "", ""));
+    }
+
+    private EmailChannel canal(boolean smtpHabilitado, MensageriaProperties mensageria) {
         return new EmailChannel(
                 emailSender,
-                new MensageriaProperties(false, "", 993, "", "", 60000, "mensagens.milebag.local"),
+                mensageria,
                 new TelegramProperties(false, "", "milebag_bot", "", "https://api.telegram.org"),
                 new SmtpProperties(smtpHabilitado, "smtp", 587, "u", "s", "no-reply@milebag.local"));
     }
@@ -56,7 +61,7 @@ class EmailChannelTest {
         boolean enviado = canal(true).enviar(entregaId, "a@b.com", "assunto", "oi", false);
 
         assertThat(enviado).isTrue();
-        verify(emailSender).enviar("a@b.com", "assunto", "oi", "entrega-" + entregaId + "@mensagens.milebag.local");
+        verify(emailSender).enviar(null, "a@b.com", "assunto", "oi", "entrega-" + entregaId + "@mensagens.milebag.local");
     }
 
     @Test
@@ -66,14 +71,27 @@ class EmailChannelTest {
         canal(true).enviar(entregaId, "a@b.com", "assunto", "oi", true);
 
         verify(emailSender).enviar(
-                eq("a@b.com"), eq("assunto"), org.mockito.ArgumentMatchers.contains("https://t.me/milebag_bot?start=" + entregaId), any());
+                any(), eq("a@b.com"), eq("assunto"), org.mockito.ArgumentMatchers.contains("https://t.me/milebag_bot?start=" + entregaId), any());
     }
 
     @Test
     void reportaFalhaQuandoOEnvioLancaExcecao() throws Exception {
-        doThrow(new MessagingException("smtp fora")).when(emailSender).enviar(any(), any(), any(), any());
+        doThrow(new MessagingException("smtp fora")).when(emailSender).enviar(any(), any(), any(), any(), any());
 
         assertThat(canal(true).enviar(UUID.randomUUID(), "a@b.com", "assunto", "oi", false)).isFalse();
         verify(emailSender, never()).enviar("a@b.com", "assunto", "oi");
+    }
+
+    @Test
+    void enviaPelaContaPropriaDaMensageriaComPrefixoNoReplyTo() throws Exception {
+        UUID entregaId = UUID.randomUUID();
+        MensageriaProperties mensageria = new MensageriaProperties(false, "", 993, "", "", 60000, "milebag.com.br",
+                "mensagem.motorista+", "mensagem.motorista@milebag.com.br", "senha", "", "Mensagem motorista");
+
+        canal(true, mensageria).enviar(entregaId, "a@b.com", "assunto", "oi", false);
+
+        verify(emailSender).enviar(
+                new ContaEnvioEmail("mensagem.motorista@milebag.com.br", "senha", "mensagem.motorista@milebag.com.br"), "a@b.com",
+                "assunto", "oi", "mensagem.motorista+entrega-" + entregaId + "@milebag.com.br");
     }
 }

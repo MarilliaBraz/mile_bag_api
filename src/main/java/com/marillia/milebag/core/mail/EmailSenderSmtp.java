@@ -34,7 +34,7 @@ public class EmailSenderSmtp implements EmailSender {
     }
 
     @Override
-    public void enviar(String destinatario, String assunto, String corpo, String replyTo) throws MessagingException {
+    public void enviar(ContaEnvioEmail conta, String destinatario, String assunto, String corpo, String replyTo) throws MessagingException {
         if (!smtpProperties.habilitado()) {
             log.warn("Envio de e-mail desabilitado (milebag.smtp.habilitado=false) - nenhum e-mail enviado para {}.", destinatario);
             return;
@@ -46,15 +46,18 @@ public class EmailSenderSmtp implements EmailSender {
         propriedadesSessao.put("mail.smtp.host", smtpProperties.host());
         propriedadesSessao.put("mail.smtp.port", String.valueOf(smtpProperties.port()));
 
+        String usuario = conta == null ? smtpProperties.usuario() : conta.usuario();
+        String senha = conta == null ? smtpProperties.senha() : conta.senha();
+        String remetente = conta == null ? smtpProperties.remetente() : conta.remetente();
         Session sessao = Session.getInstance(propriedadesSessao, new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(smtpProperties.usuario(), smtpProperties.senha());
+                return new PasswordAuthentication(usuario, senha);
             }
         });
 
         Message mensagem = new MimeMessage(sessao);
-        mensagem.setFrom(new InternetAddress(smtpProperties.remetente()));
+        mensagem.setFrom(new InternetAddress(remetente));
         mensagem.setRecipients(Message.RecipientType.TO, InternetAddress.parse(destinatario));
         if (replyTo != null && !replyTo.isBlank()) {
             mensagem.setReplyTo(InternetAddress.parse(replyTo));
