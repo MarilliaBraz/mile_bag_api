@@ -35,7 +35,7 @@ class EmailChannelTest {
     private EmailSender emailSender;
 
     private EmailChannel canal(boolean smtpHabilitado) {
-        return canal(smtpHabilitado, new MensageriaProperties(false, "", 993, "", "", 60000, "mensagens.milebag.local", "", "", "", ""));
+        return canal(smtpHabilitado, new MensageriaProperties(false, "", 993, "", "", 60000, "mensagens.milebag.local", "", "", "", "", ""));
     }
 
     private EmailChannel canal(boolean smtpHabilitado, MensageriaProperties mensageria) {
@@ -86,7 +86,7 @@ class EmailChannelTest {
     void enviaPelaContaPropriaDaMensageriaComPrefixoNoReplyTo() throws Exception {
         UUID entregaId = UUID.randomUUID();
         MensageriaProperties mensageria = new MensageriaProperties(false, "", 993, "", "", 60000, "milebag.com.br",
-                "mensagem.motorista+", "mensagem.motorista@milebag.com.br", "senha", "");
+                "mensagem.motorista+", "mensagem.motorista@milebag.com.br", "senha", "", "Mensagem motorista");
 
         canal(true, mensageria).enviar(entregaId, "a@b.com", "assunto", "oi", false);
 

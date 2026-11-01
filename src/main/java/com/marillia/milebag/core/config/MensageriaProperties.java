@@ -13,7 +13,8 @@ import com.marillia.milebag.core.mail.ContaEnvioEmail;
  *
  * <p>{@code smtpUsuario} vazio: a conversa sai pela conta padrao de {@code milebag.smtp}. {@code prefixoEndereco} vai
  * antes de {@code entrega-{id}} no {@code Reply-To} - ex. {@code mensagem.motorista+} quando o provedor entrega o
- * subendereco na caixa e o dominio nao tem conta "pega-tudo".</p>
+ * subendereco na caixa e o dominio nao tem conta "pega-tudo". {@code imapPasta}: pasta lida (no Gmail, o nome do
+ * marcador) - outra que nao a INBOX quando a caixa e compartilhada, ja que toda mensagem lida e marcada como vista.</p>
  */
 @ConfigurationProperties(prefix = "milebag.mensageria")
 public record MensageriaProperties(
@@ -27,7 +28,13 @@ public record MensageriaProperties(
         String prefixoEndereco,
         String smtpUsuario,
         String smtpSenha,
-        String smtpRemetente) {
+        String smtpRemetente,
+        String imapPasta) {
+
+    /** Pasta IMAP lida pelo {@code EmailInboundListener}; vazia = INBOX. */
+    public String pastaLeitura() {
+        return imapPasta == null || imapPasta.isBlank() ? "INBOX" : imapPasta;
+    }
 
     /** Conta propria de envio da conversa, ou {@code null} para usar a padrao. */
     public ContaEnvioEmail contaEnvio() {

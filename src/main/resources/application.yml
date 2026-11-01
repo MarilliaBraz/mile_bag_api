@@ -112,6 +112,9 @@ milebag:
     imap-usuario: ${MILEBAG_MENSAGERIA_IMAP_USUARIO:}
     imap-senha: ${MILEBAG_MENSAGERIA_IMAP_SENHA:}
     imap-intervalo-consulta-ms: ${MILEBAG_MENSAGERIA_IMAP_INTERVALO_MS:60000}
+    # Pasta lida (no Gmail, o nome do marcador). Outra que nao a INBOX quando a caixa e compartilhada com outros
+    # e-mails: toda mensagem lida e marcada como vista.
+    imap-pasta: ${MILEBAG_MENSAGERIA_IMAP_PASTA:INBOX}
     # Base do Reply-To por entrega: entrega-{entregaId}@<dominio-email>.
     dominio-email: ${MILEBAG_MENSAGERIA_DOMINIO_EMAIL:mensagens.milebag.local}
     # Antes de "entrega-{id}" no Reply-To (ex. mensagem.motorista+). Vazio = entrega-{id}@<dominio-email>.
