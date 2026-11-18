@@ -51,7 +51,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api-docs/**", "/docs/**", "/docs").permitAll()
+                        // RNF05: /docs redireciona para /swagger-ui/index.html (tela e arquivos do Swagger UI);
+                        // sem /swagger-ui/** a tela respondia 401. Fora da homologacao o springdoc fica
+                        // desligado e esses caminhos nem existem (404).
+                        .requestMatchers("/api-docs/**", "/docs/**", "/docs", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // HU15: tela de ativacao do convite roda antes de
                         // qualquer login (contracts/convite-api.md) - sem
                         // JWT a apresentar, entao publico por definicao.
