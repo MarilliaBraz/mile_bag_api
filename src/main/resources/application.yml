@@ -11,6 +11,12 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  servlet:
+    multipart:
+      # Foto de celular tem de 3 a 8 MB (o padrao do Spring, 1 MB, recusava o BDO). O app ja reduz a foto antes
+      # de enviar; o limite aqui cobre quem enviar a imagem original (ou um app antigo, ainda em cache).
+      max-file-size: ${MILEBAG_UPLOAD_MAX_ARQUIVO:15MB}
+      max-request-size: ${MILEBAG_UPLOAD_MAX_REQUISICAO:20MB}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -24,6 +30,10 @@ spring:
     password: ${MILEBAG_FLYWAY_PASSWORD:${MILEBAG_DB_PASSWORD:milebag_app}}
 
 server:
+  tomcat:
+    # Acima do limite, o Tomcat precisa ler o corpo inteiro para conseguir responder o 413 com o problem+json
+    # (com o padrao de 2 MB ele derruba a conexao e o app so ve "falha de rede").
+    max-swallow-size: ${MILEBAG_UPLOAD_MAX_DESCARTE:50MB}
   error:
     include-message: never
     include-binding-errors: never
