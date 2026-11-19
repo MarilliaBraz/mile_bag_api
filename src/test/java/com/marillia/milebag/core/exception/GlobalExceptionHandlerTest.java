@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 class GlobalExceptionHandlerTest {
 
@@ -44,6 +45,20 @@ class GlobalExceptionHandlerTest {
         assertThat(problema.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problema.getType().toString()).endsWith("/campo-invalido");
         assertThat(problema.getDetail()).isEqualTo("Valor invalido para o campo tenantId.");
+    }
+
+    /** Foto acima do limite: antes vinha "Maximum upload size exceeded" (texto do Spring, em ingles) para a tela. */
+    @Test
+    void arquivoAcimaDoLimiteViraArquivoGrandeEmPortugues() {
+        ResponseEntity<Object> resposta = handler.handleMaxUploadSizeExceededException(
+                new MaxUploadSizeExceededException(15L * 1024 * 1024), new HttpHeaders(), HttpStatus.PAYLOAD_TOO_LARGE,
+                new ServletWebRequest(new MockHttpServletRequest()));
+
+        assertThat(resposta).isNotNull();
+        assertThat(resposta.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        ProblemDetail problema = (ProblemDetail) resposta.getBody();
+        assertThat(problema.getType().toString()).endsWith("/arquivo-grande");
+        assertThat(problema.getDetail()).isEqualTo("Arquivo grande demais (limite de 15 MB). Tire a foto de novo ou envie um arquivo menor.");
     }
 
     private static MethodArgumentTypeMismatchException erro(String metodo, String nome) throws Exception {

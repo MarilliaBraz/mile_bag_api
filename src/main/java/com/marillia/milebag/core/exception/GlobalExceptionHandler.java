@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -134,6 +135,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         String campo = ex.getPropertyName() != null ? ex.getPropertyName() : "informado";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problema(
                 HttpStatus.BAD_REQUEST, "campo-invalido", "Valor invalido para o campo " + campo + "."));
+    }
+
+    /**
+     * Foto ou arquivo acima de {@code spring.servlet.multipart.max-file-size}. Sem isto o Spring responde
+     * "Maximum upload size exceeded", em ingles, e a tela mostrava esse texto ao motorista.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        long limite = ex.getMaxUploadSize();
+        String detalhe = limite > 0
+                ? "Arquivo grande demais (limite de " + (limite / (1024 * 1024)) + " MB). Tire a foto de novo ou envie um arquivo menor."
+                : "Arquivo grande demais. Tire a foto de novo ou envie um arquivo menor.";
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(problema(HttpStatus.PAYLOAD_TOO_LARGE, "arquivo-grande", detalhe));
     }
 
     @ExceptionHandler(Exception.class)
