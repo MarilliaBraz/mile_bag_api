@@ -107,6 +107,8 @@ public class SecurityConfig {
                         // HU12: "perfil exigido: administrador do tenant"
                         // sem excecao de leitura para o motorista.
                         .requestMatchers("/api/v1/fechamentos/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
+                        // V46: tela "Entregas" e rastreabilidade da mala - so a empresa.
+                        .requestMatchers("/api/v1/gestao/**").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         // HU13: "restritos ao perfil de administrador do
                         // proprio tenant" (contracts/identidade-visual-api.md)
                         // - inclui o endpoint de leitura do logotipo, que

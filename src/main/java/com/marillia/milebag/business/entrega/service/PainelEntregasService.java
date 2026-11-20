@@ -12,6 +12,7 @@ import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
+import com.marillia.milebag.business.dispensa.service.DispensaEntregaService;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
@@ -42,13 +43,16 @@ public class PainelEntregasService {
     private final BagagemCaronaService bagagemCaronaService;
     private final ViagemService viagemService;
     private final PainelEntregasMapper mapper;
+    private final DispensaEntregaService dispensaEntregaService;
 
     public PainelEntregasService(
             EntregaRepository entregaRepository,
             BdoService bdoService,
             BagagemCaronaService bagagemCaronaService,
             ViagemService viagemService,
-            PainelEntregasMapper mapper) {
+            PainelEntregasMapper mapper,
+            DispensaEntregaService dispensaEntregaService) {
+        this.dispensaEntregaService = dispensaEntregaService;
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.bagagemCaronaService = bagagemCaronaService;
@@ -78,7 +82,9 @@ public class PainelEntregasService {
 
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entregaId);
-        return mapper.toDetalhe(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null));
+        return mapper.toDetalhe(
+                entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null),
+                dispensaEntregaService.exigeMotivo(entregaId));
     }
 
     private ItemPainelResponse montarItem(Entrega entrega) {

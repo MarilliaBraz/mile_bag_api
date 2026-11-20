@@ -19,6 +19,27 @@ public interface EntregaRepository extends BaseRepository<Entrega, UUID> {
     List<Entrega> findByMotoristaResponsavelAndStatus(UUID motoristaResponsavel, EntregaStatus status);
 
     /**
+     * Dispensa (V46): devolve a entrega aos motoristas so se ela ainda for do motorista e estiver em aberto, numa
+     * unica instrucao - mesmo padrao de {@link #autoatribuirSeDisponivel}. Uma conclusao (comprovante) ou outra
+     * dispensa simultanea faz esta devolver 0, e nada e alterado.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE entrega
+               SET status = :novoStatus, motorista_responsavel = NULL, atualizado_em = now()
+             WHERE id = :id
+               AND motorista_responsavel = :motoristaId
+               AND status IN ('ATRIBUIDA', 'EM_ANDAMENTO')
+            """, nativeQuery = true)
+    int devolverSeAindaDoMotorista(
+            @Param("id") UUID id, @Param("motoristaId") UUID motoristaId, @Param("novoStatus") String novoStatus);
+
+    /** Tela "Entregas" da empresa (V46) - limitada para nao crescer sem fim. */
+    List<Entrega> findTop200ByOrderByAtualizadoEmDesc();
+
+    List<Entrega> findTop200ByStatusOrderByAtualizadoEmDesc(EntregaStatus status);
+
+    /**
      * Painel de entregas pendentes do motorista (HU19, FR-001) - os tres
      * status "em aberto" do ciclo de vida (RD05), nunca {@code
      * AGUARDANDO_ATRIBUICAO} (sem motorista ainda) nem {@code

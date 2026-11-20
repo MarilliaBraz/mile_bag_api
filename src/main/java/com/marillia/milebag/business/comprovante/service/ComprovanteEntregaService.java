@@ -62,6 +62,12 @@ public class ComprovanteEntregaService {
         return comprovanteEntregaRepository.findByDataHoraBetween(inicio, fim);
     }
 
+    /** Ponto de leitura publico para a rastreabilidade da entrega (V46). */
+    @Transactional(readOnly = true)
+    public Optional<ComprovanteEntrega> buscarPorEntrega(UUID entregaId) {
+        return comprovanteEntregaRepository.findByEntregaId(entregaId);
+    }
+
     /**
      * {@code justificativaDivergencia} nao faz parte do contrato original
      * desta HU (anterior a regeneracao de HU04 em 2026-09-09, que introduziu

@@ -99,6 +99,31 @@ class EntregaServiceTest {
     }
 
     @Test
+    void devolverAposDispensaUsaAAtualizacaoCondicionalComOStatusCerto() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        when(entregaRepository.devolverSeAindaDoMotorista(entregaId, motoristaId, "AGUARDANDO_ATRIBUICAO")).thenReturn(1);
+        when(entregaRepository.devolverSeAindaDoMotorista(entregaId, motoristaId, "REABERTA")).thenReturn(1);
+
+        entregaService.devolverAposDispensa(entregaId, motoristaId, false);
+        entregaService.devolverAposDispensa(entregaId, motoristaId, true);
+
+        verify(entregaRepository).devolverSeAindaDoMotorista(entregaId, motoristaId, "AGUARDANDO_ATRIBUICAO");
+        verify(entregaRepository).devolverSeAindaDoMotorista(entregaId, motoristaId, "REABERTA");
+    }
+
+    /** Concluida (ou ja dispensada) no mesmo instante: nada muda e a dispensa inteira e desfeita. */
+    @Test
+    void devolverAposDispensaFalhaSeAEntregaJaMudou() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        when(entregaRepository.devolverSeAindaDoMotorista(entregaId, motoristaId, "REABERTA")).thenReturn(0);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> entregaService.devolverAposDispensa(entregaId, motoristaId, true))
+                .isInstanceOf(com.marillia.milebag.core.exception.ConflitoException.class);
+    }
+
+    @Test
     void reabrirComReagendamentoGuardaJanelaENovaOcorrenciaSemJanelaADescarta() {
         UUID entregaId = UUID.randomUUID();
         Entrega entrega = novaEntrega(entregaId, EntregaStatus.EM_ANDAMENTO);

@@ -26,5 +26,7 @@ public record ItemPainelDetalheResponse(
         boolean temTrajetoIniciado,
         String marcoMaisRecente,
         List<PendenciaContatoBdo> pendenciasContato,
-        JanelaReagendamento janelaReagendamento) {
+        JanelaReagendamento janelaReagendamento,
+        // V46: a dispensa desta entrega exige motivo (a bagagem ja saiu com um motorista).
+        boolean motivoDispensaObrigatorio) {
 }

@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.BdosDisponiveisResponse;
+import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
 
 /**
@@ -37,7 +38,11 @@ public class BdosDisponiveisService {
     public BdosDisponiveisResponse consultarDisponiveis() {
         // A entrega reaberta (RN05) traz a janela de reagendamento (HU29); a consulta so devolve BDO sem entrega ou com entrega reaberta.
         var bdos = bdoRepository.findDisponiveisParaAutoatribuicao().stream()
-                .map(bdo -> mapper.toItemDisponivel(bdo, entregaRepository.findByBdoId(bdo.getId()).orElse(null)))
+                // So a entrega REABERTA e uma nova tentativa: a devolvida por dispensa antes de qualquer viagem
+                // (AGUARDANDO_ATRIBUICAO, V46) aparece como uma entrega nova.
+                .map(bdo -> mapper.toItemDisponivel(bdo, entregaRepository.findByBdoId(bdo.getId())
+                        .filter(entrega -> entrega.getStatus() == EntregaStatus.REABERTA)
+                        .orElse(null)))
                 .toList();
         log.info("Consulta de BDOs disponiveis: {} encontrado(s)", bdos.size());
         return new BdosDisponiveisResponse(bdos);

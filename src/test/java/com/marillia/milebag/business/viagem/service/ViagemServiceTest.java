@@ -228,6 +228,48 @@ class ViagemServiceTest {
     }
 
     @Test
+    void dispensaEmRotaEncerraAViagemComOUltimoCalculoEAVincula() {
+        UUID entregaId = UUID.randomUUID();
+        UUID dispensaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, UUID.randomUUID(), Instant.now());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
+        when(calculoRotaRepository.findByTrajetoIdOrderByDataHoraAsc(trajeto.getId())).thenReturn(List.of(
+                new CalculoRota(trajeto.getId(), new java.math.BigDecimal("7.500"), new java.math.BigDecimal("7.500"), "[]", 900, TipoSelecao.SUGERIDA, Instant.now(), true)));
+
+        viagemService.encerrarPorDispensa(entregaId, dispensaId);
+
+        assertThat(trajeto.getStatus()).isEqualTo(TrajetoStatus.ENCERRADO);
+        assertThat(trajeto.getKmIdaFinal()).isEqualByComparingTo("7.500");
+        assertThat(trajeto.getDispensaId()).isEqualTo(dispensaId);
+        assertThat(trajeto.getOcorrenciaId()).isNull();
+        assertThat(trajeto.encerradoSemSucesso()).isTrue();
+        verify(trajetoRepository).save(trajeto);
+    }
+
+    @Test
+    void depoisDaDispensaATentativaAtualNaoTemViagem() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto tentativaDispensada = new Trajeto(entregaId, UUID.randomUUID(), Instant.now());
+        tentativaDispensada.vincularDispensa(UUID.randomUUID(), Instant.now());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(tentativaDispensada));
+
+        assertThat(viagemService.buscarTrajetoPorEntrega(entregaId)).isEmpty();
+        assertThat(viagemService.viagemEmAndamento(entregaId)).isFalse();
+    }
+
+    @Test
+    void viagemEmAndamentoSoComViagemDaTentativaAtualEmExecucao() {
+        UUID emRota = UUID.randomUUID();
+        UUID semViagem = UUID.randomUUID();
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(emRota))
+                .thenReturn(Optional.of(new Trajeto(emRota, UUID.randomUUID(), Instant.now())));
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(semViagem)).thenReturn(Optional.empty());
+
+        assertThat(viagemService.viagemEmAndamento(emRota)).isTrue();
+        assertThat(viagemService.viagemEmAndamento(semViagem)).isFalse();
+    }
+
+    @Test
     void ocorrenciaSemViagemIniciadaNaoFazNada() {
         UUID entregaId = UUID.randomUUID();
         when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.empty());

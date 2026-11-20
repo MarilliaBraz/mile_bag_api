@@ -74,7 +74,7 @@ public class RelatorioMotoristaService {
                 .flatMap(Optional::stream)
                 .toList());
         // Tentativas sem sucesso (HU07) do motorista: a viagem tambem e paga a ele.
-        viagemService.listarEncerradosPorOcorrencia(inicioInstant, fimInstant).stream()
+        viagemService.listarTentativasSemSucesso(inicioInstant, fimInstant).stream()
                 .filter(trajeto -> motoristaId.equals(trajeto.getMotoristaId()))
                 .forEach(trajeto -> entregaService.buscarPorId(trajeto.getEntregaId())
                         .ifPresent(entrega -> itens.add(montarItem(entrega, trajeto, true))));

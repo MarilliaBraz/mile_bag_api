@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
+import com.marillia.milebag.business.dispensa.service.DispensaEntregaService;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
@@ -41,6 +42,8 @@ class PainelEntregasServiceTest {
     private BagagemCaronaService bagagemCaronaService;
     @Mock
     private ViagemService viagemService;
+    @Mock
+    private DispensaEntregaService dispensaEntregaService;
 
     private PainelEntregasService painelEntregasService;
 
@@ -49,7 +52,8 @@ class PainelEntregasServiceTest {
         // PainelEntregasMapper real (nao mock): so mapeia campos, sem
         // dependencias - um mock devolveria null em todo metodo.
         painelEntregasService =
-                new PainelEntregasService(entregaRepository, bdoService, bagagemCaronaService, viagemService, new PainelEntregasMapper());
+                new PainelEntregasService(
+                        entregaRepository, bdoService, bagagemCaronaService, viagemService, new PainelEntregasMapper(), dispensaEntregaService);
         // lenient: nem todo teste chega a montar um item (ex.: consultarPainelVazioNaoQuebra).
         org.mockito.Mockito.lenient().when(viagemService.marcoMaisRecente(any())).thenReturn(Optional.empty());
     }

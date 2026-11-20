@@ -35,7 +35,9 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
      * confirmados, de qualquer {@code origem} (inclusive {@code
      * EMAIL_AUTOMATICO}, RF21), sem motorista responsavel - ou seja, sem
      * {@code Entrega} ainda, ou com uma entrega reaberta por ocorrencia
-     * (RN05: {@code REABERTA} e sem motorista). Antes de HU29 a entrega
+     * (RN05: {@code REABERTA} e sem motorista) ou devolvida por uma dispensa
+     * antes de qualquer tentativa (V46: {@code AGUARDANDO_ATRIBUICAO} e sem
+     * motorista). Antes de HU29 a entrega
      * reaberta ficava fora desta lista e tambem fora do painel (que exige
      * motorista), invisivel para todos. BDO vinculado como bagagem carona
      * viaja com outra entrega e nunca aparece.
@@ -55,7 +57,7 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
               AND NOT EXISTS (
                   SELECT 1 FROM entrega e
                   WHERE e.bdo_id = b.id
-                    AND NOT (e.status = 'REABERTA' AND e.motorista_responsavel IS NULL))
+                    AND NOT (e.status IN ('REABERTA', 'AGUARDANDO_ATRIBUICAO') AND e.motorista_responsavel IS NULL))
               AND NOT EXISTS (SELECT 1 FROM bagagem_carona bc WHERE bc.bdo_id = b.id)
             ORDER BY b.data_captura ASC
             """;

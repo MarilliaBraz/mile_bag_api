@@ -14,6 +14,7 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
@@ -85,7 +86,7 @@ public class OcorrenciaService {
         // invisivel aqui - buscarAtivoOuFalhar retorna 404 tanto para "nao
         // existe" quanto para "existe, mas e de outro tenant" (nunca
         // revelado como tal, mesma convencao do resto da API).
-        MotivoOcorrencia motivo = motivoOcorrenciaService.buscarAtivoOuFalhar(motivoOcorrenciaId);
+        MotivoOcorrencia motivo = motivoOcorrenciaService.buscarAtivoOuFalhar(motivoOcorrenciaId, FinalidadeMotivo.OCORRENCIA);
         validarJanela(motivo, janela);
 
         Ocorrencia ocorrencia = ocorrenciaRepository.save(
@@ -124,6 +125,12 @@ public class OcorrenciaService {
         if (!motivo.isReagendamento() && janela != null) {
             throw new RegraNegocioException("Janela de reagendamento so pode ser informada para um motivo de reagendamento.");
         }
+    }
+
+    /** Ponto de leitura publico para a rastreabilidade da entrega (V46): os registros completos, com a descricao adicional. */
+    @Transactional(readOnly = true)
+    public List<Ocorrencia> listarRegistrosPorEntrega(UUID entregaId) {
+        return ocorrenciaRepository.findByEntregaIdOrderByDataHoraAsc(entregaId);
     }
 
     @Transactional(readOnly = true)

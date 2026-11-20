@@ -70,6 +70,14 @@ public class Trajeto extends BaseEntity {
     private UUID ocorrenciaId;
 
     /**
+     * Dispensa que encerrou esta viagem (V46): o motorista ja estava em rota e devolveu a entrega. Como a encerrada
+     * por ocorrencia, e uma tentativa sem sucesso - fica no historico, e paga a quem dirigiu e deixa de ser a viagem
+     * da tentativa atual.
+     */
+    @Column(name = "dispensa_id")
+    private UUID dispensaId;
+
+    /**
      * Ultima posicao do motorista na tentativa em andamento (HU31, RN16): substituida a cada envio do app e
      * apagada ao encerrar - excecao a "append-only" acima, porque nao e dado da viagem, so do acompanhamento.
      */
@@ -92,6 +100,16 @@ public class Trajeto extends BaseEntity {
     /** Tentativa sem sucesso (HU07): a viagem ja encerrada (ou encerrada agora, por quem chama) passa a pertencer a ocorrencia. */
     public void vincularOcorrencia(UUID ocorrenciaId, Instant quando) {
         this.ocorrenciaId = ocorrenciaId;
+        marcarEncerradoEm(quando);
+    }
+
+    /** Dispensa com o motorista em rota (V46): a viagem ja encerrada (ou encerrada agora, por quem chama) passa a pertencer a ela. */
+    public void vincularDispensa(UUID dispensaId, Instant quando) {
+        this.dispensaId = dispensaId;
+        marcarEncerradoEm(quando);
+    }
+
+    private void marcarEncerradoEm(Instant quando) {
         if (this.encerradoEm == null) {
             this.encerradoEm = quando;
         }
@@ -116,6 +134,11 @@ public class Trajeto extends BaseEntity {
 
     public boolean encerradoPorOcorrencia() {
         return ocorrenciaId != null;
+    }
+
+    /** Tentativa sem sucesso: encerrada por ocorrencia (nao entrega) ou por dispensa do motorista ja em rota. */
+    public boolean encerradoSemSucesso() {
+        return ocorrenciaId != null || dispensaId != null;
     }
 
     /**

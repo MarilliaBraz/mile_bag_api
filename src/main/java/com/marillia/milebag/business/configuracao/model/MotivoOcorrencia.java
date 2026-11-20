@@ -6,6 +6,8 @@ import com.marillia.milebag.core.config.security.TenantContext;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -48,14 +50,24 @@ public class MotivoOcorrencia {
     @Column(nullable = false, updatable = false)
     private boolean reagendamento;
 
+    /** Ocorrencia (nao entrega) ou dispensa da entrega pelo motorista (V46) - fixa desde a criacao. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false, length = 20)
+    private FinalidadeMotivo finalidade;
+
     public MotivoOcorrencia(String descricao) {
         this(descricao, false);
     }
 
     public MotivoOcorrencia(String descricao, boolean reagendamento) {
+        this(descricao, reagendamento, FinalidadeMotivo.OCORRENCIA);
+    }
+
+    public MotivoOcorrencia(String descricao, boolean reagendamento, FinalidadeMotivo finalidade) {
         this.descricao = descricao;
         this.ativo = true;
         this.reagendamento = reagendamento;
+        this.finalidade = finalidade;
     }
 
     public void definirAtivo(boolean ativo) {
