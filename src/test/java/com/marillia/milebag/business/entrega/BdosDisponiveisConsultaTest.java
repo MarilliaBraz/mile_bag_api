@@ -78,6 +78,17 @@ class BdosDisponiveisConsultaTest {
         assertThat(disponiveis()).contains(semEntrega, reaberta).doesNotContain(atribuida, carona);
     }
 
+    /** V46: dispensada antes de qualquer viagem, a entrega volta como AGUARDANDO_ATRIBUICAO e precisa reaparecer na lista. */
+    @Test
+    void entregaDispensadaAntesDeQualquerViagemVoltaParaALista() throws Exception {
+        UUID dispensada = inserirBdo();
+        inserirEntrega(dispensada, null, "AGUARDANDO_ATRIBUICAO");
+        UUID emAndamento = inserirBdo();
+        inserirEntrega(emAndamento, UUID.randomUUID(), "EM_ANDAMENTO");
+
+        assertThat(disponiveis()).contains(dispensada).doesNotContain(emAndamento);
+    }
+
     @Test
     void janelaDeReagendamentoInvertidaERecusadaPeloBanco() throws Exception {
         UUID bdo = inserirBdo();

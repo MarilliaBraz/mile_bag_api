@@ -134,6 +134,22 @@ class AcompanhamentoServiceTest {
         assertThat(resposta.janelaReagendamento().inicio()).isEqualTo(Instant.parse("2026-10-29T17:00:00Z"));
     }
 
+    /** V46: dispensada em rota, o link desta viagem mostra "transferida" - e nao "entregue" quando outro motorista entregar. */
+    @Test
+    void dispensaEmRotaMostraTransferidaMesmoDepoisDeOutroMotoristaEntregar() {
+        trajeto.consolidar(BigDecimal.ONE, BigDecimal.ONE, "[]", 60, null);
+        trajeto.vincularDispensa(UUID.randomUUID(), Instant.now());
+        entrega.setStatus(EntregaStatus.REABERTA);
+
+        AcompanhamentoResponse resposta = service.consultar(link);
+        assertThat(resposta.etapa()).isEqualTo(EtapaAcompanhamento.TRANSFERIDA);
+        assertThat(resposta.posicao()).isNull();
+        assertThat(resposta.janelaReagendamento()).isNull();
+
+        entrega.setStatus(EntregaStatus.ENCERRADA_COM_SUCESSO);
+        assertThat(service.consultar(link).etapa()).isEqualTo(EtapaAcompanhamento.TRANSFERIDA);
+    }
+
     /** Uma tentativa sem sucesso continua "nao entregue" no link dela, mesmo depois de outra tentativa entregar. */
     @Test
     void linkDeTentativaAnteriorContinuaNaoEntregue() {

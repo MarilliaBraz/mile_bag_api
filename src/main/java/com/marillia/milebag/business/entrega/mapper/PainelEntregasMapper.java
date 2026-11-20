@@ -37,7 +37,8 @@ public class PainelEntregasMapper {
     }
 
     public ItemPainelDetalheResponse toDetalhe(
-            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente) {
+            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente,
+            boolean motivoDispensaObrigatorio) {
         return new ItemPainelDetalheResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -52,7 +53,8 @@ public class PainelEntregasMapper {
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
                 marcoMaisRecente,
                 bdo.pendenciasDeContato(),
-                entrega.janelaReagendamento());
+                entrega.janelaReagendamento(),
+                motivoDispensaObrigatorio);
     }
 
     /** {@code entregaReaberta}: a entrega reaberta deste BDO (RN05), ou nulo se o BDO ainda nao tem entrega. */

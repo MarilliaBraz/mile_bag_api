@@ -7,6 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.function.Function;
+import java.util.Map;
+import java.util.Collection;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +68,12 @@ public class BdoService {
     @Transactional(readOnly = true)
     public Optional<Bdo> buscarPorId(UUID id) {
         return bdoRepository.findById(id);
+    }
+
+    /** Varios BDOs numa consulta so, por id (tela "Entregas" da empresa, V46). */
+    @Transactional(readOnly = true)
+    public Map<UUID, Bdo> buscarPorIds(Collection<UUID> ids) {
+        return bdoRepository.findAllById(ids).stream().collect(Collectors.toMap(Bdo::getId, Function.identity()));
     }
 
     /** Volume de BDOs capturados no mes corrente do tenant ambiente (HU16, uso atual contra o limite do plano). */

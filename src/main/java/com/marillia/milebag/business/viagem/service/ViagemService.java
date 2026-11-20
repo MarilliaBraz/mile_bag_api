@@ -8,6 +8,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,17 +112,38 @@ public class ViagemService {
 
     /**
      * Ponto de leitura publico para outros dominios (fechamento) - nunca {@code TrajetoRepository} direto (CONVENTIONS.md 2.1).
-     * Devolve a viagem da tentativa atual: a de uma tentativa sem sucesso so aparece em {@link #listarEncerradosPorOcorrencia}.
+     * Devolve a viagem da tentativa atual: a de uma tentativa sem sucesso so aparece em {@link #listarTentativasSemSucesso}.
      */
     @Transactional(readOnly = true)
     public Optional<Trajeto> buscarTrajetoPorEntrega(UUID entregaId) {
         return trajetoDaTentativaAtual(entregaId);
     }
 
-    /** Viagens de tentativas sem sucesso encerradas no periodo [inicio, fim) - pagas a quem dirigiu (fechamento, relatorio). */
+    /**
+     * Viagens de tentativas sem sucesso (ocorrencia, ou dispensa com o motorista em rota) encerradas no periodo
+     * [inicio, fim) - pagas a quem dirigiu (fechamento, relatorio).
+     */
     @Transactional(readOnly = true)
-    public List<Trajeto> listarEncerradosPorOcorrencia(Instant inicio, Instant fim) {
-        return trajetoRepository.findByOcorrenciaIdIsNotNullAndEncerradoEmGreaterThanEqualAndEncerradoEmLessThan(inicio, fim);
+    public List<Trajeto> listarTentativasSemSucesso(Instant inicio, Instant fim) {
+        return trajetoRepository.listarTentativasSemSucessoEncerradasEntre(inicio, fim);
+    }
+
+    /** Se a tentativa atual da entrega esta em rota (viagem iniciada e ainda nao encerrada). */
+    @Transactional(readOnly = true)
+    public boolean viagemEmAndamento(UUID entregaId) {
+        return trajetoDaTentativaAtual(entregaId).filter(trajeto -> trajeto.getStatus() == TrajetoStatus.EM_EXECUCAO).isPresent();
+    }
+
+    /** Todas as viagens da entrega (uma por tentativa), da mais antiga para a mais recente - rastreabilidade (V46). */
+    @Transactional(readOnly = true)
+    public List<Trajeto> listarViagensDaEntrega(UUID entregaId) {
+        return trajetoRepository.findByEntregaIdOrderByDataInicioAsc(entregaId);
+    }
+
+    /** Se a entrega ja teve alguma viagem, em qualquer tentativa - a atual em andamento ou outras ja encerradas. */
+    @Transactional(readOnly = true)
+    public boolean houveTentativa(UUID entregaId) {
+        return trajetoRepository.existsByEntregaId(entregaId);
     }
 
     /**
@@ -131,15 +153,28 @@ public class ViagemService {
      */
     @Transactional
     public void encerrarPorOcorrencia(UUID entregaId, UUID ocorrenciaId) {
+        encerrarTentativaSemSucesso(entregaId, trajeto -> trajeto.vincularOcorrencia(ocorrenciaId, Instant.now()), "ocorrencia " + ocorrenciaId);
+    }
+
+    /**
+     * V46: a dispensa com o motorista em rota encerra a viagem da tentativa do mesmo jeito que a ocorrencia - paga a
+     * quem dirigiu - e a vincula a dispensa. Sem viagem iniciada (bagagem nao retirada), nao faz nada: nao ha o que pagar.
+     */
+    @Transactional
+    public void encerrarPorDispensa(UUID entregaId, UUID dispensaId) {
+        encerrarTentativaSemSucesso(entregaId, trajeto -> trajeto.vincularDispensa(dispensaId, Instant.now()), "dispensa " + dispensaId);
+    }
+
+    private void encerrarTentativaSemSucesso(UUID entregaId, Consumer<Trajeto> vincular, String causa) {
         trajetoDaTentativaAtual(entregaId).ifPresent(trajeto -> {
             if (trajeto.getStatus() == TrajetoStatus.EM_EXECUCAO) {
                 CalculoRota calculoFinal = ultimoCalculo(trajeto);
                 trajeto.consolidar(
                         calculoFinal.getKmIda(), calculoFinal.getKmVolta(), calculoFinal.getPracasPedagio(), calculoFinal.getTempoEstimado(), null);
             }
-            trajeto.vincularOcorrencia(ocorrenciaId, Instant.now());
+            vincular.accept(trajeto);
             trajetoRepository.save(trajeto);
-            log.info("Trajeto {} encerrado pela ocorrencia {} (tentativa sem sucesso)", trajeto.getId(), ocorrenciaId);
+            log.info("Trajeto {} encerrado pela {} (tentativa sem sucesso)", trajeto.getId(), causa);
         });
     }
 
@@ -397,9 +432,9 @@ public class ViagemService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Esta entrega nao tem um trajeto iniciado."));
     }
 
-    /** A viagem mais recente, a menos que uma ocorrencia a tenha encerrado: ai a tentativa atual ainda nao tem viagem. */
+    /** A viagem mais recente, a menos que uma ocorrencia ou dispensa a tenha encerrado: ai a tentativa atual ainda nao tem viagem. */
     private Optional<Trajeto> trajetoDaTentativaAtual(UUID entregaId) {
-        return trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId).filter(trajeto -> !trajeto.encerradoPorOcorrencia());
+        return trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId).filter(trajeto -> !trajeto.encerradoSemSucesso());
     }
 
     private CalculoRota ultimoCalculo(Trajeto trajeto) {

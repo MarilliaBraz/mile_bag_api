@@ -93,10 +93,16 @@ public class AcompanhamentoService {
         return identidadeVisualTenantService.carregarLogotipo();
     }
 
-    /** A ocorrencia vem primeiro: o link de uma tentativa sem sucesso continua "nao entregue" mesmo se outra tentativa entregar. */
+    /**
+     * A tentativa sem sucesso vem primeiro: o link dela continua "nao entregue" (ocorrencia) ou "transferida"
+     * (dispensa, V46) mesmo se outra tentativa entregar - o link e de uma viagem, nao da entrega.
+     */
     private EtapaAcompanhamento etapa(Trajeto trajeto, Entrega entrega) {
         if (trajeto.encerradoPorOcorrencia()) {
             return EtapaAcompanhamento.NAO_ENTREGUE;
+        }
+        if (trajeto.encerradoSemSucesso()) {
+            return EtapaAcompanhamento.TRANSFERIDA;
         }
         if (entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO) {
             return EtapaAcompanhamento.ENTREGUE;

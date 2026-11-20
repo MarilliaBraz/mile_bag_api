@@ -121,7 +121,7 @@ class FechamentoServiceTest {
         tentativa.vincularOcorrencia(UUID.randomUUID(), Instant.parse("2026-05-03T11:00:00Z"));
         Trajeto semMotorista = new Trajeto(UUID.randomUUID(), null, Instant.parse("2026-05-04T10:00:00Z"));
         semMotorista.vincularOcorrencia(UUID.randomUUID(), Instant.parse("2026-05-04T11:00:00Z"));
-        when(viagemService.listarEncerradosPorOcorrencia(any(), any())).thenReturn(List.of(tentativa, semMotorista));
+        when(viagemService.listarTentativasSemSucesso(any(), any())).thenReturn(List.of(tentativa, semMotorista));
         when(ajusteViagemService.resolverValorVigente(tentativa.getId(), CampoAjusteViagem.TARIFA_APLICADA))
                 .thenReturn(Optional.of(new BigDecimal("72.00")));
         when(ajusteViagemService.resolverValorVigente(tentativa.getId(), CampoAjusteViagem.VALOR_PEDAGIO))

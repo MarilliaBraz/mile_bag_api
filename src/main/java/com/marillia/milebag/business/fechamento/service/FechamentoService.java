@@ -97,8 +97,8 @@ public class FechamentoService {
         for (Entrega entrega : entregasElegiveis) {
             itens.add(itemFechamentoRepository.save(calcularItem(fechamento.getId(), entrega)));
         }
-        // Tentativas sem sucesso (HU07) encerradas no periodo: a viagem e paga a quem dirigiu.
-        for (Trajeto tentativa : viagemService.listarEncerradosPorOcorrencia(inicioDoPeriodo(periodoInicio), fimDoPeriodo(periodoFim))) {
+        // Tentativas sem sucesso (ocorrencia HU07 ou dispensa em rota V46) encerradas no periodo: a viagem e paga a quem dirigiu.
+        for (Trajeto tentativa : viagemService.listarTentativasSemSucesso(inicioDoPeriodo(periodoInicio), fimDoPeriodo(periodoFim))) {
             if (tentativa.getMotoristaId() == null) {
                 // Viagem anterior a V37 sem registro de quem dirigiu: nao ha a quem pagar.
                 log.warn("Trajeto {} de tentativa sem sucesso sem motorista registrado - fora do fechamento {}.", tentativa.getId(), fechamento.getId());

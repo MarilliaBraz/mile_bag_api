@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,6 +23,7 @@ import com.marillia.milebag.business.configuracao.model.CampoObrigatorioResponse
 import com.marillia.milebag.business.configuracao.model.CodigoNomeRequest;
 import com.marillia.milebag.business.configuracao.model.CodigoNomeResponse;
 import com.marillia.milebag.business.configuracao.model.CriarMotivoOcorrenciaRequest;
+import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrenciaResponse;
 import com.marillia.milebag.business.configuracao.model.PeriodicidadeAtualResponse;
 import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService;
@@ -62,16 +64,21 @@ public class ConfiguracaoTenantController {
 
     // --- Motivos de ocorrencia ---
 
+    /** Sem {@code finalidade}, os motivos de ocorrencia (contrato original da HU11, usado pelo app do motorista). */
     @GetMapping("/motivos-ocorrencia")
-    public List<MotivoOcorrenciaResponse> listarMotivosOcorrencia() {
-        return motivoOcorrenciaService.listarAtivos().stream().map(MotivoOcorrenciaResponse::de).toList();
+    public List<MotivoOcorrenciaResponse> listarMotivosOcorrencia(
+            @RequestParam(defaultValue = "OCORRENCIA") FinalidadeMotivo finalidade) {
+        return motivoOcorrenciaService.listarAtivos(finalidade).stream().map(MotivoOcorrenciaResponse::de).toList();
     }
 
     @PostMapping("/motivos-ocorrencia")
     @ResponseStatus(HttpStatus.CREATED)
     public MotivoOcorrenciaResponse criarMotivoOcorrencia(@RequestBody CriarMotivoOcorrenciaRequest request) {
         return MotivoOcorrenciaResponse.de(
-                motivoOcorrenciaService.criar(request.descricao(), Boolean.TRUE.equals(request.reagendamento())));
+                motivoOcorrenciaService.criar(
+                        request.descricao(),
+                        Boolean.TRUE.equals(request.reagendamento()),
+                        request.finalidade() == null ? FinalidadeMotivo.OCORRENCIA : request.finalidade()));
     }
 
     @PatchMapping("/motivos-ocorrencia/{id}")

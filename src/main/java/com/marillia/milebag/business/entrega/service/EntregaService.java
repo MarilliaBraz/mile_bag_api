@@ -76,9 +76,29 @@ public class EntregaService {
      */
     public void reabrirParaNovaTentativa(UUID entregaId, JanelaReagendamento janela) {
         Entrega entrega = buscarOuFalhar(entregaId);
-        entrega.setStatus(EntregaStatus.REABERTA);
-        entrega.setMotoristaResponsavel(null);
         entrega.definirJanelaReagendamento(janela);
+        devolverAosMotoristas(entrega, EntregaStatus.REABERTA);
+    }
+
+    /**
+     * V46: a dispensa devolve a entrega aos outros motoristas. Volta como {@code REABERTA} se ja houve tentativa
+     * (alguma viagem iniciada) e como {@code AGUARDANDO_ATRIBUICAO} se ninguem chegou a sair com a bagagem. A janela
+     * de reagendamento combinada com o passageiro continua valendo para quem assumir.
+     *
+     * <p>Atomico: so devolve se a entrega ainda for deste motorista e estiver em aberto - uma entrega concluida no
+     * mesmo instante nunca e reaberta por engano (409, e a transacao da dispensa inteira e desfeita).</p>
+     */
+    @Transactional
+    public void devolverAposDispensa(UUID entregaId, UUID motoristaId, boolean houveTentativa) {
+        EntregaStatus novoStatus = houveTentativa ? EntregaStatus.REABERTA : EntregaStatus.AGUARDANDO_ATRIBUICAO;
+        if (entregaRepository.devolverSeAindaDoMotorista(entregaId, motoristaId, novoStatus.name()) == 0) {
+            throw new ConflitoException("Esta entrega mudou enquanto voce dispensava. Atualize a tela e confira.");
+        }
+    }
+
+    private void devolverAosMotoristas(Entrega entrega, EntregaStatus status) {
+        entrega.setStatus(status);
+        entrega.setMotoristaResponsavel(null);
         entregaRepository.save(entrega);
     }
 
@@ -109,6 +129,14 @@ public class EntregaService {
         return entregaRepository.findByMotoristaResponsavelAndStatus(motoristaId, status).stream()
                 .map(entrega -> entregaMapper.toResponse(entrega, buscarBdoOuFalhar(entrega.getBdoId())))
                 .toList();
+    }
+
+    /** Tela "Entregas" da empresa (V46): as mais recentemente movimentadas primeiro, limitadas; status nulo = todos. */
+    @Transactional(readOnly = true)
+    public List<Entrega> listarParaGestao(EntregaStatus status) {
+        return status == null
+                ? entregaRepository.findTop200ByOrderByAtualizadoEmDesc()
+                : entregaRepository.findTop200ByStatusOrderByAtualizadoEmDesc(status);
     }
 
     private Entrega buscarOuFalhar(UUID entregaId) {

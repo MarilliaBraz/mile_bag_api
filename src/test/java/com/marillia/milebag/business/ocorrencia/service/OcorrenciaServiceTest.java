@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
@@ -69,12 +70,12 @@ class OcorrenciaServiceTest {
         UUID motivoId = UUID.randomUUID();
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
         MotivoOcorrencia motivo = new MotivoOcorrencia("Endereco nao localizado");
-        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(motivo);
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA)).thenReturn(motivo);
         when(ocorrenciaRepository.save(any(Ocorrencia.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ocorrenciaService.registrar(entregaId, motivoId, "ninguem atendeu", null, null);
 
-        verify(motivoOcorrenciaService).buscarAtivoOuFalhar(motivoId);
+        verify(motivoOcorrenciaService).buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA);
         verify(entregaService).reabrirParaNovaTentativa(entregaId, null);
         verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.OCORRENCIA_REGISTRADA);
         // A viagem desta tentativa e encerrada e vinculada a ocorrencia (paga a quem dirigiu).
@@ -89,7 +90,7 @@ class OcorrenciaServiceTest {
 
         assertThatThrownBy(() -> ocorrenciaService.registrar(entregaId, UUID.randomUUID(), "desc", null, null))
                 .isInstanceOf(ConflitoException.class);
-        verify(motivoOcorrenciaService, never()).buscarAtivoOuFalhar(any());
+        verify(motivoOcorrenciaService, never()).buscarAtivoOuFalhar(any(), any());
         verify(entregaService, never()).reabrirParaNovaTentativa(any(), any());
     }
 
@@ -123,7 +124,7 @@ class OcorrenciaServiceTest {
         UUID entregaId = UUID.randomUUID();
         UUID motivoId = UUID.randomUUID();
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
-        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(new MotivoOcorrencia("Endereco nao localizado"));
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA)).thenReturn(new MotivoOcorrencia("Endereco nao localizado"));
         when(ocorrenciaRepository.save(any(Ocorrencia.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(ocorrenciaService.registrarComResultado(entregaId, motivoId, null, "local-2", null).novo()).isTrue();
@@ -139,7 +140,7 @@ class OcorrenciaServiceTest {
         UUID entregaId = UUID.randomUUID();
         UUID motivoId = UUID.randomUUID();
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
-        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(new MotivoOcorrencia("Reagendada", true));
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA)).thenReturn(new MotivoOcorrencia("Reagendada", true));
         when(ocorrenciaRepository.save(any(Ocorrencia.class))).thenAnswer(inv -> inv.getArgument(0));
         JanelaReagendamento janela = new JanelaReagendamento(INICIO, FIM);
 
@@ -156,7 +157,7 @@ class OcorrenciaServiceTest {
         UUID entregaId = UUID.randomUUID();
         UUID motivoId = UUID.randomUUID();
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
-        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(new MotivoOcorrencia("Reagendada", true));
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA)).thenReturn(new MotivoOcorrencia("Reagendada", true));
 
         assertThatThrownBy(() -> ocorrenciaService.registrar(entregaId, motivoId, null, null, null))
                 .isInstanceOf(RegraNegocioException.class);
@@ -169,7 +170,7 @@ class OcorrenciaServiceTest {
         UUID entregaId = UUID.randomUUID();
         UUID motivoId = UUID.randomUUID();
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComStatus(EntregaStatus.EM_ANDAMENTO)));
-        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId)).thenReturn(new MotivoOcorrencia("Recusa de recebimento"));
+        when(motivoOcorrenciaService.buscarAtivoOuFalhar(motivoId, FinalidadeMotivo.OCORRENCIA)).thenReturn(new MotivoOcorrencia("Recusa de recebimento"));
 
         assertThatThrownBy(() -> ocorrenciaService.registrar(entregaId, motivoId, null, null, new JanelaReagendamento(INICIO, FIM)))
                 .isInstanceOf(RegraNegocioException.class);
