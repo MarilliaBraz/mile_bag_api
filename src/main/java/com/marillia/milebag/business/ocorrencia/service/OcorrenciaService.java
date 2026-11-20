@@ -72,6 +72,7 @@ public class OcorrenciaService {
         if (entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO) {
             throw new ConflitoException("Esta entrega ja foi encerrada com comprovante de entrega.");
         }
+        EntregaService.exigirNaoCancelada(entrega);
 
         boolean temIdLocal = idLocal != null && !idLocal.isBlank();
         if (temIdLocal) {

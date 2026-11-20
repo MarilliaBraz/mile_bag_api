@@ -55,16 +55,26 @@ public class EntregaService {
         return entregaRepository.findById(id);
     }
 
+    /** V47: o que o motorista ve ao agir numa entrega que a empresa cancelou. */
+    public static final String MENSAGEM_CANCELADA = "A empresa cancelou esta entrega.";
+
+    /** V47: toda acao do motorista numa entrega cancelada para aqui, com a mesma mensagem. */
+    public static void exigirNaoCancelada(Entrega entrega) {
+        if (entrega.getStatus() == EntregaStatus.CANCELADA) {
+            throw new ConflitoException(MENSAGEM_CANCELADA);
+        }
+    }
+
     @Transactional
     public void marcarEmAndamento(UUID entregaId) {
-        Entrega entrega = buscarOuFalhar(entregaId);
+        Entrega entrega = buscarParaMudarSituacao(entregaId);
         entrega.setStatus(EntregaStatus.EM_ANDAMENTO);
         entregaRepository.save(entrega);
     }
 
     @Transactional
     public void marcarEncerradaComSucesso(UUID entregaId) {
-        Entrega entrega = buscarOuFalhar(entregaId);
+        Entrega entrega = buscarParaMudarSituacao(entregaId);
         entrega.setStatus(EntregaStatus.ENCERRADA_COM_SUCESSO);
         entregaRepository.save(entrega);
     }
@@ -75,9 +85,51 @@ public class EntregaService {
      * janela substitui a anterior - {@code null} a descarta (HU29, RD07).
      */
     public void reabrirParaNovaTentativa(UUID entregaId, JanelaReagendamento janela) {
-        Entrega entrega = buscarOuFalhar(entregaId);
+        Entrega entrega = buscarParaMudarSituacao(entregaId);
         entrega.definirJanelaReagendamento(janela);
-        devolverAosMotoristas(entrega, EntregaStatus.REABERTA);
+        tirarDoMotorista(entrega, EntregaStatus.REABERTA);
+    }
+
+    /**
+     * V47: cancelamento do BDO pela empresa - a entrega fica CANCELADA, sem motorista. Sem entrega ainda (ninguem
+     * assumiu), cria uma ja cancelada, que tira o BDO dos disponiveis. Devolve quem estava com ela e a situacao
+     * anterior, para quem cancela avisar o motorista e encerrar a viagem.
+     *
+     * <p>Com a linha travada: uma autoatribuicao, viagem, ocorrencia ou comprovante simultaneo espera e depois ve a
+     * entrega cancelada (ou o cancelamento ve a situacao que ela deixou).</p>
+     */
+    @Transactional
+    public EntregaCancelada cancelar(UUID bdoId) {
+        Optional<Entrega> existente = entregaRepository.findForUpdateByBdoId(bdoId);
+        if (existente.isEmpty()) {
+            UUID id = UUID.randomUUID();
+            if (entregaRepository.criarCancelada(id, TenantContext.get(), bdoId) == 0) {
+                boolean outroCancelamento = entregaRepository.findByBdoId(bdoId)
+                        .map(entrega -> entrega.getStatus() == EntregaStatus.CANCELADA).orElse(false);
+                throw new ConflitoException(outroCancelamento
+                        ? "Este BDO ja foi cancelado."
+                        : "Um motorista acabou de assumir este BDO. Atualize a tela e tente de novo.");
+            }
+            return new EntregaCancelada(id, null, null);
+        }
+        Entrega entrega = existente.get();
+        if (entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO) {
+            throw new ConflitoException("Esta entrega ja foi concluida e nao pode ser cancelada.");
+        }
+        if (entrega.getStatus() == EntregaStatus.CANCELADA) {
+            throw new ConflitoException("Este BDO ja foi cancelado.");
+        }
+        EntregaCancelada cancelada = new EntregaCancelada(entrega.getId(), entrega.getMotoristaResponsavel(), entrega.getStatus());
+        tirarDoMotorista(entrega, EntregaStatus.CANCELADA);
+        return cancelada;
+    }
+
+    /** Situacao da entrega no instante do cancelamento: {@code motoristaAnterior} e {@code statusAnterior} nulos se ela nao existia. */
+    public record EntregaCancelada(UUID entregaId, UUID motoristaAnterior, EntregaStatus statusAnterior) {
+
+        public boolean estavaEmRota() {
+            return statusAnterior == EntregaStatus.EM_ANDAMENTO;
+        }
     }
 
     /**
@@ -96,7 +148,7 @@ public class EntregaService {
         }
     }
 
-    private void devolverAosMotoristas(Entrega entrega, EntregaStatus status) {
+    private void tirarDoMotorista(Entrega entrega, EntregaStatus status) {
         entrega.setStatus(status);
         entrega.setMotoristaResponsavel(null);
         entregaRepository.save(entrega);
@@ -113,6 +165,8 @@ public class EntregaService {
         int atribuidas = entregaRepository.autoatribuirSeDisponivel(
                 UUID.randomUUID(), TenantContext.get(), bdoId, motoristaId);
         if (atribuidas == 0) {
+            // V47: lista desatualizada (ou evento offline) com o BDO ja cancelado pela empresa - diz o motivo certo.
+            entregaRepository.findByBdoId(bdoId).ifPresent(EntregaService::exigirNaoCancelada);
             throw new ConflitoException("Esta entrega ja possui um motorista responsavel.");
         }
 
@@ -139,9 +193,12 @@ public class EntregaService {
                 : entregaRepository.findTop200ByStatusOrderByAtualizadoEmDesc(status);
     }
 
-    private Entrega buscarOuFalhar(UUID entregaId) {
-        return entregaRepository.findById(entregaId)
+    /** Com a linha travada (V47), e recusando a entrega cancelada pela empresa. */
+    private Entrega buscarParaMudarSituacao(UUID entregaId) {
+        Entrega entrega = entregaRepository.findForUpdateById(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+        exigirNaoCancelada(entrega);
+        return entrega;
     }
 
     private Bdo buscarBdoConfirmadoOuFalhar(UUID bdoId) {

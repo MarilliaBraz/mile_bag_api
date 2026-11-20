@@ -31,15 +31,13 @@ import com.marillia.milebag.core.config.security.TenantContext;
 @Component
 public class NotificadorBdoNovo {
 
-    private static final Logger log = LoggerFactory.getLogger(NotificadorBdoNovo.class);
-
     private final InscricaoPushService inscricaoPushService;
-    private final EnviadorPush enviadorPush;
+    private final DisparadorPush disparadorPush;
     private final ObjectMapper objectMapper;
 
-    public NotificadorBdoNovo(InscricaoPushService inscricaoPushService, EnviadorPush enviadorPush, ObjectMapper objectMapper) {
+    public NotificadorBdoNovo(InscricaoPushService inscricaoPushService, DisparadorPush disparadorPush, ObjectMapper objectMapper) {
         this.inscricaoPushService = inscricaoPushService;
-        this.enviadorPush = enviadorPush;
+        this.disparadorPush = disparadorPush;
         this.objectMapper = objectMapper;
     }
 
@@ -70,26 +68,10 @@ public class NotificadorBdoNovo {
     }
 
     private void avisar(UUID bdoId, String conteudo) {
-        if (!enviadorPush.habilitado()) {
+        if (!disparadorPush.habilitado()) {
             return;
         }
-        List<InscricaoPush> inscricoes = inscricaoPushService.listarDosMotoristasAtivos();
-        int enviados = 0;
-        for (InscricaoPush inscricao : inscricoes) {
-            try {
-                int status = enviadorPush.enviar(inscricao, conteudo);
-                if (status == 404 || status == 410) {
-                    inscricaoPushService.removerExpirada(inscricao.getId());
-                } else if (status >= 400) {
-                    log.warn("Servico de push recusou o aviso do BDO {} (HTTP {}) para a inscricao {}.", bdoId, status, inscricao.getId());
-                } else {
-                    enviados++;
-                }
-            } catch (Exception e) {
-                log.warn("Falha ao enviar o aviso do BDO {} para a inscricao {} - seguindo com as demais.", bdoId, inscricao.getId(), e);
-            }
-        }
-        log.info("Aviso de BDO novo {} enviado a {} de {} aparelho(s).", bdoId, enviados, inscricoes.size());
+        disparadorPush.disparar(inscricaoPushService.listarDosMotoristasAtivos(), conteudo, "de BDO novo " + bdoId);
     }
 
     String conteudo(BdoRecebidoPorEmail evento) {

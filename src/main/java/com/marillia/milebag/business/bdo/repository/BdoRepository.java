@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
@@ -64,7 +65,34 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
 
     /**
      * "Volume mensal de BDOs" do tenant (HU16, uso atual contra o limite do plano) - contagem por data de captura, mes corrente.
-     * So conta BDO confirmado: uma foto descartada ou abandonada na conferencia nao e um BDO de verdade.
+     * So conta BDO confirmado: uma foto descartada ou abandonada na conferencia nao e um BDO de verdade. Nem o BDO
+     * cancelado pela empresa (V47): enviado por engano ou duplicado, nao foi um servico.
      */
-    long countByStatusConferenciaAndDataCapturaBetween(StatusConferencia statusConferencia, Instant inicio, Instant fim);
+    @Query(value = CONSULTA_VOLUME_DO_PLANO, nativeQuery = true)
+    long contarConfirmadosNaoCanceladosEntre(@Param("inicio") Instant inicio, @Param("fim") Instant fim);
+
+    /** Constante para o teste contra PostgreSQL real exercitar exatamente este SQL (CancelamentoBdoBancoTest). */
+    String CONSULTA_VOLUME_DO_PLANO = """
+            SELECT count(*) FROM bdo b
+            WHERE b.status_conferencia = 'CONFIRMADO'
+              AND b.data_captura BETWEEN :inicio AND :fim
+              AND NOT EXISTS (SELECT 1 FROM cancelamento_bdo c WHERE c.bdo_id = b.id)
+            """;
+
+    /**
+     * Tela "Entregas" da empresa (V47): BDOs confirmados que ainda nao tem entrega - ninguem assumiu ainda, ou viajam
+     * como bagagem carona de outra ainda nao entregue -, para a empresa poder cancelar o que chegou por engano. Os mais recentes primeiro,
+     * limitados como a lista de entregas.
+     */
+    @Query(value = """
+            SELECT b.* FROM bdo b
+            WHERE b.status_conferencia = 'CONFIRMADO'
+              AND NOT EXISTS (SELECT 1 FROM entrega e WHERE e.bdo_id = b.id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM bagagem_carona bc JOIN entrega p ON p.id = bc.entrega_principal_id
+                  WHERE bc.bdo_id = b.id AND p.status = 'ENCERRADA_COM_SUCESSO')
+            ORDER BY b.data_captura DESC
+            LIMIT 200
+            """, nativeQuery = true)
+    List<Bdo> findTop200SemEntrega();
 }

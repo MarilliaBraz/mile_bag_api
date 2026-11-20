@@ -5,17 +5,21 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.dispensa.model.DispensaEntregaResponse;
 import com.marillia.milebag.business.dispensa.service.DispensaEntregaService;
+import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
@@ -45,6 +49,8 @@ public class RastreabilidadeEntregaService {
     private final ComprovanteEntregaService comprovanteEntregaService;
     private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final UsuarioConsultaService usuarioConsultaService;
+    private final CancelamentoBdoService cancelamentoBdoService;
+    private final BagagemCaronaService bagagemCaronaService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -54,7 +60,9 @@ public class RastreabilidadeEntregaService {
             DispensaEntregaService dispensaEntregaService,
             ComprovanteEntregaService comprovanteEntregaService,
             MotivoOcorrenciaService motivoOcorrenciaService,
-            UsuarioConsultaService usuarioConsultaService) {
+            UsuarioConsultaService usuarioConsultaService,
+            CancelamentoBdoService cancelamentoBdoService,
+            BagagemCaronaService bagagemCaronaService) {
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.viagemService = viagemService;
@@ -63,6 +71,8 @@ public class RastreabilidadeEntregaService {
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.usuarioConsultaService = usuarioConsultaService;
+        this.cancelamentoBdoService = cancelamentoBdoService;
+        this.bagagemCaronaService = bagagemCaronaService;
     }
 
     @Transactional(readOnly = true)
@@ -70,8 +80,13 @@ public class RastreabilidadeEntregaService {
         Map<UUID, String> nomes = new HashMap<>();
         List<Entrega> entregas = entregaService.listarParaGestao(status);
         Map<UUID, Bdo> bdos = bdoService.buscarPorIds(entregas.stream().map(Entrega::getBdoId).toList());
-        return entregas.stream()
-                .map(entrega -> resumo(entrega, bdos.get(entrega.getBdoId()), nomes))
+        // V47: o BDO que ninguem assumiu ainda nao tem entrega, mas a empresa precisa ve-lo para poder cancela-lo.
+        List<Bdo> semEntrega = status == null || status == EntregaStatus.AGUARDANDO_ATRIBUICAO ? bdoService.listarSemEntrega() : List.of();
+        Set<UUID> caronas = bagagemCaronaService.bdosQueSaoCarona(semEntrega.stream().map(Bdo::getId).toList());
+        return Stream.concat(
+                        entregas.stream().map(entrega -> resumo(entrega, bdos.get(entrega.getBdoId()), nomes)),
+                        semEntrega.stream().map(bdo -> resumoSemEntrega(bdo, caronas.contains(bdo.getId()))))
+                .sorted(Comparator.comparing(EntregaGestaoResponse::atualizadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
@@ -110,6 +125,10 @@ public class RastreabilidadeEntregaService {
                     dispensa.dataHora(), dispensa.motoristaNome(), dispensa.motivo(), dispensa.complemento()));
         }
 
+        cancelamentoBdoService.buscarPorEntrega(entregaId).ifPresent(cancelamento -> eventos.add(new EventoRastreabilidade(
+                TipoEventoRastreabilidade.CANCELADO, cancelamento.dataHora(), cancelamento.canceladoPorNome(), cancelamento.motivo(),
+                cancelamento.complemento())));
+
         comprovanteEntregaService.buscarPorEntrega(entregaId).ifPresent(comprovante -> eventos.add(new EventoRastreabilidade(
                 TipoEventoRastreabilidade.ENTREGUE, comprovante.getDataHora(), nome(entrega.getMotoristaResponsavel(), nomes),
                 comprovante.getIdentificacaoRecebedor(), null)));
@@ -121,12 +140,27 @@ public class RastreabilidadeEntregaService {
     private EntregaGestaoResponse resumo(Entrega entrega, Bdo bdo, Map<UUID, String> nomes) {
         return new EntregaGestaoResponse(
                 entrega.getId(),
+                entrega.getBdoId(),
+                false,
                 entrega.getStatus(),
                 bdo == null ? null : bdo.getNumero(),
                 bdo == null ? null : bdo.getPassageiroNome(),
                 bdo == null ? null : bdo.getEnderecoEntrega(),
                 nome(entrega.getMotoristaResponsavel(), nomes),
                 entrega.getAtualizadoEm());
+    }
+
+    private static EntregaGestaoResponse resumoSemEntrega(Bdo bdo, boolean bagagemCarona) {
+        return new EntregaGestaoResponse(
+                null,
+                bdo.getId(),
+                bagagemCarona,
+                EntregaStatus.AGUARDANDO_ATRIBUICAO,
+                bdo.getNumero(),
+                bdo.getPassageiroNome(),
+                bdo.getEnderecoEntrega(),
+                null,
+                bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm());
     }
 
     /** Nome para exibir, consultado uma vez por pessoa na mesma resposta. */

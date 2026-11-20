@@ -226,4 +226,15 @@ class DispensaEntregaServiceTest {
         assertThat(dispensaEntregaService.exigeMotivo(comViagem)).isTrue();
         assertThat(dispensaEntregaService.exigeMotivo(semViagem)).isFalse();
     }
+
+    /** V47: com a tela aberta depois do cancelamento, o motorista ve o motivo da saida, nao "so o responsavel...". */
+    @Test
+    void entregaCanceladaPelaEmpresaMostraAMensagemDoCancelamento() {
+        Entrega entrega = entrega(EntregaStatus.CANCELADA, null);
+
+        assertThatThrownBy(() -> dispensaEntregaService.dispensar(entrega.getId(), motoristaId, null))
+                .isInstanceOf(ConflitoException.class)
+                .hasMessage(com.marillia.milebag.business.entrega.service.EntregaService.MENSAGEM_CANCELADA);
+        verify(dispensaEntregaRepository, never()).save(any());
+    }
 }

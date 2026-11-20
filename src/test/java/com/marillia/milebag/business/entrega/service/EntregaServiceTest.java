@@ -64,7 +64,7 @@ class EntregaServiceTest {
     void marcarEmAndamentoAtualizaStatusEPersiste() {
         UUID entregaId = UUID.randomUUID();
         Entrega entrega = novaEntrega(entregaId, EntregaStatus.ATRIBUIDA);
-        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.of(entrega));
 
         entregaService.marcarEmAndamento(entregaId);
 
@@ -76,7 +76,7 @@ class EntregaServiceTest {
     void marcarEncerradaComSucessoAtualizaStatusEPersiste() {
         UUID entregaId = UUID.randomUUID();
         Entrega entrega = novaEntrega(entregaId, EntregaStatus.EM_ANDAMENTO);
-        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.of(entrega));
 
         entregaService.marcarEncerradaComSucesso(entregaId);
 
@@ -89,7 +89,7 @@ class EntregaServiceTest {
         UUID entregaId = UUID.randomUUID();
         Entrega entrega = novaEntrega(entregaId, EntregaStatus.EM_ANDAMENTO);
         entrega.setMotoristaResponsavel(UUID.randomUUID());
-        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.of(entrega));
 
         entregaService.reabrirParaNovaTentativa(entregaId, null);
 
@@ -127,7 +127,7 @@ class EntregaServiceTest {
     void reabrirComReagendamentoGuardaJanelaENovaOcorrenciaSemJanelaADescarta() {
         UUID entregaId = UUID.randomUUID();
         Entrega entrega = novaEntrega(entregaId, EntregaStatus.EM_ANDAMENTO);
-        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.of(entrega));
         JanelaReagendamento janela =
                 new JanelaReagendamento(Instant.parse("2026-10-23T17:00:00Z"), Instant.parse("2026-10-23T19:00:00Z"));
 
@@ -141,7 +141,7 @@ class EntregaServiceTest {
     @Test
     void marcarEmAndamentoLancaQuandoEntregaNaoExiste() {
         UUID entregaId = UUID.randomUUID();
-        when(entregaRepository.findById(entregaId)).thenReturn(Optional.empty());
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> entregaService.marcarEmAndamento(entregaId))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
@@ -193,5 +193,75 @@ class EntregaServiceTest {
 
         assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, UUID.randomUUID())).isInstanceOf(ConflitoException.class);
         verify(entregaRepository, never()).autoatribuirSeDisponivel(any(), any(), any(), any());
+    }
+
+    /** V47: a entrega cancelada pela empresa nao volta a andar (viagem, comprovante, ocorrencia) - nem por corrida. */
+    @Test
+    void mudancasDeSituacaoRecusamAEntregaCanceladaComAMensagemDaEmpresa() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = novaEntrega(entregaId, EntregaStatus.CANCELADA);
+        when(entregaRepository.findForUpdateById(entregaId)).thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> entregaService.marcarEmAndamento(entregaId))
+                .isInstanceOf(ConflitoException.class).hasMessage(EntregaService.MENSAGEM_CANCELADA);
+        assertThatThrownBy(() -> entregaService.marcarEncerradaComSucesso(entregaId)).isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> entregaService.reabrirParaNovaTentativa(entregaId, null)).isInstanceOf(ConflitoException.class);
+        assertThat(entrega.getStatus()).isEqualTo(EntregaStatus.CANCELADA);
+        verify(entregaRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelarBdoSemEntregaCriaUmaJaCancelada() {
+        UUID bdoId = UUID.randomUUID();
+        when(entregaRepository.findForUpdateByBdoId(bdoId)).thenReturn(Optional.empty());
+        when(entregaRepository.criarCancelada(any(), any(), org.mockito.ArgumentMatchers.eq(bdoId))).thenReturn(1);
+
+        EntregaService.EntregaCancelada cancelada = entregaService.cancelar(bdoId);
+
+        assertThat(cancelada.entregaId()).isNotNull();
+        assertThat(cancelada.motoristaAnterior()).isNull();
+        assertThat(cancelada.estavaEmRota()).isFalse();
+    }
+
+    /** Um motorista assumiu o BDO no mesmo instante: o cancelamento nao pisa na entrega dele. */
+    @Test
+    void cancelarBdoQueUmMotoristaAcabouDeAssumirE409() {
+        UUID bdoId = UUID.randomUUID();
+        when(entregaRepository.findForUpdateByBdoId(bdoId)).thenReturn(Optional.empty());
+        when(entregaRepository.criarCancelada(any(), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> entregaService.cancelar(bdoId)).isInstanceOf(ConflitoException.class);
+    }
+
+    @Test
+    void cancelarEntregaEmRotaTiraOMotoristaEDevolveQuemEstavaComEla() {
+        UUID bdoId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Entrega entrega = novaEntrega(UUID.randomUUID(), EntregaStatus.EM_ANDAMENTO);
+        entrega.setMotoristaResponsavel(motorista);
+        when(entregaRepository.findForUpdateByBdoId(bdoId)).thenReturn(Optional.of(entrega));
+
+        EntregaService.EntregaCancelada cancelada = entregaService.cancelar(bdoId);
+
+        assertThat(cancelada.entregaId()).isEqualTo(entrega.getId());
+        assertThat(cancelada.motoristaAnterior()).isEqualTo(motorista);
+        assertThat(cancelada.estavaEmRota()).isTrue();
+        assertThat(entrega.getStatus()).isEqualTo(EntregaStatus.CANCELADA);
+        assertThat(entrega.getMotoristaResponsavel()).isNull();
+        verify(entregaRepository).save(entrega);
+    }
+
+    @Test
+    void cancelarEntregaConcluidaOuJaCanceladaE409() {
+        UUID concluida = UUID.randomUUID();
+        UUID jaCancelada = UUID.randomUUID();
+        when(entregaRepository.findForUpdateByBdoId(concluida))
+                .thenReturn(Optional.of(novaEntrega(UUID.randomUUID(), EntregaStatus.ENCERRADA_COM_SUCESSO)));
+        when(entregaRepository.findForUpdateByBdoId(jaCancelada))
+                .thenReturn(Optional.of(novaEntrega(UUID.randomUUID(), EntregaStatus.CANCELADA)));
+
+        assertThatThrownBy(() -> entregaService.cancelar(concluida)).isInstanceOf(ConflitoException.class);
+        assertThatThrownBy(() -> entregaService.cancelar(jaCancelada)).isInstanceOf(ConflitoException.class);
+        verify(entregaRepository, never()).save(any());
     }
 }

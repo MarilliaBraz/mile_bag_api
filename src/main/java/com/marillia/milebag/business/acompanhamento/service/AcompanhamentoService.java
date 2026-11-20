@@ -98,6 +98,9 @@ public class AcompanhamentoService {
      * (dispensa, V46) mesmo se outra tentativa entregar - o link e de uma viagem, nao da entrega.
      */
     private EtapaAcompanhamento etapa(Trajeto trajeto, Entrega entrega) {
+        if (trajeto.encerradoPorCancelamento()) {
+            return EtapaAcompanhamento.ENCERRADO;
+        }
         if (trajeto.encerradoPorOcorrencia()) {
             return EtapaAcompanhamento.NAO_ENTREGUE;
         }

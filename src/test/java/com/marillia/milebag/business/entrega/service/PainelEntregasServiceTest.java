@@ -152,4 +152,16 @@ class PainelEntregasServiceTest {
         assertThatThrownBy(() -> painelEntregasService.consultarDetalhe(entregaId, UUID.randomUUID()))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
     }
+
+    /** V47: o motorista que abre a entrega cancelada ve que a empresa cancelou (o push pode nao ter chegado). */
+    @Test
+    void consultarDetalheDeEntregaCanceladaInformaOCancelamento() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = entrega(entregaId, UUID.randomUUID(), null, EntregaStatus.CANCELADA);
+        when(entregaRepository.findById(entregaId)).thenReturn(Optional.of(entrega));
+
+        assertThatThrownBy(() -> painelEntregasService.consultarDetalhe(entregaId, UUID.randomUUID()))
+                .isInstanceOf(com.marillia.milebag.core.exception.ConflitoException.class)
+                .hasMessage(EntregaService.MENSAGEM_CANCELADA);
+    }
 }

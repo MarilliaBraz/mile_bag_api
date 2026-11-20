@@ -2,9 +2,12 @@ package com.marillia.milebag.business.entrega.bagagemcarona;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +19,7 @@ import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.repository.EntregaRepository;
+import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.geo.Coordenada;
@@ -57,6 +61,7 @@ public class BagagemCaronaService {
         if (entregaPrincipal.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO) {
             throw new ConflitoException("A entrega principal ja foi encerrada com comprovante.");
         }
+        EntregaService.exigirNaoCancelada(entregaPrincipal);
 
         Bdo bdoCarona = buscarBdoOuFalhar(bdoId);
         // O BDO de carona nao pode ter entrega propria (nem ser o da entrega principal): senao seria entregue duas vezes.
@@ -92,6 +97,35 @@ public class BagagemCaronaService {
 
         bagagemCaronaRepository.delete(bagagemCarona);
         log.info("Vinculo de bagagem carona {} removido da entrega {}", bagagemCaronaId, entregaPrincipalId);
+    }
+
+    /**
+     * V47, cancelamento do BDO pela empresa: o BDO cancelado deixa de ser carona de outra entrega, e as caronas da
+     * entrega dele (se tinha) voltam a ficar disponiveis para os motoristas. O encaminhamento da companhia aerea de
+     * cada carona solta volta a "aguardando motorista" (trigger da V47); so o do BDO cancelado fica CANCELADO.
+     */
+    @Transactional
+    public void soltarDoCancelamento(UUID bdoCanceladoId, UUID entregaCanceladaId) {
+        bagagemCaronaRepository.findByBdoId(bdoCanceladoId).ifPresent(bagagemCaronaRepository::delete);
+        if (entregaCanceladaId != null) {
+            bagagemCaronaRepository.deleteAll(bagagemCaronaRepository.findByEntregaPrincipalId(entregaCanceladaId));
+        }
+        bagagemCaronaRepository.flush();
+    }
+
+    /** V47: a entrega com que este BDO viaja como carona, se viaja. */
+    @Transactional(readOnly = true)
+    public Optional<Entrega> entregaPrincipalDe(UUID bdoId) {
+        return bagagemCaronaRepository.findByBdoId(bdoId).flatMap(carona -> entregaRepository.findById(carona.getEntregaPrincipalId()));
+    }
+
+    /** Tela "Entregas" da empresa (V47): quais destes BDOs viajam como carona de outra entrega - numa consulta so. */
+    @Transactional(readOnly = true)
+    public Set<UUID> bdosQueSaoCarona(Collection<UUID> bdoIds) {
+        if (bdoIds.isEmpty()) {
+            return Set.of();
+        }
+        return bagagemCaronaRepository.findByBdoIdIn(bdoIds).stream().map(BagagemCarona::getBdoId).collect(Collectors.toSet());
     }
 
     @Transactional(readOnly = true)

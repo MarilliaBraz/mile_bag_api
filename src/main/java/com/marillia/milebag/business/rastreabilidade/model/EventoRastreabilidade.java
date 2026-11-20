@@ -4,7 +4,8 @@ import java.time.Instant;
 
 /**
  * Um acontecimento na vida da mala, para a linha do tempo da empresa (V46). {@code descricao} resume o fato (motivo,
- * quem recebeu); {@code detalhe} traz o texto livre que o motorista escreveu, quando houver.
+ * quem recebeu); {@code detalhe} traz o texto livre que o motorista escreveu, quando houver. Em {@code CANCELADO}
+ * (V47), {@code motoristaNome} e quem cancelou pela empresa e {@code detalhe} o complemento dela.
  */
 public record EventoRastreabilidade(
         TipoEventoRastreabilidade tipo,
@@ -19,6 +20,7 @@ public record EventoRastreabilidade(
         OCORRENCIA,
         DISPENSA_SEM_BAGAGEM,
         DISPENSA_COM_BAGAGEM,
-        ENTREGUE
+        ENTREGUE,
+        CANCELADO
     }
 }

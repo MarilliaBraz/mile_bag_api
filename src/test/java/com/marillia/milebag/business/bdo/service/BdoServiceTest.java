@@ -162,10 +162,10 @@ class BdoServiceTest {
         verify(bdoRepository).delete(bdo);
     }
 
-    /** HU16: o uso do plano conta so BDO confirmado. */
+    /** HU16: o uso do plano conta so BDO confirmado; V47: e nao cancelado pela empresa (o filtro esta no SQL). */
     @Test
-    void contarNoMesCorrenteContaSoBdoConfirmado() {
-        when(bdoRepository.countByStatusConferenciaAndDataCapturaBetween(eq(StatusConferencia.CONFIRMADO), any(), any())).thenReturn(7L);
+    void contarNoMesCorrenteContaSoBdoConfirmadoNaoCancelado() {
+        when(bdoRepository.contarConfirmadosNaoCanceladosEntre(any(), any())).thenReturn(7L);
 
         assertThat(bdoService.contarNoMesCorrente()).isEqualTo(7L);
     }

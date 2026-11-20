@@ -11,9 +11,14 @@ public enum EtapaAcompanhamento {
      * V46: o motorista desta viagem dispensou a entrega e ela foi passada para outro. Este link termina aqui; o
      * passageiro recebe um link novo quando o proximo motorista sair (um link por viagem).
      */
-    TRANSFERIDA;
+    TRANSFERIDA,
+    /**
+     * V47: a empresa cancelou o BDO durante esta viagem. O passageiro nao e informado do cancelamento: o link so
+     * deixa de mostrar o motorista, com um texto neutro.
+     */
+    ENCERRADO;
 
     public boolean encerrada() {
-        return this == ENTREGUE || this == NAO_ENTREGUE || this == TRANSFERIDA;
+        return this == ENTREGUE || this == NAO_ENTREGUE || this == TRANSFERIDA || this == ENCERRADO;
     }
 }

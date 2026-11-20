@@ -429,4 +429,37 @@ class ViagemServiceTest {
         assertThat(trechos.get(1).valorCadastrado()).isFalse();
         assertThat(trechos.get(1).valorUnitario()).isNull();
     }
+
+    /** V47: o cancelamento encerra a viagem e a vincula, mas ela NAO vira tentativa sem sucesso - o fechamento nao a paga. */
+    @Test
+    void cancelamentoEmRotaEncerraAViagemSemVirarTentativaPaga() {
+        UUID entregaId = UUID.randomUUID();
+        UUID cancelamentoId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, UUID.randomUUID(), Instant.now());
+        trajeto.atualizarPosicao(-16.7, -49.2, Instant.now());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
+        when(calculoRotaRepository.findByTrajetoIdOrderByDataHoraAsc(trajeto.getId())).thenReturn(List.of(
+                new CalculoRota(trajeto.getId(), new java.math.BigDecimal("7.500"), new java.math.BigDecimal("7.500"), "[]", 900, TipoSelecao.SUGERIDA, Instant.now(), true)));
+
+        viagemService.encerrarPorCancelamento(entregaId, cancelamentoId);
+
+        assertThat(trajeto.getStatus()).isEqualTo(TrajetoStatus.ENCERRADO);
+        assertThat(trajeto.getCancelamentoId()).isEqualTo(cancelamentoId);
+        assertThat(trajeto.encerradoPorCancelamento()).isTrue();
+        assertThat(trajeto.encerradoSemSucesso()).isFalse();
+        assertThat(trajeto.temPosicao()).isFalse();
+        verify(trajetoRepository).save(trajeto);
+    }
+
+    @Test
+    void marcoDepoisDoCancelamentoMostraAMensagemDaEmpresa() {
+        UUID entregaId = UUID.randomUUID();
+        Trajeto trajeto = new Trajeto(entregaId, UUID.randomUUID(), Instant.now());
+        trajeto.vincularCancelamento(UUID.randomUUID(), Instant.now());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
+
+        assertThatThrownBy(() -> viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, null, null)))
+                .isInstanceOf(ConflitoException.class)
+                .hasMessage(EntregaService.MENSAGEM_CANCELADA);
+    }
 }

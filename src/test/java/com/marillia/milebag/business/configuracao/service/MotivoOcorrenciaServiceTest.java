@@ -83,13 +83,15 @@ class MotivoOcorrenciaServiceTest {
         motivoOcorrenciaService.criarPadroesSeAusentes(tenantId);
 
         ArgumentCaptor<MotivoOcorrencia> salvos = ArgumentCaptor.forClass(MotivoOcorrencia.class);
-        verify(motivoOcorrenciaRepository, times(8)).save(salvos.capture());
+        verify(motivoOcorrenciaRepository, times(12)).save(salvos.capture());
         List<MotivoOcorrencia> motivos = salvos.getAllValues();
         assertThat(motivos).extracting(MotivoOcorrencia::getDescricao).contains("Ausência do recebedor", "Reagendada com o passageiro");
         assertThat(motivos).filteredOn(MotivoOcorrencia::isReagendamento).hasSize(1)
                 .allMatch(motivo -> motivo.getFinalidade() == FinalidadeMotivo.OCORRENCIA);
         assertThat(motivos).filteredOn(motivo -> motivo.getFinalidade() == FinalidadeMotivo.DISPENSA)
                 .extracting(MotivoOcorrencia::getDescricao).contains("Problema no veículo", "Outro motivo").hasSize(4);
+        assertThat(motivos).filteredOn(motivo -> motivo.getFinalidade() == FinalidadeMotivo.CANCELAMENTO)
+                .extracting(MotivoOcorrencia::getDescricao).contains("Enviado por engano", "BDO duplicado").hasSize(4);
         assertThat(tenantNoSave[0]).isEqualTo(tenantId);
         assertThat(TenantContext.get()).isNull();
     }
@@ -110,6 +112,7 @@ class MotivoOcorrenciaServiceTest {
     void criarPadroesSeAusentesCompletaSoAFinalidadeQueFalta() {
         when(motivoOcorrenciaRepository.existsByFinalidade(FinalidadeMotivo.OCORRENCIA)).thenReturn(true);
         when(motivoOcorrenciaRepository.existsByFinalidade(FinalidadeMotivo.DISPENSA)).thenReturn(false);
+        when(motivoOcorrenciaRepository.existsByFinalidade(FinalidadeMotivo.CANCELAMENTO)).thenReturn(true);
         when(motivoOcorrenciaRepository.save(any(MotivoOcorrencia.class))).thenAnswer(invocacao -> invocacao.getArgument(0));
 
         motivoOcorrenciaService.criarPadroesSeAusentes(UUID.randomUUID());

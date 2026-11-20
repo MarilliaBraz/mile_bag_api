@@ -76,6 +76,8 @@ public class PainelEntregasService {
     @Transactional(readOnly = true)
     public ItemPainelDetalheResponse consultarDetalhe(UUID entregaId, UUID motoristaId) {
         Entrega entrega = buscarEntregaOuFalhar(entregaId);
+        // V47: quem estava com a tela aberta ve o motivo da saida, nao um "nao pertence" generico.
+        EntregaService.exigirNaoCancelada(entrega);
         if (!motoristaId.equals(entrega.getMotoristaResponsavel())) {
             throw new AcessoNegadoException("Esta entrega nao pertence ao motorista autenticado.");
         }
