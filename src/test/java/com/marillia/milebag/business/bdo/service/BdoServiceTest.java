@@ -130,6 +130,10 @@ class BdoServiceTest {
                 .hasMessage("O numero do BDO deve ter de 4 a 30 letras e numeros, sem simbolos (ex.: GYNLA24713).");
         assertThatThrownBy(() -> bdoService.criarPelaEmpresa(campos("AB/CD", "P", "E", null, null, null, null), null, administrador))
                 .hasMessageStartingWith("O numero do BDO deve ter");
+        CamposExtraidosBdo comAcento = new CamposExtraidosBdo("GYNLA00001", "P", "E", null, null, null, null, "AÇÃO", null, null,
+                null, null, null, null, null, null, null, null);
+        assertThatThrownBy(() -> bdoService.criarPelaEmpresa(comAcento, null, administrador))
+                .hasMessage("O tipo do processo deve ter so letras, sem acento (ex.: AHL).");
         assertThatThrownBy(() -> bdoService.criarPelaEmpresa(null, null, administrador))
                 .hasMessage("Informe os dados do BDO.");
         verify(bdoRepository, never()).saveAndFlush(any());

@@ -266,6 +266,10 @@ public class BdoService {
         if (email != null && !email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
             throw new RegraNegocioException("O e-mail do passageiro nao parece valido.");
         }
+        String tipoProcesso = maiusculo(vazioParaNulo(c.tipoProcesso()));
+        if (tipoProcesso != null && !tipoProcesso.matches("[A-Z]{1,10}")) {
+            throw new RegraNegocioException("O tipo do processo deve ter so letras, sem acento (ex.: AHL).");
+        }
         String uf = maiusculo(vazioParaNulo(c.uf()));
         if (uf != null && !uf.matches("[A-Z]{2}")) {
             throw new RegraNegocioException("A UF deve ter duas letras (ex.: GO).");
@@ -293,7 +297,7 @@ public class BdoService {
                 textoOpcional(c.telefonePassageiro(), 30, "telefone"),
                 email,
                 textoOpcional(c.etiquetaBagagem(), 300, "etiquetas"),
-                maiusculo(textoOpcional(c.tipoProcesso(), 10, "tipo do processo")),
+                tipoProcesso,
                 textoOpcional(c.cidade(), 100, "cidade"),
                 uf,
                 cep,

@@ -20,5 +20,16 @@ public interface EmailSender {
     }
 
     /** {@code conta}: nula usa a conta padrao de {@code milebag.smtp}. */
-    void enviar(ContaEnvioEmail conta, String destinatario, String assunto, String corpo, String replyTo) throws MessagingException;
+    default void enviar(ContaEnvioEmail conta, String destinatario, String assunto, String corpo, String replyTo) throws MessagingException {
+        enviar(conta, destinatario, assunto, corpo, replyTo, null);
+    }
+
+    /** Com um arquivo anexado pela conta padrao (segunda via do BDO, V50). */
+    default void enviarComAnexo(String destinatario, String assunto, String corpo, AnexoEmail anexo) throws MessagingException {
+        enviar(null, destinatario, assunto, corpo, null, anexo);
+    }
+
+    /** {@code anexo}: nulo envia so o texto, como sempre. */
+    void enviar(ContaEnvioEmail conta, String destinatario, String assunto, String corpo, String replyTo, AnexoEmail anexo)
+            throws MessagingException;
 }
