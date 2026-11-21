@@ -47,7 +47,12 @@ public class MotivoOcorrenciaService {
             new MotivoPadrao("Familiar", false, FinalidadeMotivo.RECEBEDOR),
             new MotivoPadrao("Porteiro ou portaria", false, FinalidadeMotivo.RECEBEDOR),
             new MotivoPadrao("Vizinho", false, FinalidadeMotivo.RECEBEDOR),
-            new MotivoPadrao("Outro", false, FinalidadeMotivo.RECEBEDOR));
+            new MotivoPadrao("Outro", false, FinalidadeMotivo.RECEBEDOR),
+            new MotivoPadrao("Foto errada", false, FinalidadeMotivo.CORRECAO),
+            new MotivoPadrao("Foto ilegível", false, FinalidadeMotivo.CORRECAO),
+            new MotivoPadrao("Dado digitado errado", false, FinalidadeMotivo.CORRECAO),
+            new MotivoPadrao("Recebedor errado", false, FinalidadeMotivo.CORRECAO),
+            new MotivoPadrao("Outro", false, FinalidadeMotivo.CORRECAO));
 
     record MotivoPadrao(String descricao, boolean reagendamento, FinalidadeMotivo finalidade) {
     }

@@ -25,6 +25,8 @@ public record EventoRastreabilidade(
         ENTREGUE,
         CANCELADO,
         /** V50: segunda via do BDO enviada por e-mail; {@code descricao} e o endereco de destino. */
-        SEGUNDA_VIA_ENVIADA
+        SEGUNDA_VIA_ENVIADA,
+        /** V51: correcao de etapa; {@code descricao} e a etapa (FOTO_PORTA...), {@code detalhe} o motivo, antes e depois. */
+        CORRECAO
     }
 }

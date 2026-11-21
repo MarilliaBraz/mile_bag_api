@@ -40,6 +40,10 @@ public class FotoEntrega extends BaseEntity {
     @Column(name = "data_hora", nullable = false, updatable = false)
     private Instant dataHora;
 
+    /** V51: trocada por uma correcao - continua guardada para auditoria, fora das fotos atuais. */
+    @Column(name = "substituida_em")
+    private Instant substituidaEm;
+
     public FotoEntrega(UUID entregaId, TipoFotoEntrega tipo, UUID retiradaId, UUID comprovanteId, String caminho, Instant dataHora) {
         this.entregaId = entregaId;
         this.tipo = tipo;
@@ -47,5 +51,22 @@ public class FotoEntrega extends BaseEntity {
         this.comprovanteId = comprovanteId;
         this.caminho = caminho;
         this.dataHora = dataHora;
+    }
+
+    /** A foto do BDO assinado que saiu do comprovante numa correcao (V51): ja nasce substituida. */
+    public static FotoEntrega bdoAssinadoSubstituido(UUID entregaId, UUID comprovanteId, String caminho, Instant dataHora, Instant substituidaEm) {
+        FotoEntrega foto = new FotoEntrega(entregaId, TipoFotoEntrega.BDO_ASSINADO, null, comprovanteId, caminho, dataHora);
+        foto.substituidaEm = substituidaEm;
+        return foto;
+    }
+
+    public boolean substituida() {
+        return substituidaEm != null;
+    }
+
+    public void substituir(Instant quando) {
+        if (substituidaEm == null) {
+            substituidaEm = quando;
+        }
     }
 }

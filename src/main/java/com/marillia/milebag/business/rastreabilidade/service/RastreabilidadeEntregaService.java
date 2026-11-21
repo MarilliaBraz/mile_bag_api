@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.rastreabilidade.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -17,6 +18,8 @@ import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
+import com.marillia.milebag.business.correcao.model.CorrecaoEntrega;
+import com.marillia.milebag.business.correcao.service.CorrecaoEntregaService;
 import com.marillia.milebag.business.dispensa.model.DispensaEntregaResponse;
 import com.marillia.milebag.business.dispensa.service.DispensaEntregaService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
@@ -24,6 +27,8 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.ocorrencia.service.OcorrenciaService;
+import com.marillia.milebag.business.fotoentrega.model.TipoFotoEntrega;
+import com.marillia.milebag.business.fotoentrega.model.FotoEntrega;
 import com.marillia.milebag.business.fotoentrega.service.FotoEntregaService;
 import com.marillia.milebag.business.rastreabilidade.model.EntregaGestaoResponse;
 import com.marillia.milebag.business.rastreabilidade.model.FotoGestaoResponse;
@@ -61,6 +66,7 @@ public class RastreabilidadeEntregaService {
     private final RetiradaBagagemService retiradaBagagemService;
     private final FotoEntregaService fotoEntregaService;
     private final SegundaViaBdoService segundaViaBdoService;
+    private final CorrecaoEntregaService correcaoEntregaService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -75,7 +81,8 @@ public class RastreabilidadeEntregaService {
             BagagemCaronaService bagagemCaronaService,
             RetiradaBagagemService retiradaBagagemService,
             FotoEntregaService fotoEntregaService,
-            SegundaViaBdoService segundaViaBdoService) {
+            SegundaViaBdoService segundaViaBdoService,
+            CorrecaoEntregaService correcaoEntregaService) {
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.viagemService = viagemService;
@@ -89,6 +96,7 @@ public class RastreabilidadeEntregaService {
         this.retiradaBagagemService = retiradaBagagemService;
         this.fotoEntregaService = fotoEntregaService;
         this.segundaViaBdoService = segundaViaBdoService;
+        this.correcaoEntregaService = correcaoEntregaService;
     }
 
     @Transactional(readOnly = true)
@@ -99,8 +107,9 @@ public class RastreabilidadeEntregaService {
         // V47: o BDO que ninguem assumiu ainda nao tem entrega, mas a empresa precisa ve-lo para poder cancela-lo.
         List<Bdo> semEntrega = status == null || status == EntregaStatus.AGUARDANDO_ATRIBUICAO ? bdoService.listarSemEntrega() : List.of();
         Set<UUID> caronas = bagagemCaronaService.bdosQueSaoCarona(semEntrega.stream().map(Bdo::getId).toList());
+        Set<UUID> corrigidas = correcaoEntregaService.entregasCorrigidas(entregas.stream().map(Entrega::getId).toList());
         return Stream.concat(
-                        entregas.stream().map(entrega -> resumo(entrega, bdos.get(entrega.getBdoId()), nomes)),
+                        entregas.stream().map(entrega -> resumo(entrega, bdos.get(entrega.getBdoId()), nomes, corrigidas.contains(entrega.getId()))),
                         semEntrega.stream().map(bdo -> resumoSemEntrega(bdo, caronas.contains(bdo.getId()))))
                 .sorted(Comparator.comparing(EntregaGestaoResponse::atualizadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
@@ -160,19 +169,32 @@ public class RastreabilidadeEntregaService {
                 TipoEventoRastreabilidade.ENTREGUE, comprovante.getDataHora(), nome(entrega.getMotoristaResponsavel(), nomes),
                 comprovante.getIdentificacaoRecebedor(), null)));
 
+        List<CorrecaoEntrega> correcoes = correcaoEntregaService.listarPorEntrega(entregaId);
+        for (CorrecaoEntrega correcao : correcoes) {
+            eventos.add(new EventoRastreabilidade(TipoEventoRastreabilidade.CORRECAO, correcao.getDataHora(),
+                    nome(correcao.getCorrigidoPor(), nomes), correcao.getEtapa().name(), detalheDaCorrecao(correcao)));
+        }
         eventos.sort(Comparator.comparing(EventoRastreabilidade::dataHora, Comparator.nullsLast(Comparator.naturalOrder())));
-        return new HistoricoEntregaResponse(resumo(entrega, bdoService.buscarPorId(entrega.getBdoId()).orElse(null), nomes), eventos);
+        return new HistoricoEntregaResponse(
+                resumo(entrega, bdoService.buscarPorId(entrega.getBdoId()).orElse(null), nomes, !correcoes.isEmpty()), eventos);
     }
 
     /** V48: as fotos da entrega, na ordem em que foram tiradas, inclusive a do BDO assinado (do comprovante). */
     @Transactional(readOnly = true)
     public List<FotoGestaoResponse> fotos(UUID entregaId) {
         exigirEntrega(entregaId);
-        List<FotoGestaoResponse> fotos = new ArrayList<>(fotoEntregaService.listarPorEntrega(entregaId).stream()
-                .map(foto -> new FotoGestaoResponse(foto.getId(), foto.getTipo().name(), foto.getDataHora()))
+        List<FotoEntrega> registradas = fotoEntregaService.listarPorEntrega(entregaId);
+        List<FotoGestaoResponse> fotos = new ArrayList<>(registradas.stream()
+                .map(foto -> new FotoGestaoResponse(foto.getId(), foto.getTipo().name(), foto.getDataHora(), foto.substituida()))
                 .toList());
-        comprovanteEntregaService.buscarPorEntrega(entregaId).ifPresent(comprovante ->
-                fotos.add(new FotoGestaoResponse(comprovante.getId(), TIPO_BDO_ASSINADO, comprovante.getDataHora())));
+        // A foto atual do BDO assinado vale a partir da ultima troca (V51); sem troca, desde o registro.
+        Instant trocadaEm = registradas.stream()
+                .filter(foto -> foto.getTipo() == TipoFotoEntrega.BDO_ASSINADO && foto.substituida())
+                .map(FotoEntrega::getSubstituidaEm)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+        comprovanteEntregaService.buscarPorEntrega(entregaId).ifPresent(comprovante -> fotos.add(new FotoGestaoResponse(
+                comprovante.getId(), TIPO_BDO_ASSINADO, trocadaEm != null ? trocadaEm : comprovante.getDataHora(), false)));
         fotos.sort(Comparator.comparing(FotoGestaoResponse::dataHora, Comparator.nullsLast(Comparator.naturalOrder())));
         return fotos;
     }
@@ -191,7 +213,21 @@ public class RastreabilidadeEntregaService {
         entregaService.buscarPorId(entregaId).orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 
-    private EntregaGestaoResponse resumo(Entrega entrega, Bdo bdo, Map<UUID, String> nomes) {
+    /** "Motivo: Foto errada. Antes: ... Depois: ... (complemento)". */
+    private String detalheDaCorrecao(CorrecaoEntrega correcao) {
+        StringBuilder detalhe = new StringBuilder("Motivo: ")
+                .append(motivoOcorrenciaService.descricao(correcao.getMotivoId()).orElse("-")).append('.');
+        if (correcao.getAntes() != null || correcao.getDepois() != null) {
+            detalhe.append(" Antes: ").append(correcao.getAntes() == null ? "-" : correcao.getAntes())
+                    .append(". Depois: ").append(correcao.getDepois() == null ? "-" : correcao.getDepois()).append('.');
+        }
+        if (correcao.getComplemento() != null) {
+            detalhe.append(" (").append(correcao.getComplemento()).append(')');
+        }
+        return detalhe.toString();
+    }
+
+    private EntregaGestaoResponse resumo(Entrega entrega, Bdo bdo, Map<UUID, String> nomes, boolean corrigida) {
         return new EntregaGestaoResponse(
                 entrega.getId(),
                 entrega.getBdoId(),
@@ -201,7 +237,8 @@ public class RastreabilidadeEntregaService {
                 bdo == null ? null : bdo.getPassageiroNome(),
                 bdo == null ? null : bdo.getEnderecoEntrega(),
                 nome(entrega.getMotoristaResponsavel(), nomes),
-                entrega.getAtualizadoEm());
+                entrega.getAtualizadoEm(),
+                corrigida);
     }
 
     private static EntregaGestaoResponse resumoSemEntrega(Bdo bdo, boolean bagagemCarona) {
@@ -214,7 +251,8 @@ public class RastreabilidadeEntregaService {
                 bdo.getPassageiroNome(),
                 bdo.getEnderecoEntrega(),
                 null,
-                bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm());
+                bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm(),
+                false);
     }
 
     /** Nome para exibir, consultado uma vez por pessoa na mesma resposta. */

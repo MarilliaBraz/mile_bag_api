@@ -19,5 +19,7 @@ public record EntregaGestaoResponse(
         String passageiroNome,
         String endereco,
         String motoristaNome,
-        Instant atualizadoEm) {
+        Instant atualizadoEm,
+        /** V51: o motorista voltou e corrigiu alguma etapa (selo "Corrigida"; o detalhe esta no historico). */
+        boolean corrigida) {
 }

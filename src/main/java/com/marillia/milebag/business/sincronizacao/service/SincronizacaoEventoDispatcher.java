@@ -157,7 +157,8 @@ public class SincronizacaoEventoDispatcher {
                 payload.tipoRecebedorId(),
                 payload.nomeRecebedor(),
                 arquivos("avarias", payload.avarias()),
-                payload.observacaoAvaria());
+                payload.observacaoAvaria(),
+                payload.correcoes() == null ? List.of() : payload.correcoes());
         ComprovanteEntregaService.ComprovanteEntregaResultado resultado = comprovanteEntregaService.registrar(
                 entregaId,
                 foto,

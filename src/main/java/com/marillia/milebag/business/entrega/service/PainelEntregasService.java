@@ -1,6 +1,8 @@
 package com.marillia.milebag.business.entrega.service;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -8,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.entrega.model.EntregaCorrigivelResponse;
+import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
@@ -46,6 +50,7 @@ public class PainelEntregasService {
     private final PainelEntregasMapper mapper;
     private final DispensaEntregaService dispensaEntregaService;
     private final RetiradaBagagemService retiradaBagagemService;
+    private final ComprovanteEntregaService comprovanteEntregaService;
 
     public PainelEntregasService(
             EntregaRepository entregaRepository,
@@ -54,9 +59,11 @@ public class PainelEntregasService {
             ViagemService viagemService,
             PainelEntregasMapper mapper,
             DispensaEntregaService dispensaEntregaService,
-            RetiradaBagagemService retiradaBagagemService) {
+            RetiradaBagagemService retiradaBagagemService,
+            ComprovanteEntregaService comprovanteEntregaService) {
         this.dispensaEntregaService = dispensaEntregaService;
         this.retiradaBagagemService = retiradaBagagemService;
+        this.comprovanteEntregaService = comprovanteEntregaService;
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.bagagemCaronaService = bagagemCaronaService;
@@ -91,7 +98,33 @@ public class PainelEntregasService {
         return mapper.toDetalhe(
                 entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null),
                 dispensaEntregaService.exigeMotivo(entregaId),
-                retiradaBagagemService.temRetiradaPendente(entregaId, motoristaId));
+                retiradaBagagemService.temRetiradaPendente(entregaId, motoristaId),
+                corrigivelAte(entrega));
+    }
+
+    /** V51: as entregas que o motorista finalizou e ainda pode corrigir (24 h), as mais recentes primeiro. */
+    @Transactional(readOnly = true)
+    public List<EntregaCorrigivelResponse> listarCorrigiveis(UUID motoristaId) {
+        Instant desde = Instant.now().minus(ComprovanteEntregaService.PRAZO_CORRECAO);
+        return entregaRepository.findByMotoristaResponsavelAndStatusAndAtualizadoEmAfterOrderByAtualizadoEmDesc(
+                        motoristaId, EntregaStatus.ENCERRADA_COM_SUCESSO, desde)
+                .stream()
+                .flatMap(entrega -> {
+                    Instant ate = corrigivelAte(entrega);
+                    if (ate == null) {
+                        return Stream.empty();
+                    }
+                    Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
+                    return Stream.of(new EntregaCorrigivelResponse(entrega.getId(), bdo.getNumero(), bdo.getPassageiroNome(), ate));
+                })
+                .toList();
+    }
+
+    private Instant corrigivelAte(Entrega entrega) {
+        if (entrega.getStatus() != EntregaStatus.ENCERRADA_COM_SUCESSO) {
+            return null;
+        }
+        return comprovanteEntregaService.corrigivelAte(entrega.getId()).filter(ate -> ate.isAfter(Instant.now())).orElse(null);
     }
 
     private ItemPainelResponse montarItem(Entrega entrega) {

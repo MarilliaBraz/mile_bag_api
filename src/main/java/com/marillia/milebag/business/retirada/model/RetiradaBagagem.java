@@ -66,6 +66,11 @@ public class RetiradaBagagem extends BaseEntity {
     }
 
     /** Dispensa ou cancelamento antes da viagem: a bagagem voltou, esta retirada nao vale mais para iniciar. */
+    /** V51: correcao das avarias da retirada, com motivo registrado em correcao_entrega. */
+    public void corrigirObservacaoAvaria(String observacao) {
+        this.observacaoAvaria = observacao;
+    }
+
     public void descartar(Instant quando) {
         this.descartadaEm = quando;
     }
