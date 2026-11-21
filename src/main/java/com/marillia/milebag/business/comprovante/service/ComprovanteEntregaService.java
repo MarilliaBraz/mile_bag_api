@@ -36,6 +36,7 @@ import com.marillia.milebag.business.viagem.model.EncerrarTrajetoRequest;
 import com.marillia.milebag.business.viagem.model.RegistrarCheckpointRequest;
 import com.marillia.milebag.business.viagem.model.TipoCheckpoint;
 import com.marillia.milebag.business.viagem.service.ViagemService;
+import com.marillia.milebag.core.exception.AcessoNegadoException;
 import com.marillia.milebag.core.exception.ComprovanteIncompletoException;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
@@ -124,25 +125,10 @@ public class ComprovanteEntregaService {
      * este mesmo POST com o campo preenchido, sem perder o restante dos
      * dados do comprovante.
      */
-    @Transactional
-    public ComprovanteEntregaResultado registrar(
-            UUID entregaId,
-            MultipartFile foto,
-            String identificacaoRecebedor,
-            String dataHoraTexto,
-            Double latitude,
-            Double longitude,
-            String idLocal,
-            String justificativaDivergencia,
-            DadosDaEntrega dadosDaEntrega) {
-        return registrar(entregaId, foto, identificacaoRecebedor, dataHoraTexto, latitude, longitude, idLocal, justificativaDivergencia,
-                dadosDaEntrega, null);
-    }
-
     /**
-     * {@code autorId}: quem enviou o comprovante (o usuario autenticado, ou o autor do lote offline). As correcoes do
-     * fluxo (V51) sao atribuidas a ele e so valem se ele for o motorista responsavel - ninguem registra correcao em
-     * nome de outro.
+     * {@code autorId}: quem enviou o comprovante (o usuario autenticado, ou o autor do lote offline). So o motorista
+     * responsavel pela entrega a registra (V51) - nem outro motorista nem o administrador finalizam uma entrega que
+     * nao e deles -, e as correcoes do fluxo ficam em nome dele.
      */
     @Transactional
     public ComprovanteEntregaResultado registrar(
@@ -159,8 +145,12 @@ public class ComprovanteEntregaService {
         DadosDaEntrega dados = dadosDaEntrega == null ? DadosDaEntrega.FORMATO_ANTIGO : dadosDaEntrega;
 
         // V47: a entrega cancelada pela empresa para antes de gravar a foto (marcarEncerradaComSucesso tambem recusa).
-        EntregaService.exigirNaoCancelada(entregaService.buscarPorId(entregaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada.")));
+        Entrega daEntrega = entregaService.buscarPorId(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+        EntregaService.exigirNaoCancelada(daEntrega);
+        if (autorId == null || !autorId.equals(daEntrega.getMotoristaResponsavel())) {
+            throw new AcessoNegadoException("So o motorista responsavel pela entrega pode registra-la.");
+        }
 
         // Antes de validar: o reenvio do mesmo registro (fila offline) devolve o que ja foi gravado, mesmo que algo
         // tenha mudado depois (ex.: o tipo de quem assinou foi desativado).
@@ -184,13 +174,7 @@ public class ComprovanteEntregaService {
         novo.registrarDadosDaEntrega(validados.tipoRecebedorId(), validados.nome(), validados.observacao());
         ComprovanteEntrega comprovante = comprovanteEntregaRepository.save(novo);
         // V51: correcoes feitas no aparelho antes de finalizar (voltar a uma etapa ja concluida), com motivo.
-        Entrega entrega = entregaService.buscarPorId(entregaId).orElseThrow();
-        if (autorId != null && autorId.equals(entrega.getMotoristaResponsavel())) {
-            correcaoEntregaService.registrarDoFluxo(entregaId, autorId, dados.correcoes(), dataHora);
-        } else if (!dados.correcoes().isEmpty()) {
-            log.warn("Entrega {}: {} correcoes do fluxo ignoradas - quem enviou nao e o motorista responsavel.", entregaId,
-                    dados.correcoes().size());
-        }
+        correcaoEntregaService.registrarDoFluxo(entregaId, autorId, dados.correcoes(), dataHora);
         if (!dados.formatoAntigo()) {
             fotoEntregaService.salvarDoComprovante(entregaId, comprovante.getId(), TipoFotoEntrega.PORTA, dados.fotoPorta(), dataHora);
             validados.avarias().forEach(avaria ->

@@ -76,7 +76,7 @@ class ComprovanteEntregaServiceTest {
     }
 
     private void entregaLivreParaRegistrar() throws Exception {
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
         when(fotoEntregaService.gravarArquivo(any())).thenReturn("tenant/bdo.jpg");
         when(comprovanteEntregaRepository.save(any(ComprovanteEntrega.class))).thenAnswer(inv -> {
@@ -87,7 +87,7 @@ class ComprovanteEntregaServiceTest {
     }
 
     private void entregaLivreParaValidar() {
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
     }
 
@@ -95,7 +95,7 @@ class ComprovanteEntregaServiceTest {
     @Test
     void reenvioDoMesmoIdLocalDevolveOComprovanteSemValidarDeNovo() {
         ComprovanteEntrega gravado = new ComprovanteEntrega(entregaId, "t/bdo.jpg", "Titular - Ana", Instant.now(), -16.6, -49.2, true, "id-local");
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(gravado));
 
         var resultado = registrar(servicoAtual(), new DadosDaEntrega(null, null, null, List.of(), null));
@@ -113,7 +113,26 @@ class ComprovanteEntregaServiceTest {
     }
 
     private ComprovanteEntregaService.ComprovanteEntregaResultado registrar(ComprovanteEntregaService servico, DadosDaEntrega dados) {
-        return servico.registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null, dados);
+        return servico.registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null, dados, MOTORISTA);
+    }
+
+    private static final UUID MOTORISTA = UUID.randomUUID();
+
+    private static Entrega doMotorista() {
+        Entrega entrega = new Entrega();
+        entrega.setMotoristaResponsavel(MOTORISTA);
+        return entrega;
+    }
+
+    /** So o motorista responsavel registra a entrega: outro motorista ou o administrador recebem 403. */
+    @Test
+    void quemNaoEOResponsavelNaoRegistraAEntrega() {
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
+
+        assertThatThrownBy(() -> servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
+                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null), UUID.randomUUID()))
+                .isInstanceOf(com.marillia.milebag.core.exception.AcessoNegadoException.class);
+        verify(fotoEntregaService, never()).gravarArquivo(any());
     }
 
     @Test
@@ -171,7 +190,7 @@ class ComprovanteEntregaServiceTest {
         entregaLivreParaRegistrar();
 
         var resultado = servico(Instant.now().plus(7, ChronoUnit.DAYS)).registrar(
-                entregaId, fotoBdo, "Fulano de Tal", Instant.now().toString(), -16.6, -49.2, "id-local", null, null);
+                entregaId, fotoBdo, "Fulano de Tal", Instant.now().toString(), -16.6, -49.2, "id-local", null, null, MOTORISTA);
 
         assertThat(resultado.comprovante().getIdentificacaoRecebedor()).isEqualTo("Fulano de Tal");
         verify(fotoEntregaService, never()).salvarDoComprovante(any(), any(), any(), any(), any());
@@ -182,7 +201,7 @@ class ComprovanteEntregaServiceTest {
     void formatoAntigoDepoisDaDataDeCortePedeParaAtualizarOApp() throws Exception {
         entregaLivreParaValidar();
         assertThatThrownBy(() -> servicoAtual().registrar(
-                entregaId, fotoBdo, "Fulano", Instant.now().toString(), -16.6, -49.2, "id-local", null, DadosDaEntrega.FORMATO_ANTIGO))
+                entregaId, fotoBdo, "Fulano", Instant.now().toString(), -16.6, -49.2, "id-local", null, DadosDaEntrega.FORMATO_ANTIGO, MOTORISTA))
                 .isInstanceOf(ComprovanteIncompletoException.class).hasMessageContaining("Atualize o aplicativo");
         verify(comprovanteEntregaRepository, never()).save(any());
     }
@@ -296,20 +315,4 @@ class ComprovanteEntregaServiceTest {
         verify(correcaoEntregaService).registrarDoFluxo(eq(entregaId), eq(motoristaCorrecao), eq(correcoes), any());
     }
 
-    /** Quem nao e o motorista responsavel nao registra correcao em nome dele (a entrega segue normalmente). */
-    @Test
-    void correcoesDeQuemNaoEOResponsavelSaoIgnoradas() throws Exception {
-        entregaLivreParaRegistrar();
-        Entrega comMotorista = new Entrega();
-        comMotorista.setMotoristaResponsavel(motoristaCorrecao);
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(comMotorista));
-        tipoRecebedorAtivo();
-        var correcoes = List.of(new com.marillia.milebag.business.correcao.model.CorrecaoInformada(
-                com.marillia.milebag.business.correcao.model.EtapaCorrecao.FOTO_PORTA, UUID.randomUUID(), null, "a", "b", null));
-
-        servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
-                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null, correcoes), UUID.randomUUID());
-
-        verify(correcaoEntregaService, never()).registrarDoFluxo(any(), any(), any(), any());
-    }
 }
