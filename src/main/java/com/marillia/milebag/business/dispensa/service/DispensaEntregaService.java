@@ -26,6 +26,7 @@ import com.marillia.milebag.core.exception.AcessoNegadoException;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.exception.RegraNegocioException;
+import com.marillia.milebag.core.util.TextoLivre;
 
 /**
  * Dispensa da entrega pelo motorista responsavel (V46): devolve a entrega aos outros motoristas e registra o fato
@@ -80,6 +81,7 @@ public class DispensaEntregaService {
     public DispensaEntregaResponse dispensar(UUID entregaId, UUID motoristaId, DispensarEntregaRequest request) {
         Entrega entrega = entregaService.buscarPorId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+        EntregaService.exigirNaoCancelada(entrega);
         if (!motoristaId.equals(entrega.getMotoristaResponsavel())) {
             throw new ConflitoException("So o motorista responsavel pode dispensar esta entrega.");
         }
@@ -135,14 +137,7 @@ public class DispensaEntregaService {
     }
 
     private static String complemento(DispensarEntregaRequest request) {
-        if (request == null || request.complemento() == null || request.complemento().isBlank()) {
-            return null;
-        }
-        String texto = request.complemento().trim();
-        if (texto.length() > TAMANHO_MAXIMO_COMPLEMENTO) {
-            throw new RegraNegocioException("O complemento pode ter no maximo " + TAMANHO_MAXIMO_COMPLEMENTO + " caracteres.");
-        }
-        return texto;
+        return request == null ? null : TextoLivre.opcional(request.complemento(), TAMANHO_MAXIMO_COMPLEMENTO, "complemento");
     }
 
     private DispensaEntregaResponse paraResponse(DispensaEntrega dispensa) {

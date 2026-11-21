@@ -28,7 +28,7 @@ public class MotivoOcorrenciaService {
 
     /**
      * Catalogo inicial de toda empresa nova - sem ele o motorista nao consegue registrar ocorrencia (HU07) nem
-     * justificar uma dispensa. Mesmas listas de V35 (ocorrencia) e V46 (dispensa).
+     * justificar uma dispensa, nem a empresa cancelar um BDO. Mesmas listas de V35, V46 (dispensa) e V47 (cancelamento).
      */
     static final List<MotivoPadrao> MOTIVOS_PADRAO = List.of(
             new MotivoPadrao("Ausência do recebedor", false, FinalidadeMotivo.OCORRENCIA),
@@ -38,7 +38,11 @@ public class MotivoOcorrenciaService {
             new MotivoPadrao("Problema no veículo", false, FinalidadeMotivo.DISPENSA),
             new MotivoPadrao("Imprevisto pessoal", false, FinalidadeMotivo.DISPENSA),
             new MotivoPadrao("Indisponibilidade de horário", false, FinalidadeMotivo.DISPENSA),
-            new MotivoPadrao("Outro motivo", false, FinalidadeMotivo.DISPENSA));
+            new MotivoPadrao("Outro motivo", false, FinalidadeMotivo.DISPENSA),
+            new MotivoPadrao("Enviado por engano", false, FinalidadeMotivo.CANCELAMENTO),
+            new MotivoPadrao("Cliente retirou a bagagem no aeroporto", false, FinalidadeMotivo.CANCELAMENTO),
+            new MotivoPadrao("BDO duplicado", false, FinalidadeMotivo.CANCELAMENTO),
+            new MotivoPadrao("Outro motivo", false, FinalidadeMotivo.CANCELAMENTO));
 
     record MotivoPadrao(String descricao, boolean reagendamento, FinalidadeMotivo finalidade) {
     }

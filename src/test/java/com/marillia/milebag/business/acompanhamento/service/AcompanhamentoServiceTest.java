@@ -168,4 +168,18 @@ class AcompanhamentoServiceTest {
                 .isInstanceOf(RecursoNaoEncontradoException.class)
                 .hasMessage("Link de acompanhamento invalido.");
     }
+
+    /** V47 (o passageiro nao deve saber do cancelamento): o link so encerra, sem posicao e sem dizer por que. */
+    @Test
+    void cancelamentoPelaEmpresaEncerraOLinkSemDizerQueFoiCancelado() {
+        trajeto.consolidar(BigDecimal.ONE, BigDecimal.ONE, "[]", 60, null);
+        trajeto.vincularCancelamento(UUID.randomUUID(), Instant.now());
+        entrega.setStatus(EntregaStatus.CANCELADA);
+
+        AcompanhamentoResponse resposta = service.consultar(link);
+
+        assertThat(resposta.etapa()).isEqualTo(EtapaAcompanhamento.ENCERRADO);
+        assertThat(resposta.posicao()).isNull();
+        assertThat(resposta.janelaReagendamento()).isNull();
+    }
 }

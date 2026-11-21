@@ -52,6 +52,12 @@ public class InscricaoPushService {
         return motoristas.isEmpty() ? List.of() : inscricaoPushRepository.findByUsuarioIdIn(motoristas);
     }
 
+    /** Os aparelhos de uma pessoa (V47: aviso de cancelamento ao motorista que estava com a entrega). */
+    @Transactional(readOnly = true)
+    public List<InscricaoPush> listarDoUsuario(UUID usuarioId) {
+        return inscricaoPushRepository.findByUsuarioIdIn(List.of(usuarioId));
+    }
+
     /** O servico de push respondeu 404/410: a inscricao nao existe mais do lado do navegador. */
     @Transactional
     public void removerExpirada(UUID id) {

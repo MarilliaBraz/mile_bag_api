@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
+import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
@@ -165,6 +166,17 @@ public class ViagemService {
         encerrarTentativaSemSucesso(entregaId, trajeto -> trajeto.vincularDispensa(dispensaId, Instant.now()), "dispensa " + dispensaId);
     }
 
+    /**
+     * V47: o cancelamento do BDO pela empresa com o motorista em rota encerra a viagem e a vincula ao cancelamento -
+     * mas ela NAO vira tentativa sem sucesso: o fechamento nao a paga. Sem viagem iniciada, nao faz nada.
+     */
+    @Transactional
+    public void encerrarPorCancelamento(UUID entregaId, UUID cancelamentoId) {
+        encerrarTentativaSemSucesso(
+                entregaId, trajeto -> trajeto.vincularCancelamento(cancelamentoId, Instant.now()), "cancelamento " + cancelamentoId);
+    }
+
+    /** Encerra a viagem da tentativa atual (consolidando a ultima rota, se ainda em execucao) e a vincula a causa. */
     private void encerrarTentativaSemSucesso(UUID entregaId, Consumer<Trajeto> vincular, String causa) {
         trajetoDaTentativaAtual(entregaId).ifPresent(trajeto -> {
             if (trajeto.getStatus() == TrajetoStatus.EM_EXECUCAO) {
@@ -180,9 +192,11 @@ public class ViagemService {
 
     @Transactional
     public TrajetoIniciadoResponse iniciarViagem(UUID entregaId, IniciarViagemRequest request) {
-        UUID motoristaId = entregaService.buscarPorId(entregaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."))
-                .getMotoristaResponsavel();
+        Entrega entrega = entregaService.buscarPorId(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+        // V47: recusa ja aqui, antes de criar a viagem (marcarEmAndamento tambem recusa, com a linha travada).
+        EntregaService.exigirNaoCancelada(entrega);
+        UUID motoristaId = entrega.getMotoristaResponsavel();
 
         // Uma viagem por tentativa: a de uma tentativa sem sucesso (encerrada por ocorrencia) nao impede a nova.
         if (trajetoDaTentativaAtual(entregaId).isPresent()) {
@@ -251,6 +265,9 @@ public class ViagemService {
     @Transactional
     public CheckpointResponse registrarCheckpoint(UUID entregaId, RegistrarCheckpointRequest request) {
         Trajeto trajeto = buscarTrajetoOuFalhar(entregaId);
+        if (trajeto.encerradoPorCancelamento()) {
+            throw new ConflitoException(EntregaService.MENSAGEM_CANCELADA);
+        }
         if (trajeto.getStatus() == TrajetoStatus.ENCERRADO) {
             throw new ConflitoException("O trajeto desta entrega ja esta encerrado; nao aceita novos checkpoints.");
         }

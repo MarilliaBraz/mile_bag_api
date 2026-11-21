@@ -81,7 +81,13 @@ public class BdoService {
     public long contarNoMesCorrente() {
         Instant agora = Instant.now();
         Instant inicioDoMes = agora.atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        return bdoRepository.countByStatusConferenciaAndDataCapturaBetween(StatusConferencia.CONFIRMADO, inicioDoMes, agora);
+        return bdoRepository.contarConfirmadosNaoCanceladosEntre(inicioDoMes, agora);
+    }
+
+    /** Tela "Entregas" da empresa (V47): BDOs confirmados ainda sem entrega, os mais recentes primeiro. */
+    @Transactional(readOnly = true)
+    public List<Bdo> listarSemEntrega() {
+        return bdoRepository.findTop200SemEntrega();
     }
 
     @Transactional

@@ -37,7 +37,7 @@ class NotificadorBdoNovoTest {
 
     @BeforeEach
     void setUp() {
-        notificador = new NotificadorBdoNovo(inscricaoPushService, enviadorPush, new ObjectMapper());
+        notificador = new NotificadorBdoNovo(inscricaoPushService, new DisparadorPush(inscricaoPushService, enviadorPush), new ObjectMapper());
     }
 
     @Test

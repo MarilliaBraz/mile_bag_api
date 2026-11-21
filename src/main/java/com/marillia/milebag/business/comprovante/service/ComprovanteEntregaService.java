@@ -90,9 +90,9 @@ public class ComprovanteEntregaService {
             String justificativaDivergencia) {
         Instant dataHora = validarCampos(foto, identificacaoRecebedor, dataHoraTexto, latitude, longitude);
 
-        if (entregaService.buscarPorId(entregaId).isEmpty()) {
-            throw new RecursoNaoEncontradoException("Entrega nao encontrada.");
-        }
+        // V47: a entrega cancelada pela empresa para antes de gravar a foto (marcarEncerradaComSucesso tambem recusa).
+        EntregaService.exigirNaoCancelada(entregaService.buscarPorId(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada.")));
 
         Optional<ComprovanteEntrega> existente = comprovanteEntregaRepository.findByEntregaId(entregaId);
         if (existente.isPresent()) {

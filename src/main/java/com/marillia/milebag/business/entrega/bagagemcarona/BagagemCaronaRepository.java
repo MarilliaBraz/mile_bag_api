@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.entrega.bagagemcarona;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,4 +12,6 @@ public interface BagagemCaronaRepository extends BaseRepository<BagagemCarona, U
     Optional<BagagemCarona> findByBdoId(UUID bdoId);
 
     List<BagagemCarona> findByEntregaPrincipalId(UUID entregaPrincipalId);
+
+    List<BagagemCarona> findByBdoIdIn(Collection<UUID> bdoIds);
 }

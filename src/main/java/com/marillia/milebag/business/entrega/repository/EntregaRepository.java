@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,9 +13,33 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.core.base.BaseRepository;
 
+import jakarta.persistence.LockModeType;
+
 public interface EntregaRepository extends BaseRepository<Entrega, UUID> {
 
     Optional<Entrega> findByBdoId(UUID bdoId);
+
+    /**
+     * V47: leitura com trava da linha (SELECT ... FOR UPDATE) para as mudancas de situacao que podem cruzar com um
+     * cancelamento da empresa - quem chega depois espera e ja le a situacao nova, sem sobrescreve-la.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Entrega> findForUpdateById(UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Entrega> findForUpdateByBdoId(UUID bdoId);
+
+    /**
+     * V47: o BDO cancelado antes de qualquer motorista ganha uma entrega ja CANCELADA. Se um motorista acabou de criar
+     * a entrega (autoatribuicao simultanea), nao faz nada e devolve 0.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            INSERT INTO entrega (id, tenant_id, bdo_id, motorista_responsavel, status, criado_em, atualizado_em)
+            VALUES (:id, :tenantId, :bdoId, NULL, 'CANCELADA', now(), now())
+            ON CONFLICT (bdo_id) DO NOTHING
+            """, nativeQuery = true)
+    int criarCancelada(@Param("id") UUID id, @Param("tenantId") UUID tenantId, @Param("bdoId") UUID bdoId);
 
     List<Entrega> findByMotoristaResponsavelAndStatus(UUID motoristaResponsavel, EntregaStatus status);
 

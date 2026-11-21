@@ -10,5 +10,7 @@ public enum EntregaStatus {
     ATRIBUIDA,
     EM_ANDAMENTO,
     ENCERRADA_COM_SUCESSO,
-    REABERTA
+    REABERTA,
+    /** V47: a empresa cancelou o BDO. Definitiva - sem motorista, fora dos disponiveis e do painel, nao e paga. */
+    CANCELADA
 }

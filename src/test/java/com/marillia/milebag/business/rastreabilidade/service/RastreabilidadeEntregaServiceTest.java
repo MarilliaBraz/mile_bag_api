@@ -19,6 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.cancelamento.model.CancelamentoBdoResponse;
+import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
+import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.dispensa.model.DispensaEntregaResponse;
@@ -56,6 +59,10 @@ class RastreabilidadeEntregaServiceTest {
     private MotivoOcorrenciaService motivoOcorrenciaService;
     @Mock
     private UsuarioConsultaService usuarioConsultaService;
+    @Mock
+    private CancelamentoBdoService cancelamentoBdoService;
+    @Mock
+    private BagagemCaronaService bagagemCaronaService;
 
     @InjectMocks
     private RastreabilidadeEntregaService rastreabilidadeEntregaService;
@@ -114,5 +121,74 @@ class RastreabilidadeEntregaServiceTest {
         when(entregaService.buscarPorId(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> rastreabilidadeEntregaService.historico(entregaId)).isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    /** V47: o BDO que ninguem assumiu entra na lista (sem entrega), marcado se for carona; os mais recentes primeiro. */
+    @Test
+    void listarTrazOsBdosSemEntregaParaAEmpresaPoderCancelar() {
+        Instant t0 = Instant.parse("2026-11-20T10:00:00Z");
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setBdoId(UUID.randomUUID());
+        entrega.setStatus(EntregaStatus.ATRIBUIDA);
+        entrega.setAtualizadoEm(t0);
+        when(entregaService.listarParaGestao(null)).thenReturn(List.of(entrega));
+        when(bdoService.buscarPorIds(any())).thenReturn(java.util.Map.of());
+
+        Bdo livre = bdoSemEntrega("GYN-NOVO", t0.plusSeconds(60));
+        Bdo carona = bdoSemEntrega("GYN-CARONA", t0.minusSeconds(60));
+        when(bdoService.listarSemEntrega()).thenReturn(List.of(livre, carona));
+        when(bagagemCaronaService.bdosQueSaoCarona(List.of(livre.getId(), carona.getId()))).thenReturn(java.util.Set.of(carona.getId()));
+
+        List<com.marillia.milebag.business.rastreabilidade.model.EntregaGestaoResponse> linhas = rastreabilidadeEntregaService.listar(null);
+
+        assertThat(linhas).extracting(com.marillia.milebag.business.rastreabilidade.model.EntregaGestaoResponse::bdoId)
+                .containsExactly(livre.getId(), entrega.getBdoId(), carona.getId());
+        assertThat(linhas.get(0).entregaId()).isNull();
+        assertThat(linhas.get(0).status()).isEqualTo(EntregaStatus.AGUARDANDO_ATRIBUICAO);
+        assertThat(linhas.get(0).bagagemCarona()).isFalse();
+        assertThat(linhas.get(2).bagagemCarona()).isTrue();
+        assertThat(linhas.get(1).entregaId()).isEqualTo(entrega.getId());
+    }
+
+    /** Filtrando por outra situacao, os BDOs sem entrega (que estao aguardando) nao entram. */
+    @Test
+    void listarPorOutraSituacaoNaoTrazBdosSemEntrega() {
+        when(entregaService.listarParaGestao(EntregaStatus.CANCELADA)).thenReturn(List.of());
+        when(bdoService.buscarPorIds(any())).thenReturn(java.util.Map.of());
+
+        assertThat(rastreabilidadeEntregaService.listar(EntregaStatus.CANCELADA)).isEmpty();
+        org.mockito.Mockito.verify(bdoService, org.mockito.Mockito.never()).listarSemEntrega();
+    }
+
+    @Test
+    void historicoMostraOCancelamentoComQuemCancelouEOMotivo() {
+        UUID entregaId = UUID.randomUUID();
+        Instant t0 = Instant.parse("2026-11-20T10:00:00Z");
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setBdoId(UUID.randomUUID());
+        entrega.setStatus(EntregaStatus.CANCELADA);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        when(cancelamentoBdoService.buscarPorEntrega(entregaId)).thenReturn(Optional.of(new CancelamentoBdoResponse(
+                UUID.randomUUID(), entrega.getBdoId(), entregaId, "Enviado por engano", "duplicado no e-mail", "Marina", null, false, t0)));
+
+        HistoricoEntregaResponse historico = rastreabilidadeEntregaService.historico(entregaId);
+
+        assertThat(historico.eventos()).singleElement().satisfies(evento -> {
+            assertThat(evento.tipo()).isEqualTo(TipoEventoRastreabilidade.CANCELADO);
+            assertThat(evento.motoristaNome()).isEqualTo("Marina");
+            assertThat(evento.descricao()).isEqualTo("Enviado por engano");
+            assertThat(evento.detalhe()).isEqualTo("duplicado no e-mail");
+        });
+        assertThat(historico.entrega().status()).isEqualTo(EntregaStatus.CANCELADA);
+    }
+
+    private static Bdo bdoSemEntrega(String numero, Instant captura) {
+        Bdo bdo = new Bdo();
+        bdo.setId(UUID.randomUUID());
+        bdo.setNumero(numero);
+        bdo.setDataCaptura(captura);
+        return bdo;
     }
 }

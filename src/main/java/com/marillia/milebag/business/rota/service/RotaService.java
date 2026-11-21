@@ -119,6 +119,7 @@ public class RotaService implements SelecaoRotaProvider {
 
         propostaRotaRepository.travarPorEntrega(entregaId);
         Entrega entrega = buscarEntregaOuFalhar(entregaId);
+        EntregaService.exigirNaoCancelada(entrega);
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
 
         Coordenada destino = request.destinoManual() != null
@@ -157,7 +158,7 @@ public class RotaService implements SelecaoRotaProvider {
     @Transactional
     public SelecionarRotaResponse selecionar(UUID entregaId, SelecionarRotaRequest request) {
         propostaRotaRepository.travarPorEntrega(entregaId);
-        buscarEntregaOuFalhar(entregaId);
+        EntregaService.exigirNaoCancelada(buscarEntregaOuFalhar(entregaId));
         PropostaRota proposta = propostaRotaRepository.findById(entregaId).orElseGet(() -> {
             // Rota propria sem um /calcular previo (ex.: sincronizacao offline,
             // HU08 - nunca houve rede para chamar Valhalla/Nominatim antes da

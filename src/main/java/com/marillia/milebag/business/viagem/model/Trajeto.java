@@ -78,6 +78,13 @@ public class Trajeto extends BaseEntity {
     private UUID dispensaId;
 
     /**
+     * Cancelamento do BDO pela empresa que interrompeu esta viagem (V47). Fica no historico, mas NAO e tentativa sem
+     * sucesso: o cancelamento nao e pago, nem com o motorista em rota.
+     */
+    @Column(name = "cancelamento_id")
+    private UUID cancelamentoId;
+
+    /**
      * Ultima posicao do motorista na tentativa em andamento (HU31, RN16): substituida a cada envio do app e
      * apagada ao encerrar - excecao a "append-only" acima, porque nao e dado da viagem, so do acompanhamento.
      */
@@ -107,6 +114,16 @@ public class Trajeto extends BaseEntity {
     public void vincularDispensa(UUID dispensaId, Instant quando) {
         this.dispensaId = dispensaId;
         marcarEncerradoEm(quando);
+    }
+
+    /** Cancelamento do BDO com o motorista em rota (V47): a viagem ja encerrada (ou encerrada agora) passa a pertencer a ele. */
+    public void vincularCancelamento(UUID cancelamentoId, Instant quando) {
+        this.cancelamentoId = cancelamentoId;
+        marcarEncerradoEm(quando);
+    }
+
+    public boolean encerradoPorCancelamento() {
+        return cancelamentoId != null;
     }
 
     private void marcarEncerradoEm(Instant quando) {
