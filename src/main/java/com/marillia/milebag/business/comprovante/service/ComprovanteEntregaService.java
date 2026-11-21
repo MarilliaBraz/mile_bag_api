@@ -1,6 +1,5 @@
 package com.marillia.milebag.business.comprovante.service;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -9,24 +8,29 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.repository.ComprovanteEntregaRepository;
+import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
+import com.marillia.milebag.business.configuracao.model.MotivoOcorrencia;
+import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.fotoentrega.model.TipoFotoEntrega;
+import com.marillia.milebag.business.fotoentrega.service.FotoEntregaService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.model.EncerrarTrajetoRequest;
 import com.marillia.milebag.business.viagem.model.RegistrarCheckpointRequest;
 import com.marillia.milebag.business.viagem.model.TipoCheckpoint;
 import com.marillia.milebag.business.viagem.service.ViagemService;
-import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.ComprovanteIncompletoException;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
-import com.marillia.milebag.core.storage.ArmazenamentoImagemService;
+import com.marillia.milebag.core.util.TextoLivre;
 
 /**
  * Registra o comprovante de entrega (POD) e encerra a entrega (US1 desta
@@ -39,21 +43,44 @@ public class ComprovanteEntregaService {
 
     private final ComprovanteEntregaRepository comprovanteEntregaRepository;
     private final EntregaService entregaService;
-    private final ArmazenamentoImagemService armazenamentoImagemService;
     private final ViagemService viagemService;
     private final MensagemService mensagemService;
+    private final FotoEntregaService fotoEntregaService;
+    private final MotivoOcorrenciaService motivoOcorrenciaService;
+    /** V48 (R): ate quando o comprovante sem os dados novos (app antigo ou fila offline de antes) ainda e aceito. */
+    private final Instant formatoAntigoAceitoAte;
+
+    static final int TAMANHO_MAXIMO_NOME = 200;
 
     public ComprovanteEntregaService(
             ComprovanteEntregaRepository comprovanteEntregaRepository,
             EntregaService entregaService,
-            ArmazenamentoImagemService armazenamentoImagemService,
             ViagemService viagemService,
-            MensagemService mensagemService) {
+            MensagemService mensagemService,
+            FotoEntregaService fotoEntregaService,
+            MotivoOcorrenciaService motivoOcorrenciaService,
+            @Value("${milebag.comprovante.formato-antigo-aceito-ate:2026-12-01T03:00:00Z}") Instant formatoAntigoAceitoAte) {
         this.comprovanteEntregaRepository = comprovanteEntregaRepository;
         this.entregaService = entregaService;
-        this.armazenamentoImagemService = armazenamentoImagemService;
         this.viagemService = viagemService;
         this.mensagemService = mensagemService;
+        this.fotoEntregaService = fotoEntregaService;
+        this.motivoOcorrenciaService = motivoOcorrenciaService;
+        this.formatoAntigoAceitoAte = formatoAntigoAceitoAte;
+    }
+
+    /**
+     * V48 (itens 4 e 5): o que a entrega passou a pedir alem da foto do BDO assinado - a foto da bagagem na porta, quem
+     * assinou (lista da empresa) e o nome, e ate 5 fotos de avaria com uma observacao. Tudo vazio = formato antigo.
+     */
+    public record DadosDaEntrega(
+            MultipartFile fotoPorta, UUID tipoRecebedorId, String nomeRecebedor, List<MultipartFile> avarias, String observacaoAvaria) {
+
+        public static final DadosDaEntrega FORMATO_ANTIGO = new DadosDaEntrega(null, null, null, List.of(), null);
+
+        boolean formatoAntigo() {
+            return (fotoPorta == null || fotoPorta.isEmpty()) && tipoRecebedorId == null && (nomeRecebedor == null || nomeRecebedor.isBlank());
+        }
     }
 
     /** Ponto de leitura publico para outros dominios (fechamento) - nunca {@code ComprovanteEntregaRepository} direto (CONVENTIONS.md 2.1). */
@@ -87,13 +114,16 @@ public class ComprovanteEntregaService {
             Double latitude,
             Double longitude,
             String idLocal,
-            String justificativaDivergencia) {
-        Instant dataHora = validarCampos(foto, identificacaoRecebedor, dataHoraTexto, latitude, longitude);
+            String justificativaDivergencia,
+            DadosDaEntrega dadosDaEntrega) {
+        DadosDaEntrega dados = dadosDaEntrega == null ? DadosDaEntrega.FORMATO_ANTIGO : dadosDaEntrega;
 
         // V47: a entrega cancelada pela empresa para antes de gravar a foto (marcarEncerradaComSucesso tambem recusa).
         EntregaService.exigirNaoCancelada(entregaService.buscarPorId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada.")));
 
+        // Antes de validar: o reenvio do mesmo registro (fila offline) devolve o que ja foi gravado, mesmo que algo
+        // tenha mudado depois (ex.: o tipo de quem assinou foi desativado).
         Optional<ComprovanteEntrega> existente = comprovanteEntregaRepository.findByEntregaId(entregaId);
         if (existente.isPresent()) {
             if (idLocal != null && idLocal.equals(existente.get().getIdLocal())) {
@@ -103,11 +133,21 @@ public class ComprovanteEntregaService {
             throw new ConflitoException("Esta entrega ja possui um comprovante registrado.");
         }
 
-        String caminhoFoto = salvarFoto(TenantContext.get(), foto);
+        DadosValidados validados = validarDadosDaEntrega(dados, identificacaoRecebedor);
+        Instant dataHora = validarCampos(foto, validados.identificacao(), dataHoraTexto, latitude, longitude);
+
+        String caminhoFoto = fotoEntregaService.gravarArquivo(foto);
         boolean registradoOffline = idLocal != null && !idLocal.isBlank();
 
-        ComprovanteEntrega comprovante = comprovanteEntregaRepository.save(new ComprovanteEntrega(
-                entregaId, caminhoFoto, identificacaoRecebedor, dataHora, latitude, longitude, registradoOffline, idLocal));
+        ComprovanteEntrega novo = new ComprovanteEntrega(
+                entregaId, caminhoFoto, validados.identificacao(), dataHora, latitude, longitude, registradoOffline, idLocal);
+        novo.registrarDadosDaEntrega(validados.tipoRecebedorId(), validados.nome(), validados.observacao());
+        ComprovanteEntrega comprovante = comprovanteEntregaRepository.save(novo);
+        if (!dados.formatoAntigo()) {
+            fotoEntregaService.salvarDoComprovante(entregaId, comprovante.getId(), TipoFotoEntrega.PORTA, dados.fotoPorta(), dataHora);
+            validados.avarias().forEach(avaria ->
+                    fotoEntregaService.salvarDoComprovante(entregaId, comprovante.getId(), TipoFotoEntrega.AVARIA_ENTREGA, avaria, dataHora));
+        }
 
         // data-model.md, "Fluxo de consolidacao": o comprovante cria o
         // CheckpointGps final e, em seguida, aciona a consolidacao do
@@ -121,6 +161,42 @@ public class ComprovanteEntregaService {
         log.info("Comprovante {} registrado; entrega {} encerrada com sucesso.", comprovante.getId(), entregaId);
         notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
         return new ComprovanteEntregaResultado(comprovante, true);
+    }
+
+    /**
+     * Formato novo: foto na porta, quem assinou (motivo RECEBEDOR ativo) e nome obrigatorios; a identificacao do
+     * recebedor passa a ser "Tipo - Nome". Formato antigo: so ate a data de corte (R), com a identificacao livre.
+     */
+    private DadosValidados validarDadosDaEntrega(DadosDaEntrega dados, String identificacaoAntiga) {
+        if (dados.formatoAntigo()) {
+            if (Instant.now().isAfter(formatoAntigoAceitoAte)) {
+                throw new ComprovanteIncompletoException(
+                        "Atualize o aplicativo: a entrega agora pede a foto na porta e quem assinou o recebimento.");
+            }
+            return new DadosValidados(identificacaoAntiga, null, null, null, List.of());
+        }
+        if (dados.fotoPorta() == null || dados.fotoPorta().isEmpty()) {
+            throw new ComprovanteIncompletoException("A foto da bagagem na porta e obrigatoria.");
+        }
+        if (dados.tipoRecebedorId() == null) {
+            throw new ComprovanteIncompletoException("Informe quem assinou o recebimento.");
+        }
+        String nome = TextoLivre.opcional(dados.nomeRecebedor(), TAMANHO_MAXIMO_NOME, "nome de quem assinou");
+        if (nome == null) {
+            throw new ComprovanteIncompletoException("Informe o nome de quem assinou o recebimento.");
+        }
+        // Aceita um tipo desativado depois: o motorista escolheu da lista que tinha (inclusive sem internet).
+        MotivoOcorrencia tipo = motivoOcorrenciaService.buscarDaFinalidadeOuFalhar(dados.tipoRecebedorId(), FinalidadeMotivo.RECEBEDOR);
+        List<MultipartFile> avarias = FotoEntregaService.avariasValidas(dados.avarias());
+        String observacao = FotoEntregaService.observacaoAvaria(dados.observacaoAvaria());
+        String identificacao = tipo.getDescricao() + " - " + nome;
+        if (identificacao.length() > TAMANHO_MAXIMO_NOME) {
+            identificacao = identificacao.substring(0, TAMANHO_MAXIMO_NOME);
+        }
+        return new DadosValidados(identificacao, tipo.getId(), nome, observacao, avarias);
+    }
+
+    private record DadosValidados(String identificacao, UUID tipoRecebedorId, String nome, String observacao, List<MultipartFile> avarias) {
     }
 
     private Instant validarCampos(MultipartFile foto, String identificacaoRecebedor, String dataHoraTexto, Double latitude, Double longitude) {
@@ -149,14 +225,6 @@ public class ComprovanteEntregaService {
             mensagemService.notificarAutomatica(entregaId, tipoEvento);
         } catch (RuntimeException e) {
             log.warn("Falha ao notificar automaticamente a entrega {} do evento {} - comprovante ja registrado, seguindo.", entregaId, tipoEvento, e);
-        }
-    }
-
-    private String salvarFoto(UUID tenantId, MultipartFile foto) {
-        try {
-            return armazenamentoImagemService.salvar(tenantId, foto);
-        } catch (IOException e) {
-            throw new IllegalStateException("Falha ao gravar a foto do comprovante.", e);
         }
     }
 

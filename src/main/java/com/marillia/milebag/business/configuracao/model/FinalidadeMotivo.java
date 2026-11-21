@@ -8,5 +8,7 @@ package com.marillia.milebag.business.configuracao.model;
 public enum FinalidadeMotivo {
     OCORRENCIA,
     DISPENSA,
-    CANCELAMENTO
+    CANCELAMENTO,
+    /** V48: quem pode assinar o recebimento (titular, familiar, portaria...), escolhido no comprovante. */
+    RECEBEDOR
 }

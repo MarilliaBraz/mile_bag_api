@@ -8,5 +8,7 @@ public enum TipoEventoSincronizacao {
     VIAGEM_INICIADA,
     BAGAGEM_CARONA_VINCULADA,
     COMPROVANTE_REGISTRADO,
-    OCORRENCIA_REGISTRADA
+    OCORRENCIA_REGISTRADA,
+    /** V48: retirada da bagagem no aeroporto (foto e avarias), antes de iniciar a viagem. */
+    RETIRADA_REGISTRADA
 }

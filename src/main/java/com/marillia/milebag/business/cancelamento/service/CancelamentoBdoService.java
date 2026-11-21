@@ -26,6 +26,7 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.entrega.service.EntregaService.EntregaCancelada;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.ConflitoException;
@@ -62,6 +63,7 @@ public class CancelamentoBdoService {
     private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final UsuarioConsultaService usuarioConsultaService;
     private final ApplicationEventPublisher eventos;
+    private final RetiradaBagagemService retiradaBagagemService;
 
     public CancelamentoBdoService(
             CancelamentoBdoRepository cancelamentoBdoRepository,
@@ -71,7 +73,8 @@ public class CancelamentoBdoService {
             ViagemService viagemService,
             MotivoOcorrenciaService motivoOcorrenciaService,
             UsuarioConsultaService usuarioConsultaService,
-            ApplicationEventPublisher eventos) {
+            ApplicationEventPublisher eventos,
+            RetiradaBagagemService retiradaBagagemService) {
         this.cancelamentoBdoRepository = cancelamentoBdoRepository;
         this.bdoService = bdoService;
         this.entregaService = entregaService;
@@ -80,6 +83,7 @@ public class CancelamentoBdoService {
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.usuarioConsultaService = usuarioConsultaService;
         this.eventos = eventos;
+        this.retiradaBagagemService = retiradaBagagemService;
     }
 
     @Transactional
@@ -104,6 +108,7 @@ public class CancelamentoBdoService {
         // Primeiro a entrega (com a linha travada): se ja foi concluida ou cancelada, nada mais e gravado.
         EntregaCancelada cancelada = entregaService.cancelar(bdoId);
         bagagemCaronaService.soltarDoCancelamento(bdoId, cancelada.entregaId());
+        retiradaBagagemService.descartarPendentes(cancelada.entregaId());
         UUID motoristaAvisado = cancelada.motoristaAnterior() != null
                 ? cancelada.motoristaAnterior()
                 : principal.map(Entrega::getMotoristaResponsavel).orElse(null);

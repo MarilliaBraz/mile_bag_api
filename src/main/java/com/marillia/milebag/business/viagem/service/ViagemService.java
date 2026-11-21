@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
@@ -82,6 +83,7 @@ public class ViagemService {
     private final MensagemService mensagemService;
     private final PracaPedagioService pracaPedagioService;
     private final AcompanhamentoViagem acompanhamentoViagem;
+    private final RetiradaBagagemService retiradaBagagemService;
 
     // @Lazy: a inversao por SelecaoRotaProvider tira a dependencia de PACOTE
     // (viagem nao importa nada de rota), mas em runtime o Spring ainda ve o
@@ -98,9 +100,11 @@ public class ViagemService {
             ObjectMapper objectMapper,
             MensagemService mensagemService,
             PracaPedagioService pracaPedagioService,
-            AcompanhamentoViagem acompanhamentoViagem) {
+            AcompanhamentoViagem acompanhamentoViagem,
+            RetiradaBagagemService retiradaBagagemService) {
         this.pracaPedagioService = pracaPedagioService;
         this.acompanhamentoViagem = acompanhamentoViagem;
+        this.retiradaBagagemService = retiradaBagagemService;
         this.entregaService = entregaService;
         this.selecaoRotaProvider = selecaoRotaProvider;
         this.trajetoRepository = trajetoRepository;
@@ -192,6 +196,12 @@ public class ViagemService {
 
     @Transactional
     public TrajetoIniciadoResponse iniciarViagem(UUID entregaId, IniciarViagemRequest request) {
+        return iniciarViagem(entregaId, request, false);
+    }
+
+    /** {@code daFilaOffline}: veio do lote de sincronizacao (V48 - tolerancia de transicao para a retirada). */
+    @Transactional
+    public TrajetoIniciadoResponse iniciarViagem(UUID entregaId, IniciarViagemRequest request, boolean daFilaOffline) {
         Entrega entrega = entregaService.buscarPorId(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
         // V47: recusa ja aqui, antes de criar a viagem (marcarEmAndamento tambem recusa, com a linha travada).
@@ -210,6 +220,8 @@ public class ViagemService {
         Instant agora = Instant.now();
 
         Trajeto trajeto = trajetoRepository.save(new Trajeto(entregaId, motoristaId, agora));
+        // V48: a viagem so inicia depois da retirada da bagagem (com foto) desta tentativa, que passa a ser dela.
+        retiradaBagagemService.vincularAoTrajeto(entregaId, motoristaId, trajeto.getId(), daFilaOffline);
 
         CalculoRota calculoInicial = calculoRotaRepository.save(
                 criarCalculoRota(trajeto.getId(), selecionada.rotaEscolhida(), selecionada.tipoSelecao(), agora, true));

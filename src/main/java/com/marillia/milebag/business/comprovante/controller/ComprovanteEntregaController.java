@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.comprovante.controller;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -36,9 +37,16 @@ public class ComprovanteEntregaController {
             @RequestParam(value = "latitude", required = false) Double latitude,
             @RequestParam(value = "longitude", required = false) Double longitude,
             @RequestParam(value = "idLocal", required = false) String idLocal,
-            @RequestParam(value = "justificativaDivergencia", required = false) String justificativaDivergencia) {
+            @RequestParam(value = "justificativaDivergencia", required = false) String justificativaDivergencia,
+            // V48: passo a passo da entrega (foto na porta, quem assinou, avarias).
+            @RequestParam(value = "fotoPorta", required = false) MultipartFile fotoPorta,
+            @RequestParam(value = "tipoRecebedorId", required = false) UUID tipoRecebedorId,
+            @RequestParam(value = "nomeRecebedor", required = false) String nomeRecebedor,
+            @RequestParam(value = "avarias", required = false) List<MultipartFile> avarias,
+            @RequestParam(value = "observacaoAvaria", required = false) String observacaoAvaria) {
         var resultado = comprovanteEntregaService.registrar(
-                entregaId, foto, identificacaoRecebedor, dataHora, latitude, longitude, idLocal, justificativaDivergencia);
+                entregaId, foto, identificacaoRecebedor, dataHora, latitude, longitude, idLocal, justificativaDivergencia,
+                new ComprovanteEntregaService.DadosDaEntrega(fotoPorta, tipoRecebedorId, nomeRecebedor, avarias, observacaoAvaria));
         return ResponseEntity.status(resultado.novo() ? HttpStatus.CREATED : HttpStatus.OK).body(ComprovanteEntregaResponse.de(resultado.comprovante()));
     }
 }

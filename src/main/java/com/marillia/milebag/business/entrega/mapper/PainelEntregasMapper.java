@@ -21,7 +21,8 @@ public class PainelEntregasMapper {
 
     /** {@code marcoMaisRecente}: resolvido por {@code ViagemService.marcoMaisRecente} (HU20, FR-006) - nunca calculado aqui. */
     public ItemPainelResponse toItemPainel(
-            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente) {
+            Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente,
+            boolean retiradaRegistrada) {
         return new ItemPainelResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -33,12 +34,13 @@ public class PainelEntregasMapper {
                 entrega.getAtualizadoEm(),
                 entrega.getStatus() == EntregaStatus.EM_ANDAMENTO,
                 marcoMaisRecente,
-                entrega.janelaReagendamento());
+                entrega.janelaReagendamento(),
+                retiradaRegistrada);
     }
 
     public ItemPainelDetalheResponse toDetalhe(
             Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente,
-            boolean motivoDispensaObrigatorio) {
+            boolean motivoDispensaObrigatorio, boolean retiradaRegistrada) {
         return new ItemPainelDetalheResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -54,7 +56,8 @@ public class PainelEntregasMapper {
                 marcoMaisRecente,
                 bdo.pendenciasDeContato(),
                 entrega.janelaReagendamento(),
-                motivoDispensaObrigatorio);
+                motivoDispensaObrigatorio,
+                retiradaRegistrada);
     }
 
     /** {@code entregaReaberta}: a entrega reaberta deste BDO (RN05), ou nulo se o BDO ainda nao tem entrega. */

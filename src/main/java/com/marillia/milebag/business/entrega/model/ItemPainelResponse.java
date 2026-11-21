@@ -16,5 +16,7 @@ public record ItemPainelResponse(
         Instant dataAutoatribuicao,
         boolean temTrajetoIniciado,
         String marcoMaisRecente,
-        JanelaReagendamento janelaReagendamento) {
+        JanelaReagendamento janelaReagendamento,
+        // V48: o motorista ja registrou a retirada da bagagem desta tentativa (proxima etapa: iniciar a viagem).
+        boolean retiradaRegistrada) {
 }

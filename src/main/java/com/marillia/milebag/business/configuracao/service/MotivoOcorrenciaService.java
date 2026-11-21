@@ -28,7 +28,7 @@ public class MotivoOcorrenciaService {
 
     /**
      * Catalogo inicial de toda empresa nova - sem ele o motorista nao consegue registrar ocorrencia (HU07) nem
-     * justificar uma dispensa, nem a empresa cancelar um BDO. Mesmas listas de V35, V46 (dispensa) e V47 (cancelamento).
+     * justificar uma dispensa, nem a empresa cancelar um BDO. Mesmas listas de V35, V46 (dispensa), V47 (cancelamento) e V48 (recebedor).
      */
     static final List<MotivoPadrao> MOTIVOS_PADRAO = List.of(
             new MotivoPadrao("Ausência do recebedor", false, FinalidadeMotivo.OCORRENCIA),
@@ -42,7 +42,12 @@ public class MotivoOcorrenciaService {
             new MotivoPadrao("Enviado por engano", false, FinalidadeMotivo.CANCELAMENTO),
             new MotivoPadrao("Cliente retirou a bagagem no aeroporto", false, FinalidadeMotivo.CANCELAMENTO),
             new MotivoPadrao("BDO duplicado", false, FinalidadeMotivo.CANCELAMENTO),
-            new MotivoPadrao("Outro motivo", false, FinalidadeMotivo.CANCELAMENTO));
+            new MotivoPadrao("Outro motivo", false, FinalidadeMotivo.CANCELAMENTO),
+            new MotivoPadrao("Titular", false, FinalidadeMotivo.RECEBEDOR),
+            new MotivoPadrao("Familiar", false, FinalidadeMotivo.RECEBEDOR),
+            new MotivoPadrao("Porteiro ou portaria", false, FinalidadeMotivo.RECEBEDOR),
+            new MotivoPadrao("Vizinho", false, FinalidadeMotivo.RECEBEDOR),
+            new MotivoPadrao("Outro", false, FinalidadeMotivo.RECEBEDOR));
 
     record MotivoPadrao(String descricao, boolean reagendamento, FinalidadeMotivo finalidade) {
     }
@@ -109,6 +114,17 @@ public class MotivoOcorrenciaService {
     public MotivoOcorrencia buscarAtivoOuFalhar(UUID id, FinalidadeMotivo finalidade) {
         return motivoOcorrenciaRepository.findById(id)
                 .filter(MotivoOcorrencia::isAtivo)
+                .filter(motivo -> motivo.getFinalidade() == finalidade)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Motivo nao encontrado."));
+    }
+
+    /**
+     * Como {@link #buscarAtivoOuFalhar}, mas aceita um motivo ja desativado (V48): a escolha feita no aparelho, a partir
+     * da lista que ele tinha, continua valendo quando chega depois - so a finalidade e a empresa (RLS) sao conferidas.
+     */
+    @Transactional(readOnly = true)
+    public MotivoOcorrencia buscarDaFinalidadeOuFalhar(UUID id, FinalidadeMotivo finalidade) {
+        return motivoOcorrenciaRepository.findById(id)
                 .filter(motivo -> motivo.getFinalidade() == finalidade)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Motivo nao encontrado."));
     }

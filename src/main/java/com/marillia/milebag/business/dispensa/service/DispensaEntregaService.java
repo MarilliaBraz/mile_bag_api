@@ -19,6 +19,7 @@ import com.marillia.milebag.business.dispensa.repository.DispensaEntregaReposito
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.config.security.Papeis;
@@ -57,18 +58,21 @@ public class DispensaEntregaService {
     private final ViagemService viagemService;
     private final MotivoOcorrenciaService motivoOcorrenciaService;
     private final UsuarioConsultaService usuarioConsultaService;
+    private final RetiradaBagagemService retiradaBagagemService;
 
     public DispensaEntregaService(
             DispensaEntregaRepository dispensaEntregaRepository,
             EntregaService entregaService,
             ViagemService viagemService,
             MotivoOcorrenciaService motivoOcorrenciaService,
-            UsuarioConsultaService usuarioConsultaService) {
+            UsuarioConsultaService usuarioConsultaService,
+            RetiradaBagagemService retiradaBagagemService) {
         this.dispensaEntregaRepository = dispensaEntregaRepository;
         this.entregaService = entregaService;
         this.viagemService = viagemService;
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.usuarioConsultaService = usuarioConsultaService;
+        this.retiradaBagagemService = retiradaBagagemService;
     }
 
     /** Se a dispensa desta entrega exige motivo: a entrega ja teve alguma viagem (nesta ou numa tentativa anterior). */
@@ -102,6 +106,8 @@ public class DispensaEntregaService {
 
         // Primeiro a devolucao atomica: se a entrega mudou no meio do caminho, nada mais e gravado.
         entregaService.devolverAposDispensa(entregaId, motoristaId, houveTentativa);
+        // V48: a bagagem retirada e nao levada volta; quem assumir de novo retira outra vez.
+        retiradaBagagemService.descartarPendentes(entregaId);
         DispensaEntrega dispensa = dispensaEntregaRepository.save(new DispensaEntrega(
                 entregaId, motoristaId, motivoId, complemento(request), emRota, Instant.now()));
         if (emRota) {

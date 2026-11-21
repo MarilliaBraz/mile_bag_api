@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.sincronizacao.service;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +28,9 @@ import com.marillia.milebag.business.rota.model.SelecionarRotaRequest;
 import com.marillia.milebag.business.rota.service.RotaService;
 import com.marillia.milebag.business.sincronizacao.model.EventoSincronizacaoRequest;
 import com.marillia.milebag.business.sincronizacao.model.EventoSincronizado;
+import com.marillia.milebag.business.sincronizacao.model.FotoOffline;
+import com.marillia.milebag.business.sincronizacao.model.PayloadRetiradaRegistrada;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.sincronizacao.model.PayloadBagagemCaronaVinculada;
 import com.marillia.milebag.business.sincronizacao.model.PayloadBdoCapturado;
 import com.marillia.milebag.business.sincronizacao.model.PayloadComprovanteRegistrado;
@@ -59,6 +63,7 @@ public class SincronizacaoEventoDispatcher {
     private final BagagemCaronaService bagagemCaronaService;
     private final ComprovanteEntregaService comprovanteEntregaService;
     private final OcorrenciaService ocorrenciaService;
+    private final RetiradaBagagemService retiradaBagagemService;
     private final EventoSincronizadoRepository eventoSincronizadoRepository;
     private final ObjectMapper objectMapper;
 
@@ -70,6 +75,7 @@ public class SincronizacaoEventoDispatcher {
             BagagemCaronaService bagagemCaronaService,
             ComprovanteEntregaService comprovanteEntregaService,
             OcorrenciaService ocorrenciaService,
+            RetiradaBagagemService retiradaBagagemService,
             EventoSincronizadoRepository eventoSincronizadoRepository,
             ObjectMapper objectMapper) {
         this.bdoService = bdoService;
@@ -79,6 +85,7 @@ public class SincronizacaoEventoDispatcher {
         this.bagagemCaronaService = bagagemCaronaService;
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.ocorrenciaService = ocorrenciaService;
+        this.retiradaBagagemService = retiradaBagagemService;
         this.eventoSincronizadoRepository = eventoSincronizadoRepository;
         this.objectMapper = objectMapper;
     }
@@ -107,6 +114,7 @@ public class SincronizacaoEventoDispatcher {
             case BAGAGEM_CARONA_VINCULADA -> despacharBagagemCaronaVinculada(evento, resolvidosNesteLote);
             case COMPROVANTE_REGISTRADO -> despacharComprovanteRegistrado(evento, resolvidosNesteLote);
             case OCORRENCIA_REGISTRADA -> despacharOcorrenciaRegistrada(evento, resolvidosNesteLote);
+            case RETIRADA_REGISTRADA -> despacharRetiradaRegistrada(evento, motoristaId, resolvidosNesteLote);
         };
 
         eventoSincronizadoRepository.save(new EventoSincronizado(evento.idLocal(), evento.tipoEvento(), idServidor));
@@ -139,7 +147,7 @@ public class SincronizacaoEventoDispatcher {
     private UUID despacharViagemIniciada(EventoSincronizacaoRequest evento, Map<UUID, UUID> resolvidos) {
         PayloadViagemIniciada payload = converter(evento, PayloadViagemIniciada.class);
         UUID entregaId = resolverReferencia(payload.entregaId(), resolvidos);
-        TrajetoIniciadoResponse resposta = viagemService.iniciarViagem(entregaId, new IniciarViagemRequest(payload.lat(), payload.lng()));
+        TrajetoIniciadoResponse resposta = viagemService.iniciarViagem(entregaId, new IniciarViagemRequest(payload.lat(), payload.lng()), true);
         return resposta.id();
     }
 
@@ -155,6 +163,12 @@ public class SincronizacaoEventoDispatcher {
         PayloadComprovanteRegistrado payload = converter(evento, PayloadComprovanteRegistrado.class);
         UUID entregaId = resolverReferencia(payload.entregaId(), resolvidos);
         MultipartFile foto = new ByteArrayMultipartFile("foto", payload.nomeArquivo(), decodificar(payload.fotoBase64()));
+        ComprovanteEntregaService.DadosDaEntrega dados = new ComprovanteEntregaService.DadosDaEntrega(
+                payload.fotoPorta() == null ? null : arquivo("fotoPorta", payload.fotoPorta()),
+                payload.tipoRecebedorId(),
+                payload.nomeRecebedor(),
+                arquivos("avarias", payload.avarias()),
+                payload.observacaoAvaria());
         ComprovanteEntregaService.ComprovanteEntregaResultado resultado = comprovanteEntregaService.registrar(
                 entregaId,
                 foto,
@@ -163,7 +177,8 @@ public class SincronizacaoEventoDispatcher {
                 payload.latitude(),
                 payload.longitude(),
                 evento.idLocal().toString(),
-                payload.justificativaDivergencia());
+                payload.justificativaDivergencia(),
+                dados);
         ComprovanteEntrega comprovante = resultado.comprovante();
         return comprovante.getId();
     }
@@ -198,6 +213,24 @@ public class SincronizacaoEventoDispatcher {
             return resolvidoNoLote;
         }
         return eventoSincronizadoRepository.findById(valor).map(EventoSincronizado::getIdServidor).orElse(valor);
+    }
+
+    /** V48: retirada offline - o motorista do lote e quem retirou; as fotos vem em base64. */
+    private UUID despacharRetiradaRegistrada(EventoSincronizacaoRequest evento, UUID motoristaId, Map<UUID, UUID> resolvidos) {
+        PayloadRetiradaRegistrada payload = converter(evento, PayloadRetiradaRegistrada.class);
+        UUID entregaId = resolverReferencia(payload.entregaId(), resolvidos);
+        MultipartFile foto = new ByteArrayMultipartFile("foto", payload.nomeArquivo(), decodificar(payload.fotoBase64()));
+        return retiradaBagagemService.registrar(
+                entregaId, motoristaId, foto, arquivos("avarias", payload.avarias()), payload.latitude(), payload.longitude(),
+                payload.dataHora(), evento.idLocal().toString(), payload.observacaoAvaria()).id();
+    }
+
+    private MultipartFile arquivo(String campo, FotoOffline foto) {
+        return new ByteArrayMultipartFile(campo, foto.nomeArquivo(), decodificar(foto.fotoBase64()));
+    }
+
+    private List<MultipartFile> arquivos(String campo, List<FotoOffline> fotos) {
+        return fotos == null ? List.of() : fotos.stream().map(foto -> arquivo(campo, foto)).toList();
     }
 
     private byte[] decodificar(String base64) {

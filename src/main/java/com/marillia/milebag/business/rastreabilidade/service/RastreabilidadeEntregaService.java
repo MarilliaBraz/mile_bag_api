@@ -24,7 +24,11 @@ import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.ocorrencia.service.OcorrenciaService;
+import com.marillia.milebag.business.fotoentrega.service.FotoEntregaService;
 import com.marillia.milebag.business.rastreabilidade.model.EntregaGestaoResponse;
+import com.marillia.milebag.business.rastreabilidade.model.FotoGestaoResponse;
+import com.marillia.milebag.business.retirada.model.RetiradaBagagem;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.rastreabilidade.model.EventoRastreabilidade;
 import com.marillia.milebag.business.rastreabilidade.model.EventoRastreabilidade.TipoEventoRastreabilidade;
 import com.marillia.milebag.business.rastreabilidade.model.HistoricoEntregaResponse;
@@ -41,6 +45,8 @@ import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 @Service
 public class RastreabilidadeEntregaService {
 
+    static final String TIPO_BDO_ASSINADO = "BDO_ASSINADO";
+
     private final EntregaService entregaService;
     private final BdoService bdoService;
     private final ViagemService viagemService;
@@ -51,6 +57,8 @@ public class RastreabilidadeEntregaService {
     private final UsuarioConsultaService usuarioConsultaService;
     private final CancelamentoBdoService cancelamentoBdoService;
     private final BagagemCaronaService bagagemCaronaService;
+    private final RetiradaBagagemService retiradaBagagemService;
+    private final FotoEntregaService fotoEntregaService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -62,7 +70,9 @@ public class RastreabilidadeEntregaService {
             MotivoOcorrenciaService motivoOcorrenciaService,
             UsuarioConsultaService usuarioConsultaService,
             CancelamentoBdoService cancelamentoBdoService,
-            BagagemCaronaService bagagemCaronaService) {
+            BagagemCaronaService bagagemCaronaService,
+            RetiradaBagagemService retiradaBagagemService,
+            FotoEntregaService fotoEntregaService) {
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.viagemService = viagemService;
@@ -73,6 +83,8 @@ public class RastreabilidadeEntregaService {
         this.usuarioConsultaService = usuarioConsultaService;
         this.cancelamentoBdoService = cancelamentoBdoService;
         this.bagagemCaronaService = bagagemCaronaService;
+        this.retiradaBagagemService = retiradaBagagemService;
+        this.fotoEntregaService = fotoEntregaService;
     }
 
     @Transactional(readOnly = true)
@@ -101,6 +113,12 @@ public class RastreabilidadeEntregaService {
                 .filter(bdo -> bdo.getDataCaptura() != null)
                 .ifPresent(bdo -> eventos.add(new EventoRastreabilidade(
                         TipoEventoRastreabilidade.BDO_RECEBIDO, bdo.getDataCaptura(), null, bdo.getOrigem().name(), null)));
+
+        for (RetiradaBagagem retirada : retiradaBagagemService.listarPorEntrega(entregaId)) {
+            eventos.add(new EventoRastreabilidade(
+                    TipoEventoRastreabilidade.BAGAGEM_RETIRADA, retirada.getDataHora(), nome(retirada.getMotoristaId(), nomes), null,
+                    retirada.getObservacaoAvaria()));
+        }
 
         // A ocorrencia nao guarda o motorista: ele vem da viagem que ela encerrou.
         Map<UUID, UUID> motoristaPorOcorrencia = new HashMap<>();
@@ -135,6 +153,33 @@ public class RastreabilidadeEntregaService {
 
         eventos.sort(Comparator.comparing(EventoRastreabilidade::dataHora, Comparator.nullsLast(Comparator.naturalOrder())));
         return new HistoricoEntregaResponse(resumo(entrega, bdoService.buscarPorId(entrega.getBdoId()).orElse(null), nomes), eventos);
+    }
+
+    /** V48: as fotos da entrega, na ordem em que foram tiradas, inclusive a do BDO assinado (do comprovante). */
+    @Transactional(readOnly = true)
+    public List<FotoGestaoResponse> fotos(UUID entregaId) {
+        exigirEntrega(entregaId);
+        List<FotoGestaoResponse> fotos = new ArrayList<>(fotoEntregaService.listarPorEntrega(entregaId).stream()
+                .map(foto -> new FotoGestaoResponse(foto.getId(), foto.getTipo().name(), foto.getDataHora()))
+                .toList());
+        comprovanteEntregaService.buscarPorEntrega(entregaId).ifPresent(comprovante ->
+                fotos.add(new FotoGestaoResponse(comprovante.getId(), TIPO_BDO_ASSINADO, comprovante.getDataHora())));
+        fotos.sort(Comparator.comparing(FotoGestaoResponse::dataHora, Comparator.nullsLast(Comparator.naturalOrder())));
+        return fotos;
+    }
+
+    /** O arquivo de uma foto desta entrega (a do BDO assinado tem o id do comprovante). */
+    @Transactional(readOnly = true)
+    public FotoEntregaService.Arquivo foto(UUID entregaId, UUID fotoId) {
+        exigirEntrega(entregaId);
+        return comprovanteEntregaService.buscarPorEntrega(entregaId)
+                .filter(comprovante -> comprovante.getId().equals(fotoId))
+                .map(comprovante -> fotoEntregaService.carregarCaminho(comprovante.getFotoDocumentoUrl()))
+                .orElseGet(() -> fotoEntregaService.carregar(entregaId, fotoId));
+    }
+
+    private void exigirEntrega(UUID entregaId) {
+        entregaService.buscarPorId(entregaId).orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 
     private EntregaGestaoResponse resumo(Entrega entrega, Bdo bdo, Map<UUID, String> nomes) {

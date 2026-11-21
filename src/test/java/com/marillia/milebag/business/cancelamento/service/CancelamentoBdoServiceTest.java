@@ -64,6 +64,9 @@ class CancelamentoBdoServiceTest {
     @Mock
     private ApplicationEventPublisher eventos;
 
+    @Mock
+    private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
+
     @InjectMocks
     private CancelamentoBdoService cancelamentoBdoService;
 
