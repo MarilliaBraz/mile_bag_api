@@ -48,6 +48,16 @@ public class ComprovanteEntrega extends BaseEntity {
     @Column(name = "id_local", updatable = false, length = 100)
     private String idLocal;
 
+    /** V48: quem assinou, da lista da empresa (motivo de finalidade RECEBEDOR); nulo nos comprovantes antigos. */
+    @Column(name = "tipo_recebedor_id", updatable = false)
+    private UUID tipoRecebedorId;
+
+    @Column(name = "nome_recebedor", updatable = false, length = 200)
+    private String nomeRecebedor;
+
+    @Column(name = "observacao_avaria", updatable = false)
+    private String observacaoAvaria;
+
     public ComprovanteEntrega(
             UUID entregaId,
             String fotoDocumentoUrl,
@@ -65,5 +75,12 @@ public class ComprovanteEntrega extends BaseEntity {
         this.longitude = longitude;
         this.registradoOffline = registradoOffline;
         this.idLocal = idLocal;
+    }
+
+    /** V48: dados da entrega no passo a passo - antes de gravar (as colunas nao mudam depois). */
+    public void registrarDadosDaEntrega(UUID tipoRecebedorId, String nomeRecebedor, String observacaoAvaria) {
+        this.tipoRecebedorId = tipoRecebedorId;
+        this.nomeRecebedor = nomeRecebedor;
+        this.observacaoAvaria = observacaoAvaria;
     }
 }

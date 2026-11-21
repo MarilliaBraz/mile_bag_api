@@ -63,6 +63,10 @@ class RastreabilidadeEntregaServiceTest {
     private CancelamentoBdoService cancelamentoBdoService;
     @Mock
     private BagagemCaronaService bagagemCaronaService;
+    @Mock
+    private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
+    @Mock
+    private com.marillia.milebag.business.fotoentrega.service.FotoEntregaService fotoEntregaService;
 
     @InjectMocks
     private RastreabilidadeEntregaService rastreabilidadeEntregaService;
@@ -190,5 +194,49 @@ class RastreabilidadeEntregaServiceTest {
         bdo.setNumero(numero);
         bdo.setDataCaptura(captura);
         return bdo;
+    }
+
+    /** V48: a retirada entra na linha do tempo com o motorista e a observacao das avarias. */
+    @Test
+    void historicoMostraARetiradaDaBagagem() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setBdoId(UUID.randomUUID());
+        entrega.setStatus(EntregaStatus.ATRIBUIDA);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        when(retiradaBagagemService.listarPorEntrega(entregaId)).thenReturn(List.of(new com.marillia.milebag.business.retirada.model.RetiradaBagagem(
+                entregaId, motorista, null, null, "arranhao na lateral", Instant.parse("2026-11-21T10:00:00Z"), false, null)));
+        when(usuarioConsultaService.nomeParaExibicao(motorista)).thenReturn(Optional.of("Ana"));
+
+        HistoricoEntregaResponse historico = rastreabilidadeEntregaService.historico(entregaId);
+
+        assertThat(historico.eventos()).singleElement().satisfies(evento -> {
+            assertThat(evento.tipo()).isEqualTo(TipoEventoRastreabilidade.BAGAGEM_RETIRADA);
+            assertThat(evento.motoristaNome()).isEqualTo("Ana");
+            assertThat(evento.detalhe()).isEqualTo("arranhao na lateral");
+        });
+    }
+
+    /** V48: a empresa ve todas as fotos, inclusive a do BDO assinado (do comprovante), na ordem em que foram tiradas. */
+    @Test
+    void fotosDaEntregaIncluemADoBdoAssinado() {
+        UUID entregaId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        var retirada = new com.marillia.milebag.business.fotoentrega.model.FotoEntrega(entregaId,
+                com.marillia.milebag.business.fotoentrega.model.TipoFotoEntrega.RETIRADA, UUID.randomUUID(), null, "t/r.jpg", Instant.parse("2026-11-21T10:00:00Z"));
+        retirada.setId(UUID.randomUUID());
+        when(fotoEntregaService.listarPorEntrega(entregaId)).thenReturn(List.of(retirada));
+        var comprovante = new com.marillia.milebag.business.comprovante.model.ComprovanteEntrega(
+                entregaId, "t/bdo.jpg", "Titular - Ana", Instant.parse("2026-11-21T12:00:00Z"), -16.6, -49.2, false, null);
+        comprovante.setId(UUID.randomUUID());
+        when(comprovanteEntregaService.buscarPorEntrega(entregaId)).thenReturn(Optional.of(comprovante));
+        when(fotoEntregaService.carregarCaminho("t/bdo.jpg")).thenReturn(new com.marillia.milebag.business.fotoentrega.service.FotoEntregaService.Arquivo(new byte[] {9}, "jpg"));
+
+        var fotos = rastreabilidadeEntregaService.fotos(entregaId);
+
+        assertThat(fotos).extracting(com.marillia.milebag.business.rastreabilidade.model.FotoGestaoResponse::tipo).containsExactly("RETIRADA", "BDO_ASSINADO");
+        assertThat(rastreabilidadeEntregaService.foto(entregaId, comprovante.getId()).conteudo()).containsExactly(9);
     }
 }

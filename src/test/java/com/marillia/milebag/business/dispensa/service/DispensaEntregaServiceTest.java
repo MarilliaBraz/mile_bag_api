@@ -52,6 +52,9 @@ class DispensaEntregaServiceTest {
     @Mock
     private UsuarioConsultaService usuarioConsultaService;
 
+    @Mock
+    private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
+
     @InjectMocks
     private DispensaEntregaService dispensaEntregaService;
 
@@ -236,5 +239,16 @@ class DispensaEntregaServiceTest {
                 .isInstanceOf(ConflitoException.class)
                 .hasMessage(com.marillia.milebag.business.entrega.service.EntregaService.MENSAGEM_CANCELADA);
         verify(dispensaEntregaRepository, never()).save(any());
+    }
+
+    /** V48 (M1): dispensar devolve a bagagem - a retirada pendente deixa de valer para quem assumir de novo. */
+    @Test
+    void dispensaDescartaARetiradaPendente() {
+        Entrega entrega = entrega(EntregaStatus.ATRIBUIDA, motoristaId);
+        salvarDevolvendoComId();
+
+        dispensaEntregaService.dispensar(entrega.getId(), motoristaId, null);
+
+        verify(retiradaBagagemService).descartarPendentes(entrega.getId());
     }
 }

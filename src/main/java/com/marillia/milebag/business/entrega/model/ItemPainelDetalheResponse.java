@@ -28,5 +28,7 @@ public record ItemPainelDetalheResponse(
         List<PendenciaContatoBdo> pendenciasContato,
         JanelaReagendamento janelaReagendamento,
         // V46: a dispensa desta entrega exige motivo (a bagagem ja saiu com um motorista).
-        boolean motivoDispensaObrigatorio) {
+        boolean motivoDispensaObrigatorio,
+        // V48: o motorista ja registrou a retirada da bagagem desta tentativa (proxima etapa: iniciar a viagem).
+        boolean retiradaRegistrada) {
 }

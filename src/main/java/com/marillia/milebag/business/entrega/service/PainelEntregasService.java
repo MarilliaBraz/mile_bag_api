@@ -13,6 +13,7 @@ import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.dispensa.service.DispensaEntregaService;
+import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
@@ -44,6 +45,7 @@ public class PainelEntregasService {
     private final ViagemService viagemService;
     private final PainelEntregasMapper mapper;
     private final DispensaEntregaService dispensaEntregaService;
+    private final RetiradaBagagemService retiradaBagagemService;
 
     public PainelEntregasService(
             EntregaRepository entregaRepository,
@@ -51,8 +53,10 @@ public class PainelEntregasService {
             BagagemCaronaService bagagemCaronaService,
             ViagemService viagemService,
             PainelEntregasMapper mapper,
-            DispensaEntregaService dispensaEntregaService) {
+            DispensaEntregaService dispensaEntregaService,
+            RetiradaBagagemService retiradaBagagemService) {
         this.dispensaEntregaService = dispensaEntregaService;
+        this.retiradaBagagemService = retiradaBagagemService;
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.bagagemCaronaService = bagagemCaronaService;
@@ -86,14 +90,16 @@ public class PainelEntregasService {
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entregaId);
         return mapper.toDetalhe(
                 entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null),
-                dispensaEntregaService.exigeMotivo(entregaId));
+                dispensaEntregaService.exigeMotivo(entregaId),
+                retiradaBagagemService.temRetiradaPendente(entregaId, motoristaId));
     }
 
     private ItemPainelResponse montarItem(Entrega entrega) {
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entrega.getId());
         String marcoMaisRecente = viagemService.marcoMaisRecente(entrega.getId()).orElse(null);
-        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, marcoMaisRecente);
+        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, marcoMaisRecente,
+                retiradaBagagemService.temRetiradaPendente(entrega.getId(), entrega.getMotoristaResponsavel()));
     }
 
     /** Bagagem carona referencia o proprio BDO (nao o da entrega principal) para a etiqueta exibida no resumo. */

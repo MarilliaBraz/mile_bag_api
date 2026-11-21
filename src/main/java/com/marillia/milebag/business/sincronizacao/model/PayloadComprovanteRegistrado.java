@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.sincronizacao.model;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -14,5 +15,11 @@ public record PayloadComprovanteRegistrado(
         String dataHora,
         Double latitude,
         Double longitude,
-        String justificativaDivergencia) {
+        String justificativaDivergencia,
+        // V48: ausentes nos eventos guardados por versoes antigas do app (formato antigo, aceito ate a data de corte).
+        FotoOffline fotoPorta,
+        UUID tipoRecebedorId,
+        String nomeRecebedor,
+        List<FotoOffline> avarias,
+        String observacaoAvaria) {
 }

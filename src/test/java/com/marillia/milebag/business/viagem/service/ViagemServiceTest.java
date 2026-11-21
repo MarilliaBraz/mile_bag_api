@@ -71,6 +71,8 @@ class ViagemServiceTest {
     private PracaPedagioService pracaPedagioService;
     @Mock
     private AcompanhamentoViagem acompanhamentoViagem;
+    @Mock
+    private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
 
     private ViagemService viagemService;
 
@@ -78,7 +80,8 @@ class ViagemServiceTest {
     void setUp() {
         viagemService = new ViagemService(
                 entregaService, selecaoRotaProvider, trajetoRepository, calculoRotaRepository,
-                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService, acompanhamentoViagem);
+                checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService, acompanhamentoViagem,
+                retiradaBagagemService);
         // lenient: nem todo teste chega a exercitar os tres saves (ex.: os
         // testes de erro em iniciarViagem retornam antes deles).
         org.mockito.Mockito.lenient().when(trajetoRepository.save(any(Trajeto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -461,5 +464,40 @@ class ViagemServiceTest {
         assertThatThrownBy(() -> viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.A_CAMINHO, null, null)))
                 .isInstanceOf(ConflitoException.class)
                 .hasMessage(EntregaService.MENSAGEM_CANCELADA);
+    }
+
+    /** V48: a viagem so inicia com a retirada (foto) da tentativa; sem ela, nada e gravado. */
+    @Test
+    void iniciarViagemSemRetiradaERecusada() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setMotoristaResponsavel(UUID.randomUUID());
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.empty());
+        when(selecaoRotaProvider.buscarSelecionada(entregaId)).thenReturn(Optional.of(new SelecaoRotaProvider.RotaSelecionada(
+                TipoSelecao.SUGERIDA, new RotaAlternativa("principal", 5000.0, 600, false))));
+        org.mockito.Mockito.doThrow(new com.marillia.milebag.core.exception.RegraNegocioException("Registre a retirada"))
+                .when(retiradaBagagemService).vincularAoTrajeto(org.mockito.ArgumentMatchers.eq(entregaId), any(), any(), org.mockito.ArgumentMatchers.eq(false));
+
+        assertThatThrownBy(() -> viagemService.iniciarViagem(entregaId, null))
+                .isInstanceOf(com.marillia.milebag.core.exception.RegraNegocioException.class);
+        verify(entregaService, org.mockito.Mockito.never()).marcarEmAndamento(any());
+    }
+
+    @Test
+    void iniciarViagemVinculaARetiradaDoMotoristaAViagem() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setMotoristaResponsavel(motorista);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.empty());
+        when(selecaoRotaProvider.buscarSelecionada(entregaId)).thenReturn(Optional.of(new SelecaoRotaProvider.RotaSelecionada(
+                TipoSelecao.SUGERIDA, new RotaAlternativa("principal", 5000.0, 600, false))));
+
+        viagemService.iniciarViagem(entregaId, null);
+
+        verify(retiradaBagagemService).vincularAoTrajeto(org.mockito.ArgumentMatchers.eq(entregaId), org.mockito.ArgumentMatchers.eq(motorista), any(), org.mockito.ArgumentMatchers.eq(false));
+        verify(entregaService).marcarEmAndamento(entregaId);
     }
 }

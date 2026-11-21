@@ -16,6 +16,8 @@ public record EventoRastreabilidade(
 
     public enum TipoEventoRastreabilidade {
         BDO_RECEBIDO,
+        /** V48: retirada da bagagem no aeroporto; {@code detalhe} e a observacao das avarias. */
+        BAGAGEM_RETIRADA,
         VIAGEM_INICIADA,
         OCORRENCIA,
         DISPENSA_SEM_BAGAGEM,
