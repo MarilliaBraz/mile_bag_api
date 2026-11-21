@@ -164,7 +164,7 @@ class BdoServiceTest {
         Bdo existente = new Bdo();
         existente.setId(UUID.randomUUID());
         existente.setNumero("GYNLA10001");
-        when(bdoRepository.findByNumero("GYNLA10001")).thenReturn(List.of(existente));
+        when(bdoRepository.buscarPorNumeroNormalizado("GYNLA10001")).thenReturn(List.of(existente));
 
         assertThat(bdoService.buscarPorNumero(" gynla10001 ")).hasSize(1);
         assertThat(bdoService.buscarPorNumero("  ")).isEmpty();

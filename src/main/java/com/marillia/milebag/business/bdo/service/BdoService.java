@@ -182,14 +182,14 @@ public class BdoService {
         return leitorTelexBdo.ler(texto);
     }
 
-    /** BDOs ja registrados com este numero: o painel pergunta antes de incluir um repetido. */
+    /** BDOs ja registrados com este numero (sem diferenciar maiusculas nem espacos): o painel avisa e pergunta. */
     @Transactional(readOnly = true)
     public List<BdoResponse> buscarPorNumero(String numero) {
         String normalizado = normalizarNumero(numero);
         if (normalizado == null) {
             return List.of();
         }
-        return bdoRepository.findByNumero(normalizado).stream().map(bdoMapper::toResponse).toList();
+        return bdoRepository.buscarPorNumeroNormalizado(normalizado).stream().map(bdoMapper::toResponse).toList();
     }
 
     private void aplicarCampos(Bdo bdo, CamposExtraidosBdo campos) {
