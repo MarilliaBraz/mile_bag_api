@@ -56,6 +56,8 @@ class ComprovanteEntregaServiceTest {
     private FotoEntregaService fotoEntregaService;
     @Mock
     private MotivoOcorrenciaService motivoOcorrenciaService;
+    @Mock
+    private com.marillia.milebag.business.correcao.service.CorrecaoEntregaService correcaoEntregaService;
 
     private final UUID entregaId = UUID.randomUUID();
     private final UUID tipoId = UUID.randomUUID();
@@ -66,7 +68,7 @@ class ComprovanteEntregaServiceTest {
     private ComprovanteEntregaService servico(Instant formatoAntigoAceitoAte) {
         return new ComprovanteEntregaService(
                 comprovanteEntregaRepository, entregaService, viagemService, mensagemService,
-                fotoEntregaService, motivoOcorrenciaService, formatoAntigoAceitoAte);
+                fotoEntregaService, motivoOcorrenciaService, correcaoEntregaService, formatoAntigoAceitoAte);
     }
 
     private ComprovanteEntregaService servicoAtual() {
@@ -74,7 +76,7 @@ class ComprovanteEntregaServiceTest {
     }
 
     private void entregaLivreParaRegistrar() throws Exception {
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
         when(fotoEntregaService.gravarArquivo(any())).thenReturn("tenant/bdo.jpg");
         when(comprovanteEntregaRepository.save(any(ComprovanteEntrega.class))).thenAnswer(inv -> {
@@ -85,7 +87,7 @@ class ComprovanteEntregaServiceTest {
     }
 
     private void entregaLivreParaValidar() {
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.empty());
     }
 
@@ -93,7 +95,7 @@ class ComprovanteEntregaServiceTest {
     @Test
     void reenvioDoMesmoIdLocalDevolveOComprovanteSemValidarDeNovo() {
         ComprovanteEntrega gravado = new ComprovanteEntrega(entregaId, "t/bdo.jpg", "Titular - Ana", Instant.now(), -16.6, -49.2, true, "id-local");
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(new Entrega()));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
         when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(gravado));
 
         var resultado = registrar(servicoAtual(), new DadosDaEntrega(null, null, null, List.of(), null));
@@ -106,11 +108,31 @@ class ComprovanteEntregaServiceTest {
     private void tipoRecebedorAtivo() {
         MotivoOcorrencia porteiro = new MotivoOcorrencia("Porteiro ou portaria", false, FinalidadeMotivo.RECEBEDOR);
         ReflectionTestUtils.setField(porteiro, "id", tipoId);
-        when(motivoOcorrenciaService.buscarDaFinalidadeOuFalhar(tipoId, FinalidadeMotivo.RECEBEDOR)).thenReturn(porteiro);
+        org.mockito.Mockito.lenient().when(motivoOcorrenciaService.buscarDaFinalidadeOuFalhar(tipoId, FinalidadeMotivo.RECEBEDOR)).thenReturn(porteiro);
+        org.mockito.Mockito.lenient().when(motivoOcorrenciaService.buscarAtivoOuFalhar(tipoId, FinalidadeMotivo.RECEBEDOR)).thenReturn(porteiro);
     }
 
     private ComprovanteEntregaService.ComprovanteEntregaResultado registrar(ComprovanteEntregaService servico, DadosDaEntrega dados) {
-        return servico.registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null, dados);
+        return servico.registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null, dados, MOTORISTA);
+    }
+
+    private static final UUID MOTORISTA = UUID.randomUUID();
+
+    private static Entrega doMotorista() {
+        Entrega entrega = new Entrega();
+        entrega.setMotoristaResponsavel(MOTORISTA);
+        return entrega;
+    }
+
+    /** So o motorista responsavel registra a entrega: outro motorista ou o administrador recebem 403. */
+    @Test
+    void quemNaoEOResponsavelNaoRegistraAEntrega() {
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(doMotorista()));
+
+        assertThatThrownBy(() -> servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
+                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null), UUID.randomUUID()))
+                .isInstanceOf(com.marillia.milebag.core.exception.AcessoNegadoException.class);
+        verify(fotoEntregaService, never()).gravarArquivo(any());
     }
 
     @Test
@@ -168,7 +190,7 @@ class ComprovanteEntregaServiceTest {
         entregaLivreParaRegistrar();
 
         var resultado = servico(Instant.now().plus(7, ChronoUnit.DAYS)).registrar(
-                entregaId, fotoBdo, "Fulano de Tal", Instant.now().toString(), -16.6, -49.2, "id-local", null, null);
+                entregaId, fotoBdo, "Fulano de Tal", Instant.now().toString(), -16.6, -49.2, "id-local", null, null, MOTORISTA);
 
         assertThat(resultado.comprovante().getIdentificacaoRecebedor()).isEqualTo("Fulano de Tal");
         verify(fotoEntregaService, never()).salvarDoComprovante(any(), any(), any(), any(), any());
@@ -179,7 +201,7 @@ class ComprovanteEntregaServiceTest {
     void formatoAntigoDepoisDaDataDeCortePedeParaAtualizarOApp() throws Exception {
         entregaLivreParaValidar();
         assertThatThrownBy(() -> servicoAtual().registrar(
-                entregaId, fotoBdo, "Fulano", Instant.now().toString(), -16.6, -49.2, "id-local", null, DadosDaEntrega.FORMATO_ANTIGO))
+                entregaId, fotoBdo, "Fulano", Instant.now().toString(), -16.6, -49.2, "id-local", null, DadosDaEntrega.FORMATO_ANTIGO, MOTORISTA))
                 .isInstanceOf(ComprovanteIncompletoException.class).hasMessageContaining("Atualize o aplicativo");
         verify(comprovanteEntregaRepository, never()).save(any());
     }
@@ -209,4 +231,88 @@ class ComprovanteEntregaServiceTest {
     private static MockMultipartFile foto(String nome) {
         return new MockMultipartFile("foto", nome, "image/jpeg", new byte[] {1, 2, 3});
     }
+
+    // ---- V51: correcao da entrega finalizada (ate 24 h) ----
+
+    private final UUID motoristaCorrecao = UUID.randomUUID();
+
+    private ComprovanteEntrega finalizada(Instant registradaEm) {
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setStatus(com.marillia.milebag.business.entrega.model.EntregaStatus.ENCERRADA_COM_SUCESSO);
+        entrega.setMotoristaResponsavel(motoristaCorrecao);
+        when(entregaService.travarParaCorrigir(entregaId)).thenReturn(entrega);
+        ComprovanteEntrega comprovante = new ComprovanteEntrega(entregaId, "t/bdo-antigo.jpg", "Titular - Ana", registradaEm, -16.6, -49.2, false, null);
+        comprovante.setId(UUID.randomUUID());
+        comprovante.setCriadoEm(registradaEm);
+        // lenient: quando o motorista nao e o responsavel, a recusa vem antes de buscar o comprovante.
+        org.mockito.Mockito.lenient().when(comprovanteEntregaRepository.findByEntregaId(entregaId)).thenReturn(Optional.of(comprovante));
+        return comprovante;
+    }
+
+    private ComprovanteEntregaService.CorrecaoDaEntrega correcao(MockMultipartFile documento, UUID tipo, String nome) {
+        return new ComprovanteEntregaService.CorrecaoDaEntrega(null, documento, tipo, nome, false, List.of(), null, UUID.randomUUID(), "erro meu");
+    }
+
+    @Test
+    void corrigeQuemAssinouGuardandoAntesEDepois() {
+        ComprovanteEntrega comprovante = finalizada(Instant.now().minus(2, ChronoUnit.HOURS));
+        tipoRecebedorAtivo();
+        when(comprovanteEntregaRepository.save(any(ComprovanteEntrega.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        servicoAtual().corrigir(entregaId, motoristaCorrecao, correcao(null, tipoId, "Joao Porteiro"));
+
+        assertThat(comprovante.getIdentificacaoRecebedor()).isEqualTo("Porteiro ou portaria - Joao Porteiro");
+        verify(correcaoEntregaService).registrar(eq(entregaId), eq(com.marillia.milebag.business.correcao.model.EtapaCorrecao.RECEBEDOR),
+                eq(com.marillia.milebag.business.correcao.model.MomentoCorrecao.APOS_REGISTRO), any(), eq("erro meu"),
+                eq("Titular - Ana"), eq("Porteiro ou portaria - Joao Porteiro"), eq(motoristaCorrecao), any());
+    }
+
+    @Test
+    void trocarAFotoDoBdoAssinadoGuardaAAnteriorComoSubstituida() {
+        ComprovanteEntrega comprovante = finalizada(Instant.now().minus(1, ChronoUnit.HOURS));
+        when(fotoEntregaService.gravarArquivo(any())).thenReturn("t/bdo-novo.jpg");
+        when(comprovanteEntregaRepository.save(any(ComprovanteEntrega.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        servicoAtual().corrigir(entregaId, motoristaCorrecao, correcao(fotoBdo, null, null));
+
+        verify(fotoEntregaService).guardarBdoAssinadoSubstituido(eq(entregaId), eq(comprovante.getId()), eq("t/bdo-antigo.jpg"), any(), any());
+        assertThat(comprovante.getFotoDocumentoUrl()).isEqualTo("t/bdo-novo.jpg");
+    }
+
+    @Test
+    void depoisDe24HorasACorrecaoEBloqueada() {
+        finalizada(Instant.now().minus(25, ChronoUnit.HOURS));
+
+        assertThatThrownBy(() -> servicoAtual().corrigir(entregaId, motoristaCorrecao, correcao(fotoBdo, null, null)))
+                .isInstanceOf(com.marillia.milebag.core.exception.ConflitoException.class)
+                .hasMessage("O prazo de 24 horas para corrigir esta entrega terminou.");
+        verify(fotoEntregaService, never()).gravarArquivo(any());
+    }
+
+    @Test
+    void outroMotoristaNaoCorrigeAEntrega() {
+        finalizada(Instant.now());
+
+        assertThatThrownBy(() -> servicoAtual().corrigir(entregaId, UUID.randomUUID(), correcao(fotoBdo, null, null)))
+                .isInstanceOf(com.marillia.milebag.core.exception.ConflitoException.class);
+    }
+
+    /** As correcoes feitas no aparelho antes de finalizar vao com o comprovante. */
+    @Test
+    void correcoesDoFluxoChegamComOComprovante() throws Exception {
+        entregaLivreParaRegistrar();
+        Entrega comMotorista = new Entrega();
+        comMotorista.setMotoristaResponsavel(motoristaCorrecao);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(comMotorista));
+        tipoRecebedorAtivo();
+        var correcoes = List.of(new com.marillia.milebag.business.correcao.model.CorrecaoInformada(
+                com.marillia.milebag.business.correcao.model.EtapaCorrecao.FOTO_PORTA, UUID.randomUUID(), null, "foto anterior", "foto nova", null));
+
+        servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
+                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null, correcoes), motoristaCorrecao);
+
+        verify(correcaoEntregaService).registrarDoFluxo(eq(entregaId), eq(motoristaCorrecao), eq(correcoes), any());
+    }
+
 }

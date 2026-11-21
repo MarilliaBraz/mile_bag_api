@@ -14,6 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.marillia.milebag.business.correcao.model.EtapaCorrecao;
+import com.marillia.milebag.business.correcao.model.MomentoCorrecao;
+import com.marillia.milebag.business.correcao.service.CorrecaoEntregaService;
+import com.marillia.milebag.business.correcao.service.DescricaoCorrecao;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.model.EntregaStatus;
 import com.marillia.milebag.business.entrega.service.EntregaService;
@@ -40,6 +44,7 @@ public class RetiradaBagagemService {
     private final RetiradaBagagemRepository retiradaBagagemRepository;
     private final EntregaService entregaService;
     private final FotoEntregaService fotoEntregaService;
+    private final CorrecaoEntregaService correcaoEntregaService;
     /** Mesma data de corte do comprovante (R): ate la, viagens antigas da fila offline iniciam sem retirada. */
     private final Instant transicaoAte;
 
@@ -47,10 +52,12 @@ public class RetiradaBagagemService {
             RetiradaBagagemRepository retiradaBagagemRepository,
             EntregaService entregaService,
             FotoEntregaService fotoEntregaService,
+            CorrecaoEntregaService correcaoEntregaService,
             @Value("${milebag.comprovante.formato-antigo-aceito-ate:2026-12-01T03:00:00Z}") Instant transicaoAte) {
         this.retiradaBagagemRepository = retiradaBagagemRepository;
         this.entregaService = entregaService;
         this.fotoEntregaService = fotoEntregaService;
+        this.correcaoEntregaService = correcaoEntregaService;
         this.transicaoAte = transicaoAte;
     }
 
@@ -99,6 +106,50 @@ public class RetiradaBagagemService {
 
         log.info("Retirada {} da entrega {} registrada pelo motorista {} ({} foto(s) de avaria).",
                 retirada.getId(), entregaId, motoristaId, fotosAvaria.size());
+        return RetiradaBagagemResponse.de(retirada);
+    }
+
+    /**
+     * Corrigir a retirada antes de iniciar a viagem (V51): foto nova e/ou avarias novas, sempre com motivo. As fotos
+     * antigas ficam guardadas como substituidas e cada mudanca vira um registro de correcao (antes, depois, motivo).
+     * Precisa de internet. {@code corrigirAvarias} troca o conjunto inteiro (vazio = sem avarias).
+     */
+    @Transactional
+    public RetiradaBagagemResponse corrigir(UUID entregaId, UUID motoristaId, MultipartFile foto, boolean corrigirAvarias,
+            List<MultipartFile> avarias, String observacaoAvaria, UUID motivoId, String complemento) {
+        // Travada: o inicio da viagem (que trava a mesma entrega) e outro envio da correcao esperam esta terminar.
+        Entrega entrega = entregaService.travarParaCorrigir(entregaId);
+        EntregaService.exigirNaoCancelada(entrega);
+        if (!motoristaId.equals(entrega.getMotoristaResponsavel())) {
+            throw new ConflitoException("So o motorista responsavel pode corrigir a retirada desta bagagem.");
+        }
+        RetiradaBagagem retirada = retiradaBagagemRepository
+                .findFirstByEntregaIdAndMotoristaIdAndTrajetoIdIsNullAndDescartadaEmIsNullOrderByDataHoraDesc(entregaId, motoristaId)
+                .orElseThrow(() -> new ConflitoException("A retirada so pode ser corrigida depois de registrada e antes de iniciar a viagem."));
+        boolean trocaFoto = foto != null && !foto.isEmpty();
+        if (!trocaFoto && !corrigirAvarias) {
+            throw new RegraNegocioException("Informe o que corrigir: a foto da retirada ou as avarias.");
+        }
+        correcaoEntregaService.exigirMotivo(motivoId, complemento);
+        List<MultipartFile> novasAvarias = corrigirAvarias ? FotoEntregaService.avariasValidas(avarias) : List.of();
+        String novaObservacao = corrigirAvarias ? FotoEntregaService.observacaoAvaria(observacaoAvaria) : null;
+
+        Instant agora = Instant.now();
+        if (trocaFoto) {
+            fotoEntregaService.substituir(entregaId, retirada.getId(), null, TipoFotoEntrega.RETIRADA, List.of(foto), agora);
+            correcaoEntregaService.registrar(entregaId, EtapaCorrecao.FOTO_RETIRADA, MomentoCorrecao.APOS_REGISTRO, motivoId, complemento,
+                    "foto anterior", "foto nova", motoristaId, agora);
+        }
+        if (corrigirAvarias) {
+            String antes = DescricaoCorrecao.avarias(fotoEntregaService.contarAtuais(entregaId, retirada.getId(), null, TipoFotoEntrega.AVARIA_RETIRADA),
+                    retirada.getObservacaoAvaria());
+            fotoEntregaService.substituir(entregaId, retirada.getId(), null, TipoFotoEntrega.AVARIA_RETIRADA, novasAvarias, agora);
+            retirada.corrigirObservacaoAvaria(novaObservacao);
+            retiradaBagagemRepository.save(retirada);
+            correcaoEntregaService.registrar(entregaId, EtapaCorrecao.AVARIAS_RETIRADA, MomentoCorrecao.APOS_REGISTRO, motivoId, complemento,
+                    antes, DescricaoCorrecao.avarias(novasAvarias.size(), novaObservacao), motoristaId, agora);
+        }
+        log.info("Retirada {} da entrega {} corrigida pelo motorista {}.", retirada.getId(), entregaId, motoristaId);
         return RetiradaBagagemResponse.de(retirada);
     }
 

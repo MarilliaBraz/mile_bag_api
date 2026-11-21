@@ -14,6 +14,8 @@ import com.marillia.milebag.business.entrega.service.BdosDisponiveisService;
 import com.marillia.milebag.business.entrega.service.PainelEntregasService;
 import com.marillia.milebag.core.config.security.AuthenticatedUser;
 
+import java.util.List;
+import com.marillia.milebag.business.entrega.model.EntregaCorrigivelResponse;
 /**
  * Tela inicial do motorista (HU19) - ver contracts/painel-api.md. Separado
  * de {@code EntregaController} (HU02): aquele cobre autoatribuicao/listagem
@@ -39,6 +41,12 @@ public class PainelEntregasController {
     @GetMapping("/api/v1/entregas/{entregaId}/detalhe")
     public ItemPainelDetalheResponse detalhe(@PathVariable UUID entregaId, @AuthenticationPrincipal AuthenticatedUser usuario) {
         return painelEntregasService.consultarDetalhe(entregaId, usuario.userId());
+    }
+
+    /** V51: entregas finalizadas que o motorista ainda pode corrigir (24 h). */
+    @GetMapping("/api/v1/motorista/entregas-corrigiveis")
+    public List<EntregaCorrigivelResponse> corrigiveis(@AuthenticationPrincipal AuthenticatedUser usuario) {
+        return painelEntregasService.listarCorrigiveis(usuario.userId());
     }
 
     @GetMapping("/api/v1/motorista/bdos-disponiveis")

@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.entrega.mapper;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -40,7 +41,7 @@ public class PainelEntregasMapper {
 
     public ItemPainelDetalheResponse toDetalhe(
             Entrega entrega, Bdo bdo, List<BagagemCarona> bagagensCarona, Function<UUID, String> etiquetaDoBdo, String marcoMaisRecente,
-            boolean motivoDispensaObrigatorio, boolean retiradaRegistrada) {
+            boolean motivoDispensaObrigatorio, boolean retiradaRegistrada, Instant corrigivelAte) {
         return new ItemPainelDetalheResponse(
                 entrega.getId(),
                 entrega.getStatus(),
@@ -57,7 +58,8 @@ public class PainelEntregasMapper {
                 bdo.pendenciasDeContato(),
                 entrega.janelaReagendamento(),
                 motivoDispensaObrigatorio,
-                retiradaRegistrada);
+                retiradaRegistrada,
+                corrigivelAte);
     }
 
     /** {@code entregaReaberta}: a entrega reaberta deste BDO (RN05), ou nulo se o BDO ainda nao tem entrega. */

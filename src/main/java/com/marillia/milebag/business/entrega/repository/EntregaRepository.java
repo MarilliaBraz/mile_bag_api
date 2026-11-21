@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.entrega.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,6 +43,10 @@ public interface EntregaRepository extends BaseRepository<Entrega, UUID> {
     int criarCancelada(@Param("id") UUID id, @Param("tenantId") UUID tenantId, @Param("bdoId") UUID bdoId);
 
     List<Entrega> findByMotoristaResponsavelAndStatus(UUID motoristaResponsavel, EntregaStatus status);
+
+    /** V51: entregas do motorista finalizadas desde o instante (candidatas a correcao, ate 24 h). */
+    List<Entrega> findByMotoristaResponsavelAndStatusAndAtualizadoEmAfterOrderByAtualizadoEmDesc(
+            UUID motoristaResponsavel, EntregaStatus status, Instant desde);
 
     /**
      * Dispensa (V46): devolve a entrega aos motoristas so se ela ainda for do motorista e estiver em aberto, numa

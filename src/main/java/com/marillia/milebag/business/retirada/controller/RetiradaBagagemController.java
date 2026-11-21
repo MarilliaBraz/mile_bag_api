@@ -44,4 +44,19 @@ public class RetiradaBagagemController {
         return retiradaBagagemService.registrar(
                 entregaId, usuario.userId(), foto, avarias, latitude, longitude, dataHora, idLocal, observacaoAvaria);
     }
+
+    /** V51: corrigir a retirada antes de iniciar a viagem - foto e/ou avarias, com motivo. */
+    @PostMapping(value = "/correcao", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public RetiradaBagagemResponse corrigir(
+            @PathVariable UUID entregaId,
+            @RequestParam(value = "foto", required = false) MultipartFile foto,
+            @RequestParam(value = "corrigirAvarias", defaultValue = "false") boolean corrigirAvarias,
+            @RequestParam(value = "avarias", required = false) List<MultipartFile> avarias,
+            @RequestParam(value = "observacaoAvaria", required = false) String observacaoAvaria,
+            @RequestParam(value = "motivoId", required = false) UUID motivoId,
+            @RequestParam(value = "complemento", required = false) String complemento,
+            @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return retiradaBagagemService.corrigir(entregaId, usuario.userId(), foto, corrigirAvarias, avarias == null ? List.of() : avarias,
+                observacaoAvaria, motivoId, complemento);
+    }
 }

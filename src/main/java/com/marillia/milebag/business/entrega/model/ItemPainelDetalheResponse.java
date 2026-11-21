@@ -30,5 +30,7 @@ public record ItemPainelDetalheResponse(
         // V46: a dispensa desta entrega exige motivo (a bagagem ja saiu com um motorista).
         boolean motivoDispensaObrigatorio,
         // V48: o motorista ja registrou a retirada da bagagem desta tentativa (proxima etapa: iniciar a viagem).
-        boolean retiradaRegistrada) {
+        boolean retiradaRegistrada,
+        // V51: entrega finalizada que o motorista ainda pode corrigir - ate este instante; nulo se nao pode.
+        Instant corrigivelAte) {
 }
