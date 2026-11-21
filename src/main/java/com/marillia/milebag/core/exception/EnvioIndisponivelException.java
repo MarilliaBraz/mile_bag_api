@@ -6,4 +6,8 @@ public class EnvioIndisponivelException extends RuntimeException {
     public EnvioIndisponivelException() {
         super("Nao foi possivel enviar o pedido agora. Fale conosco pelo WhatsApp.");
     }
+
+    public EnvioIndisponivelException(String mensagem) {
+        super(mensagem);
+    }
 }

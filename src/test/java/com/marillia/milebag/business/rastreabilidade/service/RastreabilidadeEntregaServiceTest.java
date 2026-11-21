@@ -68,6 +68,8 @@ class RastreabilidadeEntregaServiceTest {
     @Mock
     private com.marillia.milebag.business.fotoentrega.service.FotoEntregaService fotoEntregaService;
 
+    @Mock
+    private com.marillia.milebag.business.segundavia.service.SegundaViaBdoService segundaViaBdoService;
     @InjectMocks
     private RastreabilidadeEntregaService rastreabilidadeEntregaService;
 

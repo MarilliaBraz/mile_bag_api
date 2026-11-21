@@ -23,6 +23,8 @@ public record EventoRastreabilidade(
         DISPENSA_SEM_BAGAGEM,
         DISPENSA_COM_BAGAGEM,
         ENTREGUE,
-        CANCELADO
+        CANCELADO,
+        /** V50: segunda via do BDO enviada por e-mail; {@code descricao} e o endereco de destino. */
+        SEGUNDA_VIA_ENVIADA
     }
 }

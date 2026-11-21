@@ -32,6 +32,7 @@ import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.rastreabilidade.model.EventoRastreabilidade;
 import com.marillia.milebag.business.rastreabilidade.model.EventoRastreabilidade.TipoEventoRastreabilidade;
 import com.marillia.milebag.business.rastreabilidade.model.HistoricoEntregaResponse;
+import com.marillia.milebag.business.segundavia.service.SegundaViaBdoService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.model.Trajeto;
 import com.marillia.milebag.business.viagem.service.ViagemService;
@@ -59,6 +60,7 @@ public class RastreabilidadeEntregaService {
     private final BagagemCaronaService bagagemCaronaService;
     private final RetiradaBagagemService retiradaBagagemService;
     private final FotoEntregaService fotoEntregaService;
+    private final SegundaViaBdoService segundaViaBdoService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -72,7 +74,8 @@ public class RastreabilidadeEntregaService {
             CancelamentoBdoService cancelamentoBdoService,
             BagagemCaronaService bagagemCaronaService,
             RetiradaBagagemService retiradaBagagemService,
-            FotoEntregaService fotoEntregaService) {
+            FotoEntregaService fotoEntregaService,
+            SegundaViaBdoService segundaViaBdoService) {
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.viagemService = viagemService;
@@ -85,6 +88,7 @@ public class RastreabilidadeEntregaService {
         this.bagagemCaronaService = bagagemCaronaService;
         this.retiradaBagagemService = retiradaBagagemService;
         this.fotoEntregaService = fotoEntregaService;
+        this.segundaViaBdoService = segundaViaBdoService;
     }
 
     @Transactional(readOnly = true)
@@ -146,6 +150,11 @@ public class RastreabilidadeEntregaService {
         cancelamentoBdoService.buscarPorEntrega(entregaId).ifPresent(cancelamento -> eventos.add(new EventoRastreabilidade(
                 TipoEventoRastreabilidade.CANCELADO, cancelamento.dataHora(), cancelamento.canceladoPorNome(), cancelamento.motivo(),
                 cancelamento.complemento())));
+
+        // V50: cada envio da segunda via por e-mail - quem mandou e para onde (o PDF tem dados pessoais do passageiro).
+        segundaViaBdoService.listarEnvios(entrega.getBdoId()).forEach(envio -> eventos.add(new EventoRastreabilidade(
+                TipoEventoRastreabilidade.SEGUNDA_VIA_ENVIADA, envio.getDataHora(), nome(envio.getEnviadoPor(), nomes),
+                envio.getDestinatario(), null)));
 
         comprovanteEntregaService.buscarPorEntrega(entregaId).ifPresent(comprovante -> eventos.add(new EventoRastreabilidade(
                 TipoEventoRastreabilidade.ENTREGUE, comprovante.getDataHora(), nome(entrega.getMotoristaResponsavel(), nomes),
