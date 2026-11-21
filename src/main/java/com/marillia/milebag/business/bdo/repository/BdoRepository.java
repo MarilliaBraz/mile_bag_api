@@ -8,8 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
-import com.marillia.milebag.business.bdo.model.BdoOrigem;
-import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.core.base.BaseRepository;
 
 /**
@@ -20,16 +18,20 @@ import com.marillia.milebag.core.base.BaseRepository;
 public interface BdoRepository extends BaseRepository<Bdo, UUID> {
 
     /**
-     * Verificacao de possivel duplicidade (Edge Case do spec.md): considera
-     * BDOs de qualquer {@code origem}, inclusive recebidos automaticamente
-     * por e-mail (RF21) - correspondencia pelo numero do documento
-     * (campo-chave, ver spec.md "Assumptions").
+     * Numero repetido (V49): BDOs de qualquer {@code origem} com o mesmo numero, comparado sem diferenciar maiusculas
+     * nem espacos - inclusive os gravados antes da normalizacao ("gynla 24713"). O parametro ja vem normalizado
+     * ({@code BdoService}); os mais recentes primeiro.
      */
-    List<Bdo> findByNumero(String numero);
+    @Query(value = CONSULTA_POR_NUMERO, nativeQuery = true)
+    List<Bdo> buscarPorNumeroNormalizado(@Param("numero") String numero);
 
-    /** Capturas por foto do motorista ainda sem conferencia - inclusive as tiradas sem internet e enviadas na sincronizacao (HU08). */
-    List<Bdo> findByCapturadoPorAndOrigemAndStatusConferenciaOrderByDataCapturaAsc(
-            UUID capturadoPor, BdoOrigem origem, StatusConferencia statusConferencia);
+    /** Constante para o teste contra PostgreSQL real exercitar exatamente este SQL (BdoNumeroRepetidoBancoTest). */
+    String CONSULTA_POR_NUMERO = """
+            SELECT b.* FROM bdo b
+            WHERE upper(regexp_replace(b.numero, '\\s', '', 'g')) = :numero
+            ORDER BY b.data_captura DESC
+            LIMIT 20
+            """;
 
     /**
      * Lista de BDOs disponiveis para autoatribuicao (HU19, FR-007): ja

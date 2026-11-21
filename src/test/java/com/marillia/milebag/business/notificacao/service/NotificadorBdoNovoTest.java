@@ -100,6 +100,21 @@ class NotificadorBdoNovoTest {
         assertThat(conteudo).contains("\"url\":\"/motorista\"");
     }
 
+    /** V49: o BDO incluido pela empresa avisa os mesmos aparelhos, com o texto proprio. */
+    @Test
+    void bdoIncluidoPelaEmpresaAvisaOsMotoristasAtivos() throws Exception {
+        when(enviadorPush.habilitado()).thenReturn(true);
+        when(inscricaoPushService.listarDosMotoristasAtivos()).thenReturn(List.of(inscricao()));
+        when(enviadorPush.enviar(any(), anyString())).thenReturn(201);
+        com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa incluido =
+                new com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa(UUID.randomUUID(), "GYNLA10001");
+
+        notificador.aoIncluirBdoPelaEmpresa(incluido);
+
+        verify(enviadorPush).enviar(any(), anyString());
+        assertThat(notificador.conteudo(incluido)).contains("A empresa incluiu o BDO GYNLA10001, disponível para assumir.");
+    }
+
     @Test
     void bdoDaCompanhiaAvisaOsMotoristasDaEmpresaComOTenantDelaSoDuranteOAviso() throws Exception {
         UUID companhia = UUID.randomUUID();

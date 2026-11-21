@@ -10,22 +10,26 @@ import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 public class BdoMapper {
 
     public BdoResponse toResponse(Bdo bdo) {
-        CamposExtraidosBdo camposExtraidos = new CamposExtraidosBdo(
+        CamposExtraidosBdo campos = new CamposExtraidosBdo(
                 bdo.getNumero(),
                 bdo.getPassageiroNome(),
                 bdo.getEnderecoEntrega(),
                 bdo.getCompanhiaAerea(),
                 bdo.getTelefonePassageiro(),
                 bdo.getEmailPassageiro(),
-                bdo.getEtiquetaBagagem());
+                bdo.getEtiquetaBagagem(),
+                bdo.getTipoProcesso(),
+                bdo.getCidade(),
+                bdo.getUf(),
+                bdo.getCep(),
+                bdo.getInstrucoesEntrega(),
+                bdo.getAeroportoRetirada(),
+                bdo.getVooChegada(),
+                bdo.getDataEntregaPrevista(),
+                bdo.getQuantidadeMalas(),
+                bdo.getCoresBagagem(),
+                bdo.getValorInformado());
 
-        return new BdoResponse(
-                bdo.getId(),
-                bdo.getOrigem(),
-                camposExtraidos,
-                bdo.getImagemOriginal(),
-                bdo.getStatusConferencia(),
-                bdo.getDataCaptura(),
-                bdo.pendenciasDeContato());
+        return new BdoResponse(bdo.getId(), bdo.getOrigem(), campos, bdo.getDataCaptura(), bdo.pendenciasDeContato());
     }
 }

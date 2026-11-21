@@ -141,7 +141,7 @@ public class SecurityConfig {
                         // HU33: o que antes so exigia login e e das empresas de entrega fica
                         // fechado aos perfis da companhia (a RLS ja isolava os dados; isto
                         // tira as funcoes de vista).
-                        .requestMatchers("/api/v1/bdos/**", "/api/v1/entregas/**", "/api/v1/motorista/**", "/api/v1/sync/**")
+                        .requestMatchers("/api/v1/entregas/**", "/api/v1/motorista/**", "/api/v1/sync/**")
                         .hasAnyRole(Papeis.ADMINISTRADOR_TENANT, Papeis.MOTORISTA)
                         .anyRequest().authenticated())
                 // Sessao invalida (401) e falta de permissao (403) com o mesmo contrato de erro do resto da API.

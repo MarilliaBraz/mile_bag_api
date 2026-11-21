@@ -4,13 +4,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Representacao de um BDO exposta pela API - ver contracts/bdo-api.md. */
+/** BDO devolvido pela API: na inclusao pela empresa e na conferencia de numero repetido (V49). */
 public record BdoResponse(
         UUID id,
         BdoOrigem origem,
-        CamposExtraidosBdo camposExtraidos,
-        String imagemOriginal,
-        StatusConferencia statusConferencia,
+        CamposExtraidosBdo campos,
         Instant dataCaptura,
         List<PendenciaContatoBdo> pendenciasContato) {
 }
