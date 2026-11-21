@@ -21,6 +21,7 @@ import com.marillia.milebag.business.configuracao.model.AtualizarAtivoRequest;
 import com.marillia.milebag.business.configuracao.model.CampoObrigatorioRequest;
 import com.marillia.milebag.business.configuracao.model.CampoObrigatorioResponse;
 import com.marillia.milebag.business.configuracao.model.CodigoNomeRequest;
+import com.marillia.milebag.business.configuracao.model.BaseAeroportuariaResponse;
 import com.marillia.milebag.business.configuracao.model.CodigoNomeResponse;
 import com.marillia.milebag.business.configuracao.model.CriarMotivoOcorrenciaRequest;
 import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
@@ -105,8 +106,15 @@ public class ConfiguracaoTenantController {
     // --- Bases aeroportuarias ---
 
     @GetMapping("/bases-aeroportuarias")
-    public List<CodigoNomeResponse> listarBasesAeroportuarias() {
-        return baseAeroportuariaService.listar().stream().map(CodigoNomeResponse::de).toList();
+    public List<BaseAeroportuariaResponse> listarBasesAeroportuarias() {
+        return baseAeroportuariaService.listarComCidade();
+    }
+
+    /** V52: a base que vale quando o BDO nao traz o aeroporto de retirada. */
+    @PostMapping("/bases-aeroportuarias/{id}/principal")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void tornarBasePrincipal(@PathVariable UUID id) {
+        baseAeroportuariaService.tornarPrincipal(id);
     }
 
     @PostMapping("/bases-aeroportuarias")

@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marillia.milebag.business.viagem.model.RegraCobranca;
+import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
@@ -61,6 +63,8 @@ public class AjusteViagemService {
     private final TabelaTarifaService tabelaTarifaService;
     private final BagagemCaronaService bagagemCaronaService;
     private final ObjectMapper objectMapper;
+    private final BdoService bdoService;
+    private final CobrancaViagemService cobrancaViagemService;
 
     public AjusteViagemService(
             AjusteViagemRepository ajusteViagemRepository,
@@ -68,7 +72,11 @@ public class AjusteViagemService {
             EntregaService entregaService,
             TabelaTarifaService tabelaTarifaService,
             BagagemCaronaService bagagemCaronaService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            BdoService bdoService,
+            CobrancaViagemService cobrancaViagemService) {
+        this.bdoService = bdoService;
+        this.cobrancaViagemService = cobrancaViagemService;
         this.ajusteViagemRepository = ajusteViagemRepository;
         this.trajetoRepository = trajetoRepository;
         this.entregaService = entregaService;
@@ -150,26 +158,43 @@ public class AjusteViagemService {
         };
     }
 
-    /** Mesma formula ja usada por {@code FechamentoService}, com o km vigente (considerando ajuste de KM_IDA/KM_VOLTA, se houver). */
+    /**
+     * V52 (item 7): entrega na cidade da base paga so o valor fixo da tarifa; fora dela, so km x valor por km (ida + volta
+     * a partir do aeroporto + km complementar das caronas). A regra vem congelada na viagem; nas anteriores a V52 e
+     * decidida aqui, pelo BDO. Sem o valor que a regra pede, fica pendente (vazio), como uma tarifa nao configurada.
+     */
     private Optional<BigDecimal> calcularTarifaAplicadaOriginal(Trajeto trajeto) {
         Entrega entrega = entregaDoTrajeto(trajeto);
+        Optional<TabelaTarifa> tarifa = tabelaTarifaService.resolverTarifaAplicavel(motoristaDoTrajeto(trajeto, entrega), null);
+        if (tarifa.isEmpty()) {
+            return Optional.empty();
+        }
+        RegraCobranca regra = regraDaViagem(trajeto, entrega);
+        if (regra == null) {
+            // Nao deu para saber se a entrega e na cidade da base (servico de mapa fora): pendente, nunca um palpite.
+            return Optional.empty();
+        }
+        if (regra == RegraCobranca.FIXO_CIDADE_BASE) {
+            return Optional.ofNullable(tarifa.get().getValorFixo());
+        }
         Optional<BigDecimal> kmIda = resolverValorVigente(trajeto, CampoAjusteViagem.KM_IDA);
         Optional<BigDecimal> kmVolta = resolverValorVigente(trajeto, CampoAjusteViagem.KM_VOLTA);
-        if (kmIda.isEmpty() || kmVolta.isEmpty()) {
+        if (kmIda.isEmpty() || kmVolta.isEmpty() || tarifa.get().getValorPorKm() == null) {
             return Optional.empty();
         }
         BigDecimal kmComplementar = bagagemCaronaService.listarPorEntrega(entrega.getId()).stream()
                 .map(BagagemCarona::getQuilometragemComplementar)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal kmTotal = kmIda.get().add(kmVolta.get()).add(kmComplementar);
-
-        return tabelaTarifaService.resolverTarifaAplicavel(motoristaDoTrajeto(trajeto, entrega), null).map(tarifa -> valorPagamento(tarifa, kmTotal));
+        return Optional.of(tarifa.get().getValorPorKm().multiply(kmTotal));
     }
 
-    private BigDecimal valorPagamento(TabelaTarifa tarifa, BigDecimal kmTotal) {
-        BigDecimal fixo = tarifa.getValorFixo() != null ? tarifa.getValorFixo() : BigDecimal.ZERO;
-        BigDecimal porKm = tarifa.getValorPorKm() != null ? tarifa.getValorPorKm() : BigDecimal.ZERO;
-        return fixo.add(porKm.multiply(kmTotal));
+    private RegraCobranca regraDaViagem(Trajeto trajeto, Entrega entrega) {
+        if (trajeto.getRegraCobranca() != null) {
+            return trajeto.getRegraCobranca();
+        }
+        Optional<com.marillia.milebag.business.bdo.model.Bdo> bdo = bdoService.buscarPorId(entrega.getBdoId());
+        return bdo.isEmpty() ? RegraCobranca.POR_KM : cobrancaViagemService.cobrancaDe(bdo.get()).regra();
     }
 
     /**

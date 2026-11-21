@@ -50,12 +50,18 @@ class AjusteViagemServiceTest {
     @Mock
     private BagagemCaronaService bagagemCaronaService;
 
+    @Mock
+    private com.marillia.milebag.business.bdo.service.BdoService bdoService;
+    @Mock
+    private CobrancaViagemService cobrancaViagemService;
+
     private AjusteViagemService ajusteViagemService;
 
     @BeforeEach
     void setUp() {
         ajusteViagemService = new AjusteViagemService(
-                ajusteViagemRepository, trajetoRepository, entregaService, tabelaTarifaService, bagagemCaronaService, new ObjectMapper());
+                ajusteViagemRepository, trajetoRepository, entregaService, tabelaTarifaService, bagagemCaronaService, new ObjectMapper(),
+                bdoService, cobrancaViagemService);
     }
 
     private Trajeto trajetoConsolidado(UUID entregaId, String kmIda, String kmVolta, String pracasPedagioFinal) {
@@ -113,9 +119,43 @@ class AjusteViagemServiceTest {
 
         Optional<BigDecimal> valor = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
 
-        // 50 fixo + 2 * 20km (10 ida + 10 volta) = 90
+        // V52: fora da cidade da base so km - 2 * 20km (10 ida + 10 volta) = 40, sem o fixo.
         assertThat(valor).isPresent();
-        assertThat(valor.get()).isEqualByComparingTo("90.00");
+        assertThat(valor.get()).isEqualByComparingTo("40.00");
+    }
+
+    /** V52: entrega na cidade da base paga so o valor fixo, qualquer que seja o km. */
+    @Test
+    void naCidadeDaBasePagaSoOValorFixo() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = trajetoConsolidado(entregaId, "10.000", "10.000", "[]");
+        trajeto.definirCobranca("GYN", com.marillia.milebag.business.viagem.model.RegraCobranca.FIXO_CIDADE_BASE);
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
+        TabelaTarifa tarifa = new TabelaTarifa(
+                EscopoTarifa.MOTORISTA, motoristaId, null, new BigDecimal("50.00"), new BigDecimal("2.00"), java.time.LocalDate.now());
+        when(tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null)).thenReturn(Optional.of(tarifa));
+
+        assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA))
+                .hasValueSatisfying(valor -> assertThat(valor).isEqualByComparingTo("50.00"));
+    }
+
+    /** V52: na cidade da base, sem valor fixo na tabela, a viagem fica pendente (nao vira km). */
+    @Test
+    void naCidadeDaBaseSemValorFixoFicaPendente() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = trajetoConsolidado(entregaId, "10.000", "10.000", "[]");
+        trajeto.definirCobranca("GYN", com.marillia.milebag.business.viagem.model.RegraCobranca.FIXO_CIDADE_BASE);
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
+        TabelaTarifa soKm = new TabelaTarifa(EscopoTarifa.MOTORISTA, motoristaId, null, null, new BigDecimal("2.00"), java.time.LocalDate.now());
+        when(tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null)).thenReturn(Optional.of(soKm));
+
+        assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).isEmpty();
     }
 
     @Test
@@ -126,7 +166,7 @@ class AjusteViagemServiceTest {
         when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
         when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
         when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
-        when(bagagemCaronaService.listarPorEntrega(entregaId)).thenReturn(List.of());
+        org.mockito.Mockito.lenient().when(bagagemCaronaService.listarPorEntrega(entregaId)).thenReturn(List.of());
         when(tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null)).thenReturn(Optional.empty());
 
         assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).isEmpty();
@@ -254,5 +294,25 @@ class AjusteViagemServiceTest {
         prepararPedagio(trajeto, trechos);
 
         assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO)).isEmpty();
+    }
+
+    /** Mapa fora numa viagem antiga (regra nao congelada): o valor fica pendente, sem palpite. */
+    @Test
+    void regraIndeterminadaDeixaOValorPendente() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = trajetoConsolidado(entregaId, "10.000", "10.000", "[]");
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
+        Entrega entrega = entregaDe(entregaId, motoristaId);
+        entrega.setBdoId(UUID.randomUUID());
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        com.marillia.milebag.business.bdo.model.Bdo bdo = new com.marillia.milebag.business.bdo.model.Bdo();
+        when(bdoService.buscarPorId(entrega.getBdoId())).thenReturn(Optional.of(bdo));
+        when(cobrancaViagemService.cobrancaDe(bdo)).thenReturn(new CobrancaViagemService.Cobranca(Optional.empty(), null));
+        when(tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null)).thenReturn(Optional.of(new TabelaTarifa(
+                EscopoTarifa.MOTORISTA, motoristaId, null, new BigDecimal("50.00"), new BigDecimal("2.00"), java.time.LocalDate.now())));
+
+        assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).isEmpty();
     }
 }

@@ -74,6 +74,11 @@ class ViagemServiceTest {
     @Mock
     private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
 
+    @Mock
+    private com.marillia.milebag.business.bdo.service.BdoService bdoService;
+    @Mock
+    private CobrancaViagemService cobrancaViagemService;
+
     private ViagemService viagemService;
 
     @BeforeEach
@@ -81,7 +86,7 @@ class ViagemServiceTest {
         viagemService = new ViagemService(
                 entregaService, selecaoRotaProvider, trajetoRepository, calculoRotaRepository,
                 checkpointGpsRepository, trajetoMapper, new ObjectMapper(), mensagemService, pracaPedagioService, acompanhamentoViagem,
-                retiradaBagagemService);
+                retiradaBagagemService, bdoService, cobrancaViagemService);
         // lenient: nem todo teste chega a exercitar os tres saves (ex.: os
         // testes de erro em iniciarViagem retornam antes deles).
         org.mockito.Mockito.lenient().when(trajetoRepository.save(any(Trajeto.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -499,5 +504,57 @@ class ViagemServiceTest {
 
         verify(retiradaBagagemService).vincularAoTrajeto(org.mockito.ArgumentMatchers.eq(entregaId), org.mockito.ArgumentMatchers.eq(motorista), any(), org.mockito.ArgumentMatchers.eq(false));
         verify(entregaService).marcarEmAndamento(entregaId);
+    }
+
+    // ---- V52 (item 7): ida e volta a partir do aeroporto ----
+
+    private Trajeto trajetoParaEncerrar(UUID entregaId, UUID bdoId) {
+        Trajeto trajeto = new Trajeto(entregaId, UUID.randomUUID(), Instant.now());
+        trajeto.setId(UUID.randomUUID());
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.of(trajeto));
+        when(calculoRotaRepository.findByTrajetoIdOrderByDataHoraAsc(trajeto.getId())).thenReturn(List.of(new CalculoRota(
+                trajeto.getId(), new java.math.BigDecimal("12.000"), new java.math.BigDecimal("12.000"), "[]", 900, TipoSelecao.SUGERIDA,
+                Instant.now(), true)));
+        Entrega entrega = new Entrega();
+        entrega.setBdoId(bdoId);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        return trajeto;
+    }
+
+    @Test
+    void encerrarCongelaBaseRegraEKmAPartirDoAeroporto() {
+        UUID entregaId = UUID.randomUUID();
+        UUID bdoId = UUID.randomUUID();
+        Trajeto trajeto = trajetoParaEncerrar(entregaId, bdoId);
+        com.marillia.milebag.business.bdo.model.Bdo bdo = new com.marillia.milebag.business.bdo.model.Bdo();
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        var gyn = new com.marillia.milebag.business.bagagemencontrada.model.Aeroporto("GYN", "Santa Genoveva", "Goiânia", "GO", -16.6, -49.2);
+        when(cobrancaViagemService.cobrancaDe(bdo)).thenReturn(new CobrancaViagemService.Cobranca(Optional.of(gyn),
+                com.marillia.milebag.business.viagem.model.RegraCobranca.POR_KM));
+        com.marillia.milebag.core.geo.Coordenada destino = new com.marillia.milebag.core.geo.Coordenada(-16.33, -48.95);
+        when(selecaoRotaProvider.buscarDestino(entregaId)).thenReturn(Optional.of(destino));
+        when(cobrancaViagemService.kmIdaEVolta(gyn, destino))
+                .thenReturn(Optional.of(new java.math.BigDecimal[] {new java.math.BigDecimal("55.400"), new java.math.BigDecimal("57.100")}));
+
+        viagemService.encerrarTrajeto(entregaId, null);
+
+        assertThat(trajeto.getKmIdaFinal()).isEqualByComparingTo("55.400");
+        assertThat(trajeto.getKmVoltaFinal()).isEqualByComparingTo("57.100");
+        assertThat(trajeto.getBaseCobranca()).isEqualTo("GYN");
+        assertThat(trajeto.getRegraCobranca()).isEqualTo(com.marillia.milebag.business.viagem.model.RegraCobranca.POR_KM);
+    }
+
+    /** Se a cobranca falhar (motor de rotas, mapa), a entrega encerra com o km da rota do motorista, como antes. */
+    @Test
+    void falhaNaCobrancaNaoImpedeOEncerramento() {
+        UUID entregaId = UUID.randomUUID();
+        UUID bdoId = UUID.randomUUID();
+        Trajeto trajeto = trajetoParaEncerrar(entregaId, bdoId);
+        when(bdoService.buscarPorId(bdoId)).thenThrow(new IllegalStateException("fora"));
+
+        viagemService.encerrarTrajeto(entregaId, null);
+
+        assertThat(trajeto.getKmIdaFinal()).isEqualByComparingTo("12.000");
+        assertThat(trajeto.getStatus()).isEqualTo(com.marillia.milebag.business.viagem.model.TrajetoStatus.ENCERRADO);
     }
 }

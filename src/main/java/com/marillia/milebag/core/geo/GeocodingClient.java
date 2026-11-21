@@ -1,6 +1,7 @@
 package com.marillia.milebag.core.geo;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -60,6 +61,44 @@ public class GeocodingClient {
         }
     }
 
+    /**
+     * V52: a cidade do endereco, pelo mesmo servico (com {@code addressdetails}) - para o BDO antigo que nao traz a
+     * cidade separada. Vazio se o servico nao achar; {@link ServicoMapaIndisponivelException} se ele estiver fora ou
+     * recusar (limite de uso) - quem chama nao pode tratar a falha como "outra cidade".
+     */
+    public Optional<String> cidadeDe(String endereco) {
+        try {
+            List<ResultadoComEndereco> resultados = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/search")
+                            .queryParam("q", endereco)
+                            .queryParam("format", "json")
+                            .queryParam("addressdetails", 1)
+                            .queryParam("limit", 1)
+                            .build())
+                    .header(HttpHeaders.USER_AGENT, properties.userAgent())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<ResultadoComEndereco>>() {
+                    });
+            if (resultados == null || resultados.isEmpty() || resultados.get(0).address() == null) {
+                return Optional.empty();
+            }
+            Map<String, String> partes = resultados.get(0).address();
+            for (String chave : List.of("city", "town", "municipality", "village")) {
+                String cidade = partes.get(chave);
+                if (cidade != null && !cidade.isBlank()) {
+                    return Optional.of(cidade);
+                }
+            }
+            return Optional.empty();
+        } catch (RestClientException e) {
+            log.warn("Falha ao descobrir a cidade do endereco via Nominatim: '{}'.", endereco, e);
+            throw new ServicoMapaIndisponivelException(e);
+        }
+    }
+
     private record ResultadoNominatim(String lat, String lon) {
+    }
+
+    private record ResultadoComEndereco(Map<String, String> address) {
     }
 }

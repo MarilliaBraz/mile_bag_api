@@ -99,6 +99,7 @@ public class RotaService implements SelecaoRotaProvider {
 
     /** HU31: destino da rota calculada para a entrega, mostrado no link de acompanhamento - vazio se nao houver. */
     @Transactional(readOnly = true)
+    @Override
     public Optional<Coordenada> buscarDestino(UUID entregaId) {
         return propostaRotaRepository.findById(entregaId)
                 .map(PropostaRota::getDestino)

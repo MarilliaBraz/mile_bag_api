@@ -158,6 +158,21 @@ public class Trajeto extends BaseEntity {
         return ocorrenciaId != null || dispensaId != null;
     }
 
+    /** V52: aeroporto base usado no calculo (codigo IATA); nulo nas viagens anteriores a regra. */
+    @Column(name = "base_cobranca", length = 3)
+    private String baseCobranca;
+
+    /** V52: regra congelada no encerramento; nula nas viagens anteriores (a regra e decidida na hora do calculo). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "regra_cobranca", length = 20)
+    private RegraCobranca regraCobranca;
+
+    /** V52: base e regra do calculo, congeladas no encerramento junto com o km. */
+    public void definirCobranca(String baseCobranca, RegraCobranca regraCobranca) {
+        this.baseCobranca = baseCobranca;
+        this.regraCobranca = regraCobranca;
+    }
+
     /**
      * Unico ponto de escrita dos campos agregados (data-model.md: "so podem
      * ser preenchidos uma vez, no momento da consolidacao"). Chamado apenas
