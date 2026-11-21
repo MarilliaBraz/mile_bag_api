@@ -40,6 +40,8 @@ class RetiradaBagagemServiceTest {
     private EntregaService entregaService;
     @Mock
     private FotoEntregaService fotoEntregaService;
+    @Mock
+    private com.marillia.milebag.business.correcao.service.CorrecaoEntregaService correcaoEntregaService;
 
     private RetiradaBagagemService retiradaBagagemService;
 
@@ -49,7 +51,7 @@ class RetiradaBagagemServiceTest {
     }
 
     private RetiradaBagagemService servico(Instant transicaoAte) {
-        return new RetiradaBagagemService(retiradaBagagemRepository, entregaService, fotoEntregaService, transicaoAte);
+        return new RetiradaBagagemService(retiradaBagagemRepository, entregaService, fotoEntregaService, correcaoEntregaService, transicaoAte);
     }
 
     private final UUID entregaId = UUID.randomUUID();
@@ -61,7 +63,9 @@ class RetiradaBagagemServiceTest {
         entrega.setId(entregaId);
         entrega.setStatus(status);
         entrega.setMotoristaResponsavel(responsavel);
-        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        org.mockito.Mockito.lenient().when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        // V51: a correcao trava a entrega.
+        org.mockito.Mockito.lenient().when(entregaService.travarParaCorrigir(entregaId)).thenReturn(entrega);
     }
 
     private void salvarDevolvendoComId() {
@@ -230,5 +234,54 @@ class RetiradaBagagemServiceTest {
 
         assertThatThrownBy(() -> retiradaBagagemService.registrar(entregaId, motorista, foto, null, null, null, null, "local-x", null))
                 .isInstanceOf(ConflitoException.class);
+    }
+
+    /** V51: corrigir a retirada antes de iniciar a viagem - foto nova com motivo; a antiga fica substituida. */
+    @Test
+    void corrigirAFotoDaRetiradaSubstituiERegistraACorrecao() {
+        entrega(EntregaStatus.ATRIBUIDA, motorista);
+        RetiradaBagagem pendente = new RetiradaBagagem(entregaId, motorista, null, null, null, Instant.now(), false, null);
+        pendente.setId(UUID.randomUUID());
+        when(retiradaBagagemRepository.findFirstByEntregaIdAndMotoristaIdAndTrajetoIdIsNullAndDescartadaEmIsNullOrderByDataHoraDesc(entregaId, motorista))
+                .thenReturn(Optional.of(pendente));
+        UUID motivo = UUID.randomUUID();
+
+        retiradaBagagemService.corrigir(entregaId, motorista, foto, false, List.of(), null, motivo, "estava tremida");
+
+        verify(correcaoEntregaService).exigirMotivo(motivo, "estava tremida");
+        verify(fotoEntregaService).substituir(eq(entregaId), eq(pendente.getId()), eq(null), eq(TipoFotoEntrega.RETIRADA), eq(List.of(foto)), any());
+        verify(correcaoEntregaService).registrar(eq(entregaId), eq(com.marillia.milebag.business.correcao.model.EtapaCorrecao.FOTO_RETIRADA),
+                eq(com.marillia.milebag.business.correcao.model.MomentoCorrecao.APOS_REGISTRO), eq(motivo), eq("estava tremida"), any(), any(),
+                eq(motorista), any());
+    }
+
+    @Test
+    void corrigirRetiradaSemRetiradaPendenteERecusado() {
+        entrega(EntregaStatus.EM_ANDAMENTO, motorista);
+
+        assertThatThrownBy(() -> retiradaBagagemService.corrigir(entregaId, motorista, foto, false, List.of(), null, UUID.randomUUID(), null))
+                .isInstanceOf(ConflitoException.class)
+                .hasMessage("A retirada so pode ser corrigida depois de registrada e antes de iniciar a viagem.");
+        verifyNoInteractions(fotoEntregaService);
+    }
+
+    @Test
+    void outroMotoristaNaoCorrigeARetirada() {
+        entrega(EntregaStatus.ATRIBUIDA, UUID.randomUUID());
+
+        assertThatThrownBy(() -> retiradaBagagemService.corrigir(entregaId, motorista, foto, false, List.of(), null, UUID.randomUUID(), null))
+                .isInstanceOf(ConflitoException.class);
+        verifyNoInteractions(fotoEntregaService, correcaoEntregaService);
+    }
+
+    @Test
+    void corrigirSemNadaParaCorrigirERecusado() {
+        entrega(EntregaStatus.ATRIBUIDA, motorista);
+        when(retiradaBagagemRepository.findFirstByEntregaIdAndMotoristaIdAndTrajetoIdIsNullAndDescartadaEmIsNullOrderByDataHoraDesc(entregaId, motorista))
+                .thenReturn(Optional.of(new RetiradaBagagem(entregaId, motorista, null, null, null, Instant.now(), false, null)));
+
+        assertThatThrownBy(() -> retiradaBagagemService.corrigir(entregaId, motorista, null, false, List.of(), null, UUID.randomUUID(), null))
+                .isInstanceOf(RegraNegocioException.class);
+        verifyNoInteractions(fotoEntregaService);
     }
 }

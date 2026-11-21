@@ -46,6 +46,8 @@ class PainelEntregasServiceTest {
     private DispensaEntregaService dispensaEntregaService;
     @Mock
     private com.marillia.milebag.business.retirada.service.RetiradaBagagemService retiradaBagagemService;
+    @Mock
+    private com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService comprovanteEntregaService;
 
     private PainelEntregasService painelEntregasService;
 
@@ -56,7 +58,7 @@ class PainelEntregasServiceTest {
         painelEntregasService =
                 new PainelEntregasService(
                         entregaRepository, bdoService, bagagemCaronaService, viagemService, new PainelEntregasMapper(), dispensaEntregaService,
-                        retiradaBagagemService);
+                        retiradaBagagemService, comprovanteEntregaService);
         // lenient: nem todo teste chega a montar um item (ex.: consultarPainelVazioNaoQuebra).
         org.mockito.Mockito.lenient().when(viagemService.marcoMaisRecente(any())).thenReturn(Optional.empty());
     }

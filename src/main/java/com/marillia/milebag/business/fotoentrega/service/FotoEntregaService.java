@@ -68,6 +68,39 @@ public class FotoEntregaService {
         fotoEntregaRepository.save(new FotoEntrega(entregaId, tipo, null, comprovanteId, gravar(foto), dataHora));
     }
 
+    /**
+     * Correcao (V51): as fotos atuais deste tipo da retirada ou do comprovante ficam substituidas (nunca apagadas) e as
+     * novas entram no lugar. Lista vazia so retira as atuais (ex.: avarias que nao existiam).
+     */
+    @Transactional
+    public void substituir(UUID entregaId, UUID retiradaId, UUID comprovanteId, TipoFotoEntrega tipo, List<MultipartFile> novas, Instant quando) {
+        fotoEntregaRepository.findByEntregaIdOrderByDataHoraAsc(entregaId).stream()
+                .filter(foto -> foto.getTipo() == tipo && !foto.substituida())
+                .filter(foto -> retiradaId != null ? retiradaId.equals(foto.getRetiradaId()) : comprovanteId.equals(foto.getComprovanteId()))
+                .forEach(foto -> {
+                    foto.substituir(quando);
+                    fotoEntregaRepository.save(foto);
+                });
+        for (MultipartFile nova : novas) {
+            fotoEntregaRepository.save(new FotoEntrega(entregaId, tipo, retiradaId, comprovanteId, gravar(nova), quando));
+        }
+    }
+
+    /** A foto do BDO assinado que a correcao trocou no comprovante fica guardada aqui, como substituida (V51). */
+    @Transactional
+    public void guardarBdoAssinadoSubstituido(UUID entregaId, UUID comprovanteId, String caminhoAntigo, Instant tiradaEm, Instant quando) {
+        fotoEntregaRepository.save(FotoEntrega.bdoAssinadoSubstituido(entregaId, comprovanteId, caminhoAntigo, tiradaEm, quando));
+    }
+
+    /** Quantas fotos atuais (nao substituidas) deste tipo a retirada ou o comprovante tem - para descrever a correcao. */
+    @Transactional(readOnly = true)
+    public long contarAtuais(UUID entregaId, UUID retiradaId, UUID comprovanteId, TipoFotoEntrega tipo) {
+        return fotoEntregaRepository.findByEntregaIdOrderByDataHoraAsc(entregaId).stream()
+                .filter(foto -> foto.getTipo() == tipo && !foto.substituida())
+                .filter(foto -> retiradaId != null ? retiradaId.equals(foto.getRetiradaId()) : comprovanteId.equals(foto.getComprovanteId()))
+                .count();
+    }
+
     @Transactional(readOnly = true)
     public List<FotoEntrega> listarPorEntrega(UUID entregaId) {
         return fotoEntregaRepository.findByEntregaIdOrderByDataHoraAsc(entregaId);

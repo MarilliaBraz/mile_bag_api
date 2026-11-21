@@ -8,5 +8,7 @@ public enum TipoFotoEntrega {
     RETIRADA,
     PORTA,
     AVARIA_RETIRADA,
-    AVARIA_ENTREGA
+    AVARIA_ENTREGA,
+    /** V51: so a foto do BDO assinado SUBSTITUIDA por uma correcao - a atual continua no comprovante. */
+    BDO_ASSINADO
 }

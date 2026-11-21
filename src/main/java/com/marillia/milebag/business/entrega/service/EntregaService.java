@@ -194,6 +194,16 @@ public class EntregaService {
     }
 
     /** Com a linha travada (V47), e recusando a entrega cancelada pela empresa. */
+    /**
+     * V51: a entrega travada (FOR UPDATE) ate o fim da transacao - duas correcoes ao mesmo tempo, ou a correcao da
+     * retirada e o inicio da viagem, passam uma de cada vez.
+     */
+    @Transactional
+    public Entrega travarParaCorrigir(UUID entregaId) {
+        return entregaRepository.findForUpdateById(entregaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
+    }
+
     private Entrega buscarParaMudarSituacao(UUID entregaId) {
         Entrega entrega = entregaRepository.findForUpdateById(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));

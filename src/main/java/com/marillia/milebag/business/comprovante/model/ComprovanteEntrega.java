@@ -26,10 +26,11 @@ public class ComprovanteEntrega extends BaseEntity {
     @Column(name = "entrega_id", nullable = false, updatable = false)
     private UUID entregaId;
 
-    @Column(name = "foto_documento_url", nullable = false, updatable = false, length = 500)
+    // V51: so a correcao (ate 24 h, com motivo) troca; a foto anterior fica em foto_entrega como substituida.
+    @Column(name = "foto_documento_url", nullable = false, length = 500)
     private String fotoDocumentoUrl;
 
-    @Column(name = "identificacao_recebedor", nullable = false, updatable = false, length = 200)
+    @Column(name = "identificacao_recebedor", nullable = false, length = 200)
     private String identificacaoRecebedor;
 
     /** Momento da captura no dispositivo, nao do envio ao servidor (data-model.md). */
@@ -49,13 +50,13 @@ public class ComprovanteEntrega extends BaseEntity {
     private String idLocal;
 
     /** V48: quem assinou, da lista da empresa (motivo de finalidade RECEBEDOR); nulo nos comprovantes antigos. */
-    @Column(name = "tipo_recebedor_id", updatable = false)
+    @Column(name = "tipo_recebedor_id")
     private UUID tipoRecebedorId;
 
-    @Column(name = "nome_recebedor", updatable = false, length = 200)
+    @Column(name = "nome_recebedor", length = 200)
     private String nomeRecebedor;
 
-    @Column(name = "observacao_avaria", updatable = false)
+    @Column(name = "observacao_avaria")
     private String observacaoAvaria;
 
     public ComprovanteEntrega(
@@ -78,6 +79,23 @@ public class ComprovanteEntrega extends BaseEntity {
     }
 
     /** V48: dados da entrega no passo a passo - antes de gravar (as colunas nao mudam depois). */
+    /** V51: correcao da foto do BDO assinado; a anterior e guardada como substituida por quem chama. */
+    public void corrigirFotoDocumento(String caminho) {
+        this.fotoDocumentoUrl = caminho;
+    }
+
+    /** V51: correcao de quem assinou o recebimento. */
+    public void corrigirRecebedor(UUID tipoRecebedorId, String nomeRecebedor, String identificacao) {
+        this.tipoRecebedorId = tipoRecebedorId;
+        this.nomeRecebedor = nomeRecebedor;
+        this.identificacaoRecebedor = identificacao;
+    }
+
+    /** V51: correcao da observacao das avarias na entrega. */
+    public void corrigirObservacaoAvaria(String observacao) {
+        this.observacaoAvaria = observacao;
+    }
+
     public void registrarDadosDaEntrega(UUID tipoRecebedorId, String nomeRecebedor, String observacaoAvaria) {
         this.tipoRecebedorId = tipoRecebedorId;
         this.nomeRecebedor = nomeRecebedor;

@@ -10,5 +10,7 @@ public enum FinalidadeMotivo {
     DISPENSA,
     CANCELAMENTO,
     /** V48: quem pode assinar o recebimento (titular, familiar, portaria...), escolhido no comprovante. */
-    RECEBEDOR
+    RECEBEDOR,
+    /** V51: motivo de voltar e corrigir uma etapa da entrega (auditoria). */
+    CORRECAO
 }
