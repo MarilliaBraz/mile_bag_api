@@ -5,27 +5,27 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
-import com.marillia.milebag.business.bdo.service.CamposBdoExtractor;
+import com.marillia.milebag.business.bdo.service.LeitorTelexBdo;
 
 /**
- * Extrai os campos do telex WorldTracer a partir do corpo de texto do
- * e-mail (FR-005) - sem OCR, diferente de HU01, ja que o conteudo aqui ja
- * chega como texto estruturado (research.md desta HU, secao 3).
- *
- * <p>Mesma ressalva de {@code BdoOcrService}: nenhum layout exato do telex
- * foi fornecido nas evidencias do projeto, entao a extracao por rotulo de
- * linha e uma heuristica de melhor esforco. Aqui, porem, sem tela de
- * conferencia para corrigir depois (RN01/RI01 nao se aplicam a esta via),
- * um e-mail sem todos os campos obrigatorios NAO gera BDO (FR-007,
- * data-model.md) - os mesmos tres campos minimos exigidos tambem na
- * confirmacao de HU01 ({@code BdoService}, T014): numero, passageiro e
- * endereco de entrega.</p>
+ * Reconhece o telex WorldTracer no corpo do e-mail ({@link LeitorTelexBdo}, V49). Sem tela de conferencia nesta via,
+ * um e-mail sem os campos minimos (numero, passageiro e endereco de entrega) NAO gera BDO (FR-007) - fica para a
+ * empresa incluir pelo painel.
  */
 @Component
 public class BdoTelexParser {
 
+    private final LeitorTelexBdo leitorTelexBdo;
+
+    public BdoTelexParser(LeitorTelexBdo leitorTelexBdo) {
+        this.leitorTelexBdo = leitorTelexBdo;
+    }
+
     public Optional<CamposExtraidosBdo> parsear(String corpoEmail) {
-        CamposExtraidosBdo campos = CamposBdoExtractor.extrair(corpoEmail);
+        // Um BDO real tem menos de 2 mil caracteres; o resto do e-mail (assinaturas, historico) nao interessa.
+        String corpo = corpoEmail != null && corpoEmail.length() > LeitorTelexBdo.TAMANHO_MAXIMO_TEXTO
+                ? corpoEmail.substring(0, LeitorTelexBdo.TAMANHO_MAXIMO_TEXTO) : corpoEmail;
+        CamposExtraidosBdo campos = leitorTelexBdo.ler(corpo);
 
         if (campoAusente(campos.numero()) || campoAusente(campos.passageiroNome()) || campoAusente(campos.enderecoEntrega())) {
             return Optional.empty();

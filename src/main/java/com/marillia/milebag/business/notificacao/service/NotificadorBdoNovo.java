@@ -16,12 +16,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.bdo.model.BdoEncaminhadoPorCompanhia;
+import com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.notificacao.model.InscricaoPush;
 import com.marillia.milebag.core.config.security.TenantContext;
 
 /**
- * Avisa os aparelhos inscritos dos motoristas ativos do tenant quando um BDO chega por e-mail (HU32, RF25).
+ * Avisa os aparelhos inscritos dos motoristas ativos do tenant quando um BDO novo fica disponivel: por e-mail (HU32,
+ * RF25), pela companhia aerea (HU37) ou incluido pela empresa (V49).
  *
  * <p>Depois do commit: so avisa de um BDO que de fato ficou registrado. Numa transacao nova, porque a do registro ja
  * terminou e a leitura das inscricoes precisa de transacao para a RLS valer (TenantAspect); o tenant continua no
@@ -44,6 +46,13 @@ public class NotificadorBdoNovo {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void aoReceberBdoPorEmail(BdoRecebidoPorEmail evento) {
+        avisar(evento.bdoId(), conteudo(evento));
+    }
+
+    /** V49: a empresa incluiu o BDO pelo painel - o tenant e o da requisicao do administrador, ainda no contexto. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void aoIncluirBdoPelaEmpresa(BdoIncluidoPelaEmpresa evento) {
         avisar(evento.bdoId(), conteudo(evento));
     }
 
@@ -79,6 +88,12 @@ public class NotificadorBdoNovo {
         return json(evento.bdoId(), evento.numero() == null
                 ? "Um BDO novo chegou por e-mail e está disponível para assumir."
                 : "BDO " + evento.numero() + " chegou por e-mail e está disponível para assumir.");
+    }
+
+    String conteudo(BdoIncluidoPelaEmpresa evento) {
+        return json(evento.bdoId(), evento.numero() == null
+                ? "A empresa incluiu um BDO novo, disponível para assumir."
+                : "A empresa incluiu o BDO " + evento.numero() + ", disponível para assumir.");
     }
 
     String conteudo(BdoEncaminhadoPorCompanhia evento) {

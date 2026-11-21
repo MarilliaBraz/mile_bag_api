@@ -13,8 +13,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.marillia.milebag.business.bdo.model.BdoResponse;
-import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.entrega.model.EntregaResponse;
 import com.marillia.milebag.business.entrega.model.JanelaReagendamento;
 import com.marillia.milebag.business.entrega.service.EntregaService;
@@ -32,7 +30,6 @@ import com.marillia.milebag.business.sincronizacao.model.FotoOffline;
 import com.marillia.milebag.business.sincronizacao.model.PayloadRetiradaRegistrada;
 import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.sincronizacao.model.PayloadBagagemCaronaVinculada;
-import com.marillia.milebag.business.sincronizacao.model.PayloadBdoCapturado;
 import com.marillia.milebag.business.sincronizacao.model.PayloadComprovanteRegistrado;
 import com.marillia.milebag.business.sincronizacao.repository.EventoSincronizadoRepository;
 import com.marillia.milebag.business.sincronizacao.model.PayloadEntregaAutoatribuida;
@@ -56,7 +53,6 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 @Component
 public class SincronizacaoEventoDispatcher {
 
-    private final BdoService bdoService;
     private final EntregaService entregaService;
     private final RotaService rotaService;
     private final ViagemService viagemService;
@@ -68,7 +64,6 @@ public class SincronizacaoEventoDispatcher {
     private final ObjectMapper objectMapper;
 
     public SincronizacaoEventoDispatcher(
-            BdoService bdoService,
             EntregaService entregaService,
             RotaService rotaService,
             ViagemService viagemService,
@@ -78,7 +73,6 @@ public class SincronizacaoEventoDispatcher {
             RetiradaBagagemService retiradaBagagemService,
             EventoSincronizadoRepository eventoSincronizadoRepository,
             ObjectMapper objectMapper) {
-        this.bdoService = bdoService;
         this.entregaService = entregaService;
         this.rotaService = rotaService;
         this.viagemService = viagemService;
@@ -107,7 +101,9 @@ public class SincronizacaoEventoDispatcher {
     @Transactional
     public UUID despachar(EventoSincronizacaoRequest evento, UUID motoristaId, Map<UUID, UUID> resolvidosNesteLote) {
         UUID idServidor = switch (evento.tipoEvento()) {
-            case BDO_CAPTURADO -> despacharBdoCapturado(evento, motoristaId);
+            // V49: a captura por foto saiu; uma foto que ficou na fila de um celular antigo volta com o motivo.
+            case BDO_CAPTURADO -> throw new RegraNegocioException(
+                    "A captura do BDO por foto foi desativada. A empresa inclui o BDO pelo painel.");
             case ENTREGA_AUTOATRIBUIDA -> despacharEntregaAutoatribuida(evento, motoristaId, resolvidosNesteLote);
             case ROTA_ESCOLHIDA -> despacharRotaEscolhida(evento, resolvidosNesteLote);
             case VIAGEM_INICIADA -> despacharViagemIniciada(evento, resolvidosNesteLote);
@@ -119,13 +115,6 @@ public class SincronizacaoEventoDispatcher {
 
         eventoSincronizadoRepository.save(new EventoSincronizado(evento.idLocal(), evento.tipoEvento(), idServidor));
         return idServidor;
-    }
-
-    private UUID despacharBdoCapturado(EventoSincronizacaoRequest evento, UUID motoristaId) {
-        PayloadBdoCapturado payload = converter(evento, PayloadBdoCapturado.class);
-        MultipartFile imagem = new ByteArrayMultipartFile("imagem", payload.nomeArquivo(), decodificar(payload.imagemBase64()));
-        BdoResponse resposta = bdoService.capturar(imagem, motoristaId);
-        return resposta.id();
     }
 
     private UUID despacharEntregaAutoatribuida(EventoSincronizacaoRequest evento, UUID motoristaId, Map<UUID, UUID> resolvidos) {

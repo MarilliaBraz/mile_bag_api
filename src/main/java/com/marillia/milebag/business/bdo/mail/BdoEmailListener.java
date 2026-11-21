@@ -122,6 +122,20 @@ public class BdoEmailListener {
             mensagem.setFlag(Flags.Flag.SEEN, true);
         } catch (MessagingException | IOException e) {
             log.error("Falha ao processar e-mail de recebimento de BDO - mantido para nova tentativa.", e);
+        } catch (RuntimeException e) {
+            // Conteudo que o banco recusa (V49): repetir nao adianta e prenderia os e-mails seguintes a cada ciclo.
+            // Fica lido e registrado; a empresa inclui o BDO pelo painel.
+            log.error("E-mail de BDO recusado ({}) - marcado como lido para nao travar a caixa; incluir pelo painel.",
+                    e.getClass().getSimpleName(), e);
+            marcarComoLido(mensagem);
+        }
+    }
+
+    private void marcarComoLido(Message mensagem) {
+        try {
+            mensagem.setFlag(Flags.Flag.SEEN, true);
+        } catch (MessagingException e) {
+            log.warn("Nao foi possivel marcar o e-mail recusado como lido.", e);
         }
     }
 
@@ -130,7 +144,7 @@ public class BdoEmailListener {
         try {
             Optional<CamposExtraidosBdo> campos = bdoTelexParser.parsear(corpo);
             if (campos.isPresent()) {
-                bdoService.criarAutomatico(campos.get());
+                bdoService.criarAutomatico(campos.get(), corpo);
             } else {
                 // FR-007: sem tela de conferencia nesta via, um registro parcial
                 // nao poderia ser corrigido depois - nenhum BDO e criado.
