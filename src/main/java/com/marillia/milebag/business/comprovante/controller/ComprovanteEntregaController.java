@@ -57,11 +57,13 @@ public class ComprovanteEntregaController {
             @RequestParam(value = "avarias", required = false) List<MultipartFile> avarias,
             @RequestParam(value = "observacaoAvaria", required = false) String observacaoAvaria,
             // V51: correcoes feitas antes de finalizar (JSON), com motivo.
-            @RequestParam(value = "correcoes", required = false) String correcoes) {
+            @RequestParam(value = "correcoes", required = false) String correcoes,
+            @AuthenticationPrincipal AuthenticatedUser usuario) {
         var resultado = comprovanteEntregaService.registrar(
                 entregaId, foto, identificacaoRecebedor, dataHora, latitude, longitude, idLocal, justificativaDivergencia,
                 new ComprovanteEntregaService.DadosDaEntrega(fotoPorta, tipoRecebedorId, nomeRecebedor, avarias, observacaoAvaria,
-                        lerCorrecoes(correcoes)));
+                        lerCorrecoes(correcoes)),
+                usuario.userId());
         return ResponseEntity.status(resultado.novo() ? HttpStatus.CREATED : HttpStatus.OK).body(ComprovanteEntregaResponse.de(resultado.comprovante()));
     }
 

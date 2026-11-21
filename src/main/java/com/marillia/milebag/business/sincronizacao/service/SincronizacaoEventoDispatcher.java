@@ -108,7 +108,7 @@ public class SincronizacaoEventoDispatcher {
             case ROTA_ESCOLHIDA -> despacharRotaEscolhida(evento, resolvidosNesteLote);
             case VIAGEM_INICIADA -> despacharViagemIniciada(evento, resolvidosNesteLote);
             case BAGAGEM_CARONA_VINCULADA -> despacharBagagemCaronaVinculada(evento, resolvidosNesteLote);
-            case COMPROVANTE_REGISTRADO -> despacharComprovanteRegistrado(evento, resolvidosNesteLote);
+            case COMPROVANTE_REGISTRADO -> despacharComprovanteRegistrado(evento, motoristaId, resolvidosNesteLote);
             case OCORRENCIA_REGISTRADA -> despacharOcorrenciaRegistrada(evento, resolvidosNesteLote);
             case RETIRADA_REGISTRADA -> despacharRetiradaRegistrada(evento, motoristaId, resolvidosNesteLote);
         };
@@ -148,7 +148,7 @@ public class SincronizacaoEventoDispatcher {
         return bagagemCarona.getId();
     }
 
-    private UUID despacharComprovanteRegistrado(EventoSincronizacaoRequest evento, Map<UUID, UUID> resolvidos) {
+    private UUID despacharComprovanteRegistrado(EventoSincronizacaoRequest evento, UUID motoristaId, Map<UUID, UUID> resolvidos) {
         PayloadComprovanteRegistrado payload = converter(evento, PayloadComprovanteRegistrado.class);
         UUID entregaId = resolverReferencia(payload.entregaId(), resolvidos);
         MultipartFile foto = new ByteArrayMultipartFile("foto", payload.nomeArquivo(), decodificar(payload.fotoBase64()));
@@ -168,7 +168,8 @@ public class SincronizacaoEventoDispatcher {
                 payload.longitude(),
                 evento.idLocal().toString(),
                 payload.justificativaDivergencia(),
-                dados);
+                dados,
+                motoristaId);
         ComprovanteEntrega comprovante = resultado.comprovante();
         return comprovante.getId();
     }

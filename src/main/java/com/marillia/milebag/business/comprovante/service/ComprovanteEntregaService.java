@@ -135,6 +135,27 @@ public class ComprovanteEntregaService {
             String idLocal,
             String justificativaDivergencia,
             DadosDaEntrega dadosDaEntrega) {
+        return registrar(entregaId, foto, identificacaoRecebedor, dataHoraTexto, latitude, longitude, idLocal, justificativaDivergencia,
+                dadosDaEntrega, null);
+    }
+
+    /**
+     * {@code autorId}: quem enviou o comprovante (o usuario autenticado, ou o autor do lote offline). As correcoes do
+     * fluxo (V51) sao atribuidas a ele e so valem se ele for o motorista responsavel - ninguem registra correcao em
+     * nome de outro.
+     */
+    @Transactional
+    public ComprovanteEntregaResultado registrar(
+            UUID entregaId,
+            MultipartFile foto,
+            String identificacaoRecebedor,
+            String dataHoraTexto,
+            Double latitude,
+            Double longitude,
+            String idLocal,
+            String justificativaDivergencia,
+            DadosDaEntrega dadosDaEntrega,
+            UUID autorId) {
         DadosDaEntrega dados = dadosDaEntrega == null ? DadosDaEntrega.FORMATO_ANTIGO : dadosDaEntrega;
 
         // V47: a entrega cancelada pela empresa para antes de gravar a foto (marcarEncerradaComSucesso tambem recusa).
@@ -164,10 +185,11 @@ public class ComprovanteEntregaService {
         ComprovanteEntrega comprovante = comprovanteEntregaRepository.save(novo);
         // V51: correcoes feitas no aparelho antes de finalizar (voltar a uma etapa ja concluida), com motivo.
         Entrega entrega = entregaService.buscarPorId(entregaId).orElseThrow();
-        if (entrega.getMotoristaResponsavel() != null) {
-            correcaoEntregaService.registrarDoFluxo(entregaId, entrega.getMotoristaResponsavel(), dados.correcoes(), dataHora);
+        if (autorId != null && autorId.equals(entrega.getMotoristaResponsavel())) {
+            correcaoEntregaService.registrarDoFluxo(entregaId, autorId, dados.correcoes(), dataHora);
         } else if (!dados.correcoes().isEmpty()) {
-            log.warn("Entrega {} sem motorista responsavel: {} correcoes do fluxo nao registradas.", entregaId, dados.correcoes().size());
+            log.warn("Entrega {}: {} correcoes do fluxo ignoradas - quem enviou nao e o motorista responsavel.", entregaId,
+                    dados.correcoes().size());
         }
         if (!dados.formatoAntigo()) {
             fotoEntregaService.salvarDoComprovante(entregaId, comprovante.getId(), TipoFotoEntrega.PORTA, dados.fotoPorta(), dataHora);

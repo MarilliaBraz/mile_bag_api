@@ -290,8 +290,26 @@ class ComprovanteEntregaServiceTest {
         var correcoes = List.of(new com.marillia.milebag.business.correcao.model.CorrecaoInformada(
                 com.marillia.milebag.business.correcao.model.EtapaCorrecao.FOTO_PORTA, UUID.randomUUID(), null, "foto anterior", "foto nova", null));
 
-        registrar(servicoAtual(), new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null, correcoes));
+        servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
+                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null, correcoes), motoristaCorrecao);
 
         verify(correcaoEntregaService).registrarDoFluxo(eq(entregaId), eq(motoristaCorrecao), eq(correcoes), any());
+    }
+
+    /** Quem nao e o motorista responsavel nao registra correcao em nome dele (a entrega segue normalmente). */
+    @Test
+    void correcoesDeQuemNaoEOResponsavelSaoIgnoradas() throws Exception {
+        entregaLivreParaRegistrar();
+        Entrega comMotorista = new Entrega();
+        comMotorista.setMotoristaResponsavel(motoristaCorrecao);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(comMotorista));
+        tipoRecebedorAtivo();
+        var correcoes = List.of(new com.marillia.milebag.business.correcao.model.CorrecaoInformada(
+                com.marillia.milebag.business.correcao.model.EtapaCorrecao.FOTO_PORTA, UUID.randomUUID(), null, "a", "b", null));
+
+        servicoAtual().registrar(entregaId, fotoBdo, null, Instant.now().toString(), -16.6, -49.2, "id-local", null,
+                new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null, correcoes), UUID.randomUUID());
+
+        verify(correcaoEntregaService, never()).registrarDoFluxo(any(), any(), any(), any());
     }
 }
