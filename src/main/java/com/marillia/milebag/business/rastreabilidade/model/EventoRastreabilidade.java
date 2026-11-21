@@ -27,6 +27,8 @@ public record EventoRastreabilidade(
         /** V50: segunda via do BDO enviada por e-mail; {@code descricao} e o endereco de destino. */
         SEGUNDA_VIA_ENVIADA,
         /** V51: correcao de etapa; {@code descricao} e a etapa (FOTO_PORTA...), {@code detalhe} o motivo, antes e depois. */
-        CORRECAO
+        CORRECAO,
+        /** V52: a empresa trocou a base do BDO; {@code descricao} "GYN -> BSB", {@code detalhe} o motivo. */
+        BASE_ALTERADA
     }
 }

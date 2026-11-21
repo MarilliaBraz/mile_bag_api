@@ -72,9 +72,11 @@ public class CobrancaViagemService {
             return Optional.empty();
         }
         String doBdo = bdo.getAeroportoRetirada() == null ? "" : bdo.getAeroportoRetirada();
+        // V52: a base gravada no BDO (a que encaminhou para os motoristas) manda; sem ela, o aeroporto de retirada.
         BaseAeroportuaria escolhida = bases.stream()
-                .filter(base -> base.getCodigoIata().equalsIgnoreCase(doBdo))
+                .filter(base -> bdo.getBaseId() != null && bdo.getBaseId().equals(base.getId()))
                 .findFirst()
+                .or(() -> bases.stream().filter(base -> base.getCodigoIata().equalsIgnoreCase(doBdo)).findFirst())
                 .or(() -> bases.stream().filter(BaseAeroportuaria::isPrincipal).findFirst())
                 .orElse(bases.get(0));
         Optional<Aeroporto> aeroporto = aeroportoService.buscar(escolhida.getCodigoIata().toUpperCase(Locale.ROOT));

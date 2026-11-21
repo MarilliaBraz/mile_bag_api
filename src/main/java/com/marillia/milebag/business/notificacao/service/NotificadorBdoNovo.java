@@ -17,6 +17,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.bdo.model.BdoEncaminhadoPorCompanhia;
 import com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa;
+import com.marillia.milebag.business.bdo.model.BdoMudouDeBase;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.notificacao.model.InscricaoPush;
 import com.marillia.milebag.core.config.security.TenantContext;
@@ -80,7 +81,8 @@ public class NotificadorBdoNovo {
         if (!disparadorPush.habilitado()) {
             return;
         }
-        disparadorPush.disparar(inscricaoPushService.listarDosMotoristasAtivos(), conteudo, "de BDO novo " + bdoId);
+        // V52: so os motoristas da base do BDO.
+        disparadorPush.disparar(inscricaoPushService.listarDosMotoristasDoBdo(bdoId), conteudo, "de BDO novo " + bdoId);
     }
 
     String conteudo(BdoRecebidoPorEmail evento) {
@@ -88,6 +90,15 @@ public class NotificadorBdoNovo {
         return json(evento.bdoId(), evento.numero() == null
                 ? "Um BDO novo chegou por e-mail e está disponível para assumir."
                 : "BDO " + evento.numero() + " chegou por e-mail e está disponível para assumir.");
+    }
+
+    /** V52: a empresa passou o BDO para outra base - avisa os motoristas da base nova. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void aoMudarDeBase(BdoMudouDeBase evento) {
+        avisar(evento.bdoId(), json(evento.bdoId(), evento.numero() == null
+                ? "Um BDO passou para a sua base e está disponível para assumir."
+                : "O BDO " + evento.numero() + " passou para a sua base e está disponível para assumir."));
     }
 
     String conteudo(BdoIncluidoPelaEmpresa evento) {

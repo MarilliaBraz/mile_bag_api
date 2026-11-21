@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.service.BdoService;
@@ -40,14 +41,22 @@ public class EntregaService {
     private final BdoService bdoService;
     private final EntregaMapper entregaMapper;
     private final BagagemCaronaRepository bagagemCaronaRepository;
+    private final UsuarioConsultaService usuarioConsultaService;
 
     public EntregaService(
             EntregaRepository entregaRepository, BdoService bdoService, EntregaMapper entregaMapper,
-            BagagemCaronaRepository bagagemCaronaRepository) {
+            BagagemCaronaRepository bagagemCaronaRepository, UsuarioConsultaService usuarioConsultaService) {
         this.bagagemCaronaRepository = bagagemCaronaRepository;
+        this.usuarioConsultaService = usuarioConsultaService;
         this.entregaRepository = entregaRepository;
         this.bdoService = bdoService;
         this.entregaMapper = entregaMapper;
+    }
+
+    /** V52: a entrega do BDO, se ja existe. */
+    @Transactional(readOnly = true)
+    public Optional<Entrega> buscarPorBdo(UUID bdoId) {
+        return entregaRepository.findByBdoId(bdoId);
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +166,14 @@ public class EntregaService {
     @Transactional
     public EntregaResponse autoatribuir(UUID bdoId, UUID motoristaId) {
         Bdo bdo = buscarBdoConfirmadoOuFalhar(bdoId);
+        // V52: o BDO so vai para os motoristas da base dele (inclusive pela fila offline); sem base, nenhum.
+        UUID baseDoMotorista = usuarioConsultaService.baseDoMotorista(motoristaId).orElse(null);
+        if (baseDoMotorista == null) {
+            throw new ConflitoException("Sua empresa ainda nao definiu a sua base. Peca para ela definir antes de assumir entregas.");
+        }
+        if (bdo.getBaseId() != null && !bdo.getBaseId().equals(baseDoMotorista)) {
+            throw new ConflitoException("Este BDO e de outra base.");
+        }
         // Um BDO ja vinculado como bagagem carona viaja junto de outra entrega: nao pode virar entrega propria.
         if (bagagemCaronaRepository.findByBdoId(bdoId).isPresent()) {
             throw new ConflitoException("Este BDO ja esta vinculado como bagagem carona de outra entrega.");
@@ -211,8 +228,9 @@ public class EntregaService {
         return entrega;
     }
 
+    /** Travado (V52): a troca de base do mesmo BDO espera o autoatribuir terminar, e vice-versa. */
     private Bdo buscarBdoConfirmadoOuFalhar(UUID bdoId) {
-        return bdoService.buscarPorId(bdoId)
+        return bdoService.travar(bdoId)
                 .filter(bdo -> bdo.getStatusConferencia() == StatusConferencia.CONFIRMADO)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado ou ainda nao confirmado."));
     }

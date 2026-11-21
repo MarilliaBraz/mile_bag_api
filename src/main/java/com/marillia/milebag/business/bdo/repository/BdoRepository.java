@@ -4,11 +4,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.core.base.BaseRepository;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * Isolamento por tenant garantido pela politica de Row Level Security da
@@ -22,6 +27,11 @@ public interface BdoRepository extends BaseRepository<Bdo, UUID> {
      * nem espacos - inclusive os gravados antes da normalizacao ("gynla 24713"). O parametro ja vem normalizado
      * ({@code BdoService}); os mais recentes primeiro.
      */
+    /** V52: o BDO travado ate o fim da transacao - a troca de base e o autoatribuir passam um de cada vez. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Bdo b where b.id = :id")
+    Optional<Bdo> findForUpdateById(@Param("id") UUID id);
+
     @Query(value = CONSULTA_POR_NUMERO, nativeQuery = true)
     List<Bdo> buscarPorNumeroNormalizado(@Param("numero") String numero);
 

@@ -1,10 +1,14 @@
 package com.marillia.milebag.business.entrega.service;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.business.entrega.mapper.PainelEntregasMapper;
 import com.marillia.milebag.business.entrega.model.BdosDisponiveisResponse;
@@ -28,16 +32,26 @@ public class BdosDisponiveisService {
     private final EntregaRepository entregaRepository;
     private final PainelEntregasMapper mapper;
 
-    public BdosDisponiveisService(BdoRepository bdoRepository, EntregaRepository entregaRepository, PainelEntregasMapper mapper) {
+    private final UsuarioConsultaService usuarioConsultaService;
+
+    public BdosDisponiveisService(BdoRepository bdoRepository, EntregaRepository entregaRepository, PainelEntregasMapper mapper,
+            UsuarioConsultaService usuarioConsultaService) {
+        this.usuarioConsultaService = usuarioConsultaService;
         this.bdoRepository = bdoRepository;
         this.entregaRepository = entregaRepository;
         this.mapper = mapper;
     }
 
     @Transactional(readOnly = true)
-    public BdosDisponiveisResponse consultarDisponiveis() {
+    public BdosDisponiveisResponse consultarDisponiveis(UUID motoristaId) {
+        // V52: so os BDOs da base do motorista; sem base, nenhum (a empresa precisa definir a base dele).
+        Optional<UUID> base = usuarioConsultaService.baseDoMotorista(motoristaId);
+        if (base.isEmpty()) {
+            return new BdosDisponiveisResponse(List.of(), true);
+        }
         // A entrega reaberta (RN05) traz a janela de reagendamento (HU29); a consulta so devolve BDO sem entrega ou com entrega reaberta.
         var bdos = bdoRepository.findDisponiveisParaAutoatribuicao().stream()
+                .filter(bdo -> bdo.getBaseId() == null || bdo.getBaseId().equals(base.get()))
                 // So a entrega REABERTA e uma nova tentativa: a devolvida por dispensa antes de qualquer viagem
                 // (AGUARDANDO_ATRIBUICAO, V46) aparece como uma entrega nova.
                 .map(bdo -> mapper.toItemDisponivel(bdo, entregaRepository.findByBdoId(bdo.getId())
@@ -45,6 +59,6 @@ public class BdosDisponiveisService {
                         .orElse(null)))
                 .toList();
         log.info("Consulta de BDOs disponiveis: {} encontrado(s)", bdos.size());
-        return new BdosDisponiveisResponse(bdos);
+        return new BdosDisponiveisResponse(bdos, false);
     }
 }

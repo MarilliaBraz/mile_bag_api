@@ -45,7 +45,7 @@ class NotificadorBdoNovoTest {
         InscricaoPush celular = inscricao();
         InscricaoPush tablet = inscricao();
         when(enviadorPush.habilitado()).thenReturn(true);
-        when(inscricaoPushService.listarDosMotoristasAtivos()).thenReturn(List.of(celular, tablet));
+        when(inscricaoPushService.listarDosMotoristasDoBdo(any())).thenReturn(List.of(celular, tablet));
         when(enviadorPush.enviar(any(), anyString())).thenReturn(201);
 
         notificador.aoReceberBdoPorEmail(evento);
@@ -60,7 +60,7 @@ class NotificadorBdoNovoTest {
     void inscricaoExpiradaERemovida() throws Exception {
         InscricaoPush expirada = inscricao();
         when(enviadorPush.habilitado()).thenReturn(true);
-        when(inscricaoPushService.listarDosMotoristasAtivos()).thenReturn(List.of(expirada));
+        when(inscricaoPushService.listarDosMotoristasDoBdo(any())).thenReturn(List.of(expirada));
         when(enviadorPush.enviar(any(), anyString())).thenReturn(410);
 
         notificador.aoReceberBdoPorEmail(evento);
@@ -73,7 +73,7 @@ class NotificadorBdoNovoTest {
         InscricaoPush comFalha = inscricao();
         InscricaoPush boa = inscricao();
         when(enviadorPush.habilitado()).thenReturn(true);
-        when(inscricaoPushService.listarDosMotoristasAtivos()).thenReturn(List.of(comFalha, boa));
+        when(inscricaoPushService.listarDosMotoristasDoBdo(any())).thenReturn(List.of(comFalha, boa));
         when(enviadorPush.enviar(eq(comFalha), anyString())).thenThrow(new java.io.IOException("rede"));
         when(enviadorPush.enviar(eq(boa), anyString())).thenReturn(201);
 
@@ -104,7 +104,7 @@ class NotificadorBdoNovoTest {
     @Test
     void bdoIncluidoPelaEmpresaAvisaOsMotoristasAtivos() throws Exception {
         when(enviadorPush.habilitado()).thenReturn(true);
-        when(inscricaoPushService.listarDosMotoristasAtivos()).thenReturn(List.of(inscricao()));
+        when(inscricaoPushService.listarDosMotoristasDoBdo(any())).thenReturn(List.of(inscricao()));
         when(enviadorPush.enviar(any(), anyString())).thenReturn(201);
         com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa incluido =
                 new com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa(UUID.randomUUID(), "GYNLA10001");
@@ -122,7 +122,7 @@ class NotificadorBdoNovoTest {
         TenantContext.set(companhia);
         java.util.concurrent.atomic.AtomicReference<UUID> tenantNaLeitura = new java.util.concurrent.atomic.AtomicReference<>();
         when(enviadorPush.habilitado()).thenReturn(true);
-        when(inscricaoPushService.listarDosMotoristasAtivos()).thenAnswer(i -> {
+        when(inscricaoPushService.listarDosMotoristasDoBdo(any())).thenAnswer(i -> {
             tenantNaLeitura.set(TenantContext.get());
             return List.of(inscricao());
         });

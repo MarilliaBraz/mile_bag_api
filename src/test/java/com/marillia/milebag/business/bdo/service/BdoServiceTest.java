@@ -39,12 +39,15 @@ class BdoServiceTest {
     @Mock
     private ApplicationEventPublisher eventos;
 
+    @Mock
+    private com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService baseAeroportuariaService;
     private BdoService bdoService;
     private final UUID administrador = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        bdoService = new BdoService(bdoRepository, new BdoMapper(), new LeitorTelexBdo(), eventos);
+        bdoService = new BdoService(bdoRepository, new BdoMapper(), new LeitorTelexBdo(), eventos, baseAeroportuariaService);
+        org.mockito.Mockito.lenient().when(baseAeroportuariaService.baseDoBdo(any())).thenReturn(java.util.Optional.empty());
     }
 
     @Test

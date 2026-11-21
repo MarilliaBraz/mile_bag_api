@@ -103,6 +103,10 @@ public class Bdo extends BaseEntity {
     @Column(name = "texto_original", columnDefinition = "TEXT")
     private String textoOriginal;
 
+    /** V52: base aeroportuaria do BDO - so os motoristas dessa base o veem e sao avisados dele. */
+    @Column(name = "base_id")
+    private UUID baseId;
+
     /** Administrador que incluiu o BDO pelo painel (origem EMPRESA). */
     @Column(name = "incluido_por")
     private UUID incluidoPor;

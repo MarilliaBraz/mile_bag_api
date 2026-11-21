@@ -23,7 +23,8 @@ import com.marillia.milebag.business.tenant.service.MotoristaService;
 @RequestMapping("/api/v1/motoristas")
 public class MotoristaController {
 
-    public record CriarMotoristaRequest(String nome, String login, String senha) {
+    /** V52: {@code baseId} obrigatorio - a base aeroportuaria do motorista. */
+    public record CriarMotoristaRequest(String nome, String login, String senha, UUID baseId) {
     }
 
     /** Ao menos um dos tres campos. Trocar o login (HU26) cancela pedidos de redefinicao de senha pendentes. */
@@ -31,7 +32,8 @@ public class MotoristaController {
     public record LinhaLoteRequest(String nome, String login, String senha) {
     }
 
-    public record CriarLoteRequest(List<LinhaLoteRequest> motoristas) {
+    /** V52: o lote vai inteiro para a base escolhida ({@code baseId}, obrigatoria). */
+    public record CriarLoteRequest(List<LinhaLoteRequest> motoristas, UUID baseId) {
     }
 
     public record ResultadoLinhaResponse(int linha, String nome, String login, boolean criado, String mensagem, UUID id, String senhaGerada) {
@@ -40,18 +42,18 @@ public class MotoristaController {
     public record ResultadoLoteResponse(int criados, int comErro, List<ResultadoLinhaResponse> resultados) {
     }
 
-    public record AtualizarMotoristaRequest(String nome, String login, Boolean ativo) {
+    public record AtualizarMotoristaRequest(String nome, String login, Boolean ativo, UUID baseId) {
     }
 
     public record RedefinirSenhaRequest(String senha) {
     }
 
     /** {@code nome} cai no login quando nulo (nunca acontece para motoristas criados por aqui). */
-    public record MotoristaResponse(UUID id, String nome, String login, boolean ativo, Instant criadoEm) {
+    public record MotoristaResponse(UUID id, String nome, String login, boolean ativo, Instant criadoEm, UUID baseId) {
         static MotoristaResponse de(Usuario usuario) {
             return new MotoristaResponse(
                     usuario.getId(), usuario.getNome() != null ? usuario.getNome() : usuario.getEmail(), usuario.getEmail(), usuario.isAtivo(),
-                    usuario.getCriadoEm());
+                    usuario.getCriadoEm(), usuario.getBaseId());
         }
     }
 
@@ -69,7 +71,7 @@ public class MotoristaController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MotoristaResponse criar(@RequestBody CriarMotoristaRequest request) {
-        return MotoristaResponse.de(motoristaService.criar(request.nome(), request.login(), request.senha()));
+        return MotoristaResponse.de(motoristaService.criarNaBase(request.nome(), request.login(), request.senha(), request.baseId()));
     }
 
     /**
@@ -80,7 +82,7 @@ public class MotoristaController {
     public ResultadoLoteResponse criarEmLote(@RequestBody CriarLoteRequest request) {
         var linhas = request.motoristas() == null ? List.<MotoristaService.NovaConta>of()
                 : request.motoristas().stream().map(l -> new MotoristaService.NovaConta(l.nome(), l.login(), l.senha())).toList();
-        var resultados = motoristaService.criarEmLote(linhas).stream()
+        var resultados = motoristaService.criarEmLoteNaBase(linhas, request.baseId()).stream()
                 .map(r -> new ResultadoLinhaResponse(
                         r.linha(), r.nome(), r.login(), r.criado(), r.mensagem(), r.conta() == null ? null : r.conta().getId(), r.senhaGerada()))
                 .toList();
@@ -90,7 +92,8 @@ public class MotoristaController {
 
     @PatchMapping("/{id}")
     public MotoristaResponse atualizar(@PathVariable UUID id, @RequestBody AtualizarMotoristaRequest request) {
-        return MotoristaResponse.de(motoristaService.atualizar(id, request.nome(), request.login(), request.ativo()));
+        return MotoristaResponse.de(
+                motoristaService.atualizarComBase(id, request.nome(), request.login(), request.ativo(), request.baseId()));
     }
 
     @PutMapping("/{id}/senha")

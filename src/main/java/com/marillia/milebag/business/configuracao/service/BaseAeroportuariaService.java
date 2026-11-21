@@ -2,6 +2,7 @@ package com.marillia.milebag.business.configuracao.service;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -50,13 +51,20 @@ public class BaseAeroportuariaService {
             throw new ConflitoException("Ja existe uma base aeroportuaria com este codigoIata.");
         }
         BaseAeroportuaria base = new BaseAeroportuaria(codigo, nome);
-        base.definirPrincipal(baseAeroportuariaRepository.count() == 0);
+        boolean primeira = baseAeroportuariaRepository.count() == 0;
+        base.definirPrincipal(primeira);
         BaseAeroportuaria salva;
         try {
             salva = baseAeroportuariaRepository.saveAndFlush(base);
         } catch (DataIntegrityViolationException e) {
             // Duas inclusoes ao mesmo tempo (mesmo codigo, ou duas "primeiras" bases principais).
             throw new ConflitoException("A base foi alterada por outra pessoa agora. Atualize a tela e tente de novo.");
+        }
+        if (primeira) {
+            // Antes da primeira base, BDOs e motoristas ficaram sem: passam todos para ela.
+            int bdos = baseAeroportuariaRepository.adotarBdosSemBase(salva.getId());
+            int motoristas = baseAeroportuariaRepository.adotarMotoristasSemBase(salva.getId());
+            log.info("Primeira base {} adotou {} BDO(s) e {} motorista(s) sem base.", codigo, bdos, motoristas);
         }
         log.info("Base aeroportuaria {} ({}) criada", salva.getId(), codigo);
         return salva;
@@ -65,6 +73,23 @@ public class BaseAeroportuariaService {
     @Transactional(readOnly = true)
     public List<BaseAeroportuaria> listar() {
         return baseAeroportuariaRepository.findAllByOrderByPrincipalDescCriadoEmAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<BaseAeroportuaria> buscar(UUID id) {
+        return id == null ? Optional.empty() : baseAeroportuariaRepository.findById(id);
+    }
+
+    /** V52: a base de um BDO - o aeroporto de retirada dele, se for base da empresa; senao a principal. */
+    @Transactional(readOnly = true)
+    public Optional<BaseAeroportuaria> baseDoBdo(String aeroportoRetirada) {
+        List<BaseAeroportuaria> bases = listar();
+        String codigo = aeroportoRetirada == null ? "" : aeroportoRetirada.strip();
+        return bases.stream()
+                .filter(base -> base.getCodigoIata().equalsIgnoreCase(codigo))
+                .findFirst()
+                .or(() -> bases.stream().filter(BaseAeroportuaria::isPrincipal).findFirst())
+                .or(() -> bases.stream().findFirst());
     }
 
     /** As bases com a cidade do aeroporto, para a tela de Configuracoes. */
@@ -97,8 +122,12 @@ public class BaseAeroportuariaService {
     public void remover(UUID id) {
         BaseAeroportuaria base = baseAeroportuariaRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Base aeroportuaria nao encontrada."));
-        baseAeroportuariaRepository.delete(base);
-        baseAeroportuariaRepository.flush();
+        try {
+            baseAeroportuariaRepository.delete(base);
+            baseAeroportuariaRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflitoException("Esta base tem motoristas ou BDOs vinculados. Troque a base deles antes de remover.");
+        }
         if (base.isPrincipal()) {
             baseAeroportuariaRepository.findAllByOrderByPrincipalDescCriadoEmAsc().stream().findFirst().ifPresent(proxima -> {
                 proxima.definirPrincipal(true);
