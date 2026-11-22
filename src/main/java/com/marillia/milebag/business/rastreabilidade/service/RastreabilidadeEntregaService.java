@@ -42,6 +42,7 @@ import com.marillia.milebag.business.rastreabilidade.model.HistoricoEntregaRespo
 import com.marillia.milebag.business.segundavia.service.SegundaViaBdoService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.model.Trajeto;
+import com.marillia.milebag.core.util.EnderecoComparavel;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 
@@ -117,12 +118,52 @@ public class RastreabilidadeEntregaService {
         Set<UUID> caronas = bagagemCaronaService.bdosQueSaoCarona(semEntrega.stream().map(Bdo::getId).toList());
         Set<UUID> corrigidas = correcaoEntregaService.entregasCorrigidas(entregas.stream().map(Entrega::getId).toList());
         Map<UUID, String> bases = codigosDasBases();
-        return Stream.concat(
+        List<EntregaGestaoResponse> linhas = Stream.concat(
                         entregas.stream().map(entrega -> comBase(resumo(entrega, bdos.get(entrega.getBdoId()), nomes,
                                 corrigidas.contains(entrega.getId())), bdos.get(entrega.getBdoId()), bases)),
                         semEntrega.stream().map(bdo -> comBase(resumoSemEntrega(bdo, caronas.contains(bdo.getId())), bdo, bases)))
                 .sorted(Comparator.comparing(EntregaGestaoResponse::atualizadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+        Map<UUID, Bdo> todosOsBdos = new HashMap<>(bdos);
+        semEntrega.forEach(bdo -> todosOsBdos.put(bdo.getId(), bdo));
+        return comMesmoEndereco(linhas, todosOsBdos);
+    }
+
+    /**
+     * Item 8: marca os BDOs em aberto (sem motorista, atribuidos, em andamento ou reabertos) que vao para o mesmo
+     * endereco, para a empresa ver o grupo e o motorista levar junto como bagagem carona.
+     */
+    private static List<EntregaGestaoResponse> comMesmoEndereco(List<EntregaGestaoResponse> linhas, Map<UUID, Bdo> bdos) {
+        Map<EntregaGestaoResponse, EnderecoComparavel> enderecos = new java.util.IdentityHashMap<>();
+        for (EntregaGestaoResponse linha : linhas) {
+            Bdo bdo = bdos.get(linha.bdoId());
+            if (bdo != null && emAberto(linha.status())) {
+                EnderecoComparavel.de(bdo.getEnderecoEntrega(), bdo.getCidade(), bdo.getCep()).ifPresent(e -> enderecos.put(linha, e));
+            }
+        }
+        return linhas.stream().map(linha -> {
+            EnderecoComparavel endereco = enderecos.get(linha);
+            if (endereco == null) {
+                return linha;
+            }
+            List<String> outros = enderecos.entrySet().stream()
+                    .filter(outra -> outra.getKey() != linha && endereco.mesmoLocal(outra.getValue()))
+                    .map(outra -> outra.getKey().bdoNumero())
+                    .filter(java.util.Objects::nonNull)
+                    .sorted()
+                    .toList();
+            return outros.isEmpty() ? linha : comOutros(linha, outros);
+        }).toList();
+    }
+
+    private static boolean emAberto(EntregaStatus status) {
+        return status != EntregaStatus.ENCERRADA_COM_SUCESSO && status != EntregaStatus.CANCELADA;
+    }
+
+    private static EntregaGestaoResponse comOutros(EntregaGestaoResponse linha, List<String> outros) {
+        return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
+                linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(),
+                linha.baseCodigo(), outros);
     }
 
     @Transactional(readOnly = true)
@@ -238,7 +279,8 @@ public class RastreabilidadeEntregaService {
     private static EntregaGestaoResponse comBase(EntregaGestaoResponse linha, Bdo bdo, Map<UUID, String> bases) {
         String codigo = bdo == null || bdo.getBaseId() == null ? null : bases.get(bdo.getBaseId());
         return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
-                linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(), codigo);
+                linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(), codigo,
+                linha.mesmoEnderecoQue());
     }
 
     /** "Motivo: Foto errada. Antes: ... Depois: ... (complemento)". */
@@ -267,7 +309,8 @@ public class RastreabilidadeEntregaService {
                 nome(entrega.getMotoristaResponsavel(), nomes),
                 entrega.getAtualizadoEm(),
                 corrigida,
-                null);
+                null,
+                List.of());
     }
 
     private static EntregaGestaoResponse resumoSemEntrega(Bdo bdo, boolean bagagemCarona) {
@@ -282,7 +325,8 @@ public class RastreabilidadeEntregaService {
                 null,
                 bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm(),
                 false,
-                null);
+                null,
+                List.of());
     }
 
     /** Nome para exibir, consultado uma vez por pessoa na mesma resposta. */

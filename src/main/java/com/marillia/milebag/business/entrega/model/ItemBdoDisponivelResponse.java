@@ -23,5 +23,7 @@ public record ItemBdoDisponivelResponse(
         Instant dataCaptura,
         List<PendenciaContatoBdo> pendenciasContato,
         boolean reaberta,
-        JanelaReagendamento janelaReagendamento) {
+        JanelaReagendamento janelaReagendamento,
+        // Item 8: quantas malas o BDO tem (nulo se o BDO nao informa).
+        Integer quantidadeMalas) {
 }

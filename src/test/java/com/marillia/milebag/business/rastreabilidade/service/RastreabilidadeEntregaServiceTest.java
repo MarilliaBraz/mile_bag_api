@@ -163,6 +163,36 @@ class RastreabilidadeEntregaServiceTest {
         assertThat(linhas.get(1).entregaId()).isEqualTo(entrega.getId());
     }
 
+    /** Item 8: BDOs em aberto que vao para o mesmo endereco aparecem marcados uns com os outros. */
+    @Test
+    void listarMarcaOsBdosEmAbertoDoMesmoEndereco() {
+        Instant t0 = Instant.parse("2026-11-20T10:00:00Z");
+        Bdo assumido = bdoSemEntrega("GYN-A", t0);
+        assumido.setEnderecoEntrega("Av. Goiás, 100 - Centro");
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setBdoId(assumido.getId());
+        entrega.setStatus(EntregaStatus.ATRIBUIDA);
+        entrega.setAtualizadoEm(t0);
+        when(entregaService.listarParaGestao(null)).thenReturn(List.of(entrega));
+        when(bdoService.buscarPorIds(any())).thenReturn(java.util.Map.of(assumido.getId(), assumido));
+
+        Bdo mesmoLugar = bdoSemEntrega("GYN-B", t0.plusSeconds(60));
+        mesmoLugar.setEnderecoEntrega("AVENIDA GOIAS 100");
+        Bdo outroLugar = bdoSemEntrega("GYN-C", t0.plusSeconds(120));
+        outroLugar.setEnderecoEntrega("Av. Goiás, 102");
+        when(bdoService.listarSemEntrega()).thenReturn(List.of(mesmoLugar, outroLugar));
+        when(bagagemCaronaService.bdosQueSaoCarona(any())).thenReturn(java.util.Set.of());
+
+        var linhas = rastreabilidadeEntregaService.listar(null);
+
+        var porNumero = new java.util.HashMap<String, List<String>>();
+        linhas.forEach(linha -> porNumero.put(linha.bdoNumero(), linha.mesmoEnderecoQue()));
+        assertThat(porNumero.get("GYN-A")).containsExactly("GYN-B");
+        assertThat(porNumero.get("GYN-B")).containsExactly("GYN-A");
+        assertThat(porNumero.get("GYN-C")).isEmpty();
+    }
+
     /** Filtrando por outra situacao, os BDOs sem entrega (que estao aguardando) nao entram. */
     @Test
     void listarPorOutraSituacaoNaoTrazBdosSemEntrega() {

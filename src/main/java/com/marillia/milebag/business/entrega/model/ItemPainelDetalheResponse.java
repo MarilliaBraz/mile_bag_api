@@ -32,5 +32,7 @@ public record ItemPainelDetalheResponse(
         // V48: o motorista ja registrou a retirada da bagagem desta tentativa (proxima etapa: iniciar a viagem).
         boolean retiradaRegistrada,
         // V51: entrega finalizada que o motorista ainda pode corrigir - ate este instante; nulo se nao pode.
-        Instant corrigivelAte) {
+        Instant corrigivelAte,
+        // Item 8: quantas malas o BDO tem (nulo se o BDO nao informa).
+        Integer quantidadeMalas) {
 }

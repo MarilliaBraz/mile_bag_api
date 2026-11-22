@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.marillia.milebag.business.entrega.model.BdosDisponiveisResponse;
 import com.marillia.milebag.business.entrega.model.ItemPainelDetalheResponse;
+import com.marillia.milebag.business.entrega.model.ItemBdoDisponivelResponse;
 import com.marillia.milebag.business.entrega.model.PainelEntregasResponse;
 import com.marillia.milebag.business.entrega.service.BdosDisponiveisService;
 import com.marillia.milebag.business.entrega.service.PainelEntregasService;
@@ -47,6 +48,12 @@ public class PainelEntregasController {
     @GetMapping("/api/v1/motorista/entregas-corrigiveis")
     public List<EntregaCorrigivelResponse> corrigiveis(@AuthenticationPrincipal AuthenticatedUser usuario) {
         return painelEntregasService.listarCorrigiveis(usuario.userId());
+    }
+
+    /** Item 8: BDOs disponiveis que vao para o mesmo endereco desta entrega (sugestao de bagagem carona). */
+    @GetMapping("/api/v1/entregas/{entregaId}/sugestoes-carona")
+    public List<ItemBdoDisponivelResponse> sugestoesCarona(@PathVariable UUID entregaId, @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return bdosDisponiveisService.sugestoesDeCarona(entregaId, usuario.userId());
     }
 
     @GetMapping("/api/v1/motorista/bdos-disponiveis")

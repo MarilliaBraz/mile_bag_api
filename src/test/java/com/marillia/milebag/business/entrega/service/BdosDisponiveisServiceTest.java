@@ -142,4 +142,69 @@ class BdosDisponiveisServiceTest {
         org.assertj.core.api.Assertions.assertThat(resposta.semBase()).isTrue();
         org.mockito.Mockito.verifyNoInteractions(bdoRepository);
     }
+
+    // Item 8: sugestao de bagagem carona pelo mesmo endereco.
+
+    private static Bdo bdoEm(String endereco, String numero, Integer malas) {
+        Bdo bdo = new Bdo();
+        bdo.setId(UUID.randomUUID());
+        bdo.setBaseId(BASE);
+        bdo.setNumero(numero);
+        bdo.setEnderecoEntrega(endereco);
+        bdo.setQuantidadeMalas(malas);
+        bdo.setDataCaptura(Instant.now());
+        return bdo;
+    }
+
+    private Entrega entregaDoMotorista(Bdo bdo, EntregaStatus status) {
+        Entrega entrega = new Entrega();
+        entrega.setId(UUID.randomUUID());
+        entrega.setBdoId(bdo.getId());
+        entrega.setMotoristaResponsavel(MOTORISTA);
+        entrega.setStatus(status);
+        when(entregaRepository.findById(entrega.getId())).thenReturn(Optional.of(entrega));
+        org.mockito.Mockito.lenient().when(bdoRepository.findById(bdo.getId())).thenReturn(Optional.of(bdo));
+        return entrega;
+    }
+
+    @Test
+    void sugereComoCaronaSoOsBdosDoMesmoEndereco() {
+        Bdo principal = bdoEm("Av. Goiás, 100 - Centro", "GYNG100001", 2);
+        Entrega entrega = entregaDoMotorista(principal, EntregaStatus.ATRIBUIDA);
+        Bdo mesmoLugar = bdoEm("AVENIDA GOIAS 100, apto 12", "GYNG100002", 1);
+        Bdo outroLugar = bdoEm("Av. Goiás, 102", "GYNG100003", 1);
+        when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of(mesmoLugar, outroLugar));
+
+        var sugestoes = bdosDisponiveisService.sugestoesDeCarona(entrega.getId(), MOTORISTA);
+
+        assertThat(sugestoes).extracting("bdoNumero").containsExactly("GYNG100002");
+        assertThat(sugestoes.get(0).quantidadeMalas()).isEqualTo(1);
+    }
+
+    @Test
+    void naoSugereBdoDeOutraBase() {
+        Bdo principal = bdoEm("Rua 10, 250", "GYNG200001", 1);
+        Entrega entrega = entregaDoMotorista(principal, EntregaStatus.EM_ANDAMENTO);
+        Bdo outraBase = bdoEm("Rua 10, 250", "BSBG200002", 1);
+        outraBase.setBaseId(UUID.randomUUID());
+        when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of(outraBase));
+
+        assertThat(bdosDisponiveisService.sugestoesDeCarona(entrega.getId(), MOTORISTA)).isEmpty();
+    }
+
+    @Test
+    void entregaFinalizadaNaoTemSugestao() {
+        Entrega entrega = entregaDoMotorista(bdoEm("Rua 10, 250", "GYNG300001", 1), EntregaStatus.ENCERRADA_COM_SUCESSO);
+
+        assertThat(bdosDisponiveisService.sugestoesDeCarona(entrega.getId(), MOTORISTA)).isEmpty();
+        org.mockito.Mockito.verify(bdoRepository, org.mockito.Mockito.never()).findDisponiveisParaAutoatribuicao();
+    }
+
+    @Test
+    void entregaDeOutroMotoristaERecusada() {
+        Entrega entrega = entregaDoMotorista(bdoEm("Rua 10, 250", "GYNG400001", 1), EntregaStatus.ATRIBUIDA);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bdosDisponiveisService.sugestoesDeCarona(entrega.getId(), UUID.randomUUID()))
+                .isInstanceOf(com.marillia.milebag.core.exception.AcessoNegadoException.class);
+    }
 }

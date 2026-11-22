@@ -18,5 +18,7 @@ public record ItemPainelResponse(
         String marcoMaisRecente,
         JanelaReagendamento janelaReagendamento,
         // V48: o motorista ja registrou a retirada da bagagem desta tentativa (proxima etapa: iniciar a viagem).
-        boolean retiradaRegistrada) {
+        boolean retiradaRegistrada,
+        // Item 8: quantas malas o BDO tem (nulo se o BDO nao informa).
+        Integer quantidadeMalas) {
 }
