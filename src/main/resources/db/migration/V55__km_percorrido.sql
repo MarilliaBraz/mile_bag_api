@@ -16,7 +16,8 @@ CREATE TABLE posicao_viagem (
     id_local         VARCHAR(64) NOT NULL,
     criado_em        TIMESTAMPTZ NOT NULL,
     atualizado_em    TIMESTAMPTZ NOT NULL,
-    CONSTRAINT uk_posicao_viagem_id_local UNIQUE (tenant_id, id_local)
+    -- Por viagem: o ponto de um motorista nunca bloqueia nem e confundido com o de outro.
+    CONSTRAINT uk_posicao_viagem_id_local UNIQUE (trajeto_id, id_local)
 );
 CREATE INDEX idx_posicao_viagem_tenant_id ON posicao_viagem (tenant_id);
 CREATE INDEX idx_posicao_viagem_trajeto_data ON posicao_viagem (trajeto_id, data_hora);

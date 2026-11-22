@@ -88,8 +88,9 @@ public class PosicaoViagemService {
         Map<UUID, List<Trajeto>> viagensPorEntrega = new HashMap<>();
         validas.stream().map(Posicao::entregaId).distinct()
                 .forEach(entrega -> viagensPorEntrega.put(entrega, viagensDoMotorista(entrega, motoristaId)));
-        Set<String> jaRegistrados = validas.isEmpty() ? Set.of()
-                : new HashSet<>(posicaoViagemRepository.idsLocaisJaRegistrados(validas.stream().map(Posicao::idLocal).toList()));
+        List<UUID> viagensDoLote = viagensPorEntrega.values().stream().flatMap(List::stream).map(Trajeto::getId).toList();
+        Set<String> jaRegistrados = validas.isEmpty() || viagensDoLote.isEmpty() ? Set.of()
+                : new HashSet<>(posicaoViagemRepository.idsLocaisJaRegistrados(validas.stream().map(Posicao::idLocal).toList(), viagensDoLote));
 
         Set<String> vistos = new HashSet<>(jaRegistrados);
         Map<UUID, Trajeto> tocadas = new HashMap<>();

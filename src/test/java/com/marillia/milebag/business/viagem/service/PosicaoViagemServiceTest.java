@@ -60,7 +60,7 @@ class PosicaoViagemServiceTest {
             return chamada.getArgument(0);
         });
         lenient().when(posicaoViagemRepository.findByTrajetoIdOrderByDataHoraAsc(any())).thenAnswer(chamada -> gravadas);
-        lenient().when(posicaoViagemRepository.idsLocaisJaRegistrados(anyCollection())).thenReturn(List.of());
+        lenient().when(posicaoViagemRepository.idsLocaisJaRegistrados(anyCollection(), anyCollection())).thenReturn(List.of());
     }
 
     private Trajeto trajeto(UUID motorista, Instant inicio) {
@@ -94,7 +94,7 @@ class PosicaoViagemServiceTest {
     @Test
     void pontoRepetidoNaoEntraDuasVezes() {
         when(trajetoRepository.findByEntregaIdParaAtualizar(ENTREGA)).thenReturn(List.of(trajeto(MOTORISTA, INICIO)));
-        when(posicaoViagemRepository.idsLocaisJaRegistrados(anyCollection())).thenReturn(List.of("p1"));
+        when(posicaoViagemRepository.idsLocaisJaRegistrados(anyCollection(), anyCollection())).thenReturn(List.of("p1"));
 
         var resposta = service.registrar(MOTORISTA, lote(ponto(1, 0, 10), ponto(2, 300, 25), ponto(2, 300, 25)));
 
