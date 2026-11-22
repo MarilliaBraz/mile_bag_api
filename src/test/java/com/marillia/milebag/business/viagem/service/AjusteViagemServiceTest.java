@@ -315,4 +315,52 @@ class AjusteViagemServiceTest {
 
         assertThat(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA)).isEmpty();
     }
+
+    // ---- Item 9: km percorrido no pagamento (acima de 5% da ida calculada, a volta acompanha a ida) ----
+
+    private Optional<BigDecimal> tarifaComPercorrido(String kmPercorrido, AjusteViagem ajusteIda) {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = trajetoConsolidado(entregaId, "10.000", "10.000", "[]");
+        if (kmPercorrido != null) {
+            trajeto.registrarKmPercorrido(new BigDecimal(kmPercorrido));
+        }
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(any(), any())).thenReturn(Optional.empty());
+        if (ajusteIda != null) {
+            when(ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(trajeto.getId(), CampoAjusteViagem.KM_IDA))
+                    .thenReturn(Optional.of(ajusteIda));
+        }
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
+        when(bagagemCaronaService.listarPorEntrega(entregaId)).thenReturn(List.of());
+        TabelaTarifa tarifa = new TabelaTarifa(
+                EscopoTarifa.MOTORISTA, motoristaId, null, new BigDecimal("50.00"), new BigDecimal("2.00"), java.time.LocalDate.now());
+        when(tabelaTarifaService.resolverTarifaAplicavel(motoristaId, null)).thenReturn(Optional.of(tarifa));
+        return ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
+    }
+
+    @Test
+    void percorridoAcimaDe5PorCentoPagaAIdaPercorridaNaIdaENaVolta() {
+        // Ida calculada 10 km, percorrida 11 km (+10%): 11 + 11 = 22 km x 2,00.
+        assertThat(tarifaComPercorrido("11.000", null).get()).isEqualByComparingTo("44.00");
+    }
+
+    @Test
+    void percorridoAte5PorCentoContinuaNoCalculado() {
+        // +4%: oscilacao do GPS, nao paga - 10 + 10 = 20 km x 2,00.
+        assertThat(tarifaComPercorrido("10.400", null).get()).isEqualByComparingTo("40.00");
+    }
+
+    @Test
+    void percorridoMenorNuncaReduzOPagamento() {
+        assertThat(tarifaComPercorrido("7.000", null).get()).isEqualByComparingTo("40.00");
+    }
+
+    @Test
+    void ajusteManualDaIdaValeAcimaDoPercorrido() {
+        AjusteViagem ajuste = new AjusteViagem(UUID.randomUUID(), CampoAjusteViagem.KM_IDA, "10.000", "15.000", "desvio na obra", UUID.randomUUID());
+        // Ida ajustada 15 + volta calculada 10 = 25 km x 2,00 (o percorrido de 11 km nao entra).
+        assertThat(tarifaComPercorrido("11.000", ajuste).get()).isEqualByComparingTo("50.00");
+    }
 }
+

@@ -167,6 +167,17 @@ public class Trajeto extends BaseEntity {
     @Column(name = "regra_cobranca", length = 20)
     private RegraCobranca regraCobranca;
 
+    /**
+     * Item 9 (V55): km efetivamente percorrido na ida, somado dos pontos de GPS gravados pelo app. Nulo nas viagens sem
+     * pontos. Recalculado a cada lote que chega - inclusive depois do encerramento (pontos guardados sem internet).
+     */
+    @Column(name = "km_percorrido", precision = 10, scale = 3)
+    private BigDecimal kmPercorrido;
+
+    public void registrarKmPercorrido(BigDecimal kmPercorrido) {
+        this.kmPercorrido = kmPercorrido;
+    }
+
     /** V52: base e regra do calculo, congeladas no encerramento junto com o km. */
     public void definirCobranca(String baseCobranca, RegraCobranca regraCobranca) {
         this.baseCobranca = baseCobranca;

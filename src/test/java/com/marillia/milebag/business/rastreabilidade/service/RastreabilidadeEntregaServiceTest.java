@@ -44,6 +44,8 @@ import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 class RastreabilidadeEntregaServiceTest {
 
     @Mock
+    private com.marillia.milebag.business.viagem.service.AjusteViagemService ajusteViagemService;
+    @Mock
     private EntregaService entregaService;
     @Mock
     private BdoService bdoService;
@@ -254,6 +256,38 @@ class RastreabilidadeEntregaServiceTest {
             assertThat(evento.tipo()).isEqualTo(TipoEventoRastreabilidade.BAGAGEM_RETIRADA);
             assertThat(evento.motoristaNome()).isEqualTo("Ana");
             assertThat(evento.detalhe()).isEqualTo("arranhao na lateral");
+        });
+    }
+
+    /** Item 9: o historico traz o km calculado, o percorrido e o pago de cada viagem encerrada. */
+    @Test
+    void historicoMostraOKmCalculadoPercorridoEPago() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setBdoId(UUID.randomUUID());
+        entrega.setStatus(EntregaStatus.ENCERRADA_COM_SUCESSO);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        var viagem = new com.marillia.milebag.business.viagem.model.Trajeto(entregaId, motorista, Instant.parse("2026-11-21T10:00:00Z"));
+        viagem.setId(UUID.randomUUID());
+        viagem.consolidar(new java.math.BigDecimal("40.000"), new java.math.BigDecimal("40.000"), "[]", 3600, null);
+        viagem.registrarKmPercorrido(new java.math.BigDecimal("46.000"));
+        when(viagemService.listarViagensDaEntrega(entregaId)).thenReturn(List.of(viagem));
+        when(ajusteViagemService.kmPagos(viagem.getId())).thenReturn(Optional.of(new com.marillia.milebag.business.viagem.service.AjusteViagemService.KmPagos(
+                new java.math.BigDecimal("46.000"), new java.math.BigDecimal("46.000"), true)));
+        when(usuarioConsultaService.nomeParaExibicao(motorista)).thenReturn(Optional.of("Ana"));
+
+        HistoricoEntregaResponse historico = rastreabilidadeEntregaService.historico(entregaId);
+
+        assertThat(historico.quilometragem()).singleElement().satisfies(km -> {
+            assertThat(km.motoristaNome()).isEqualTo("Ana");
+            assertThat(km.kmIdaCalculado()).isEqualByComparingTo("40");
+            assertThat(km.kmPercorrido()).isEqualByComparingTo("46");
+            assertThat(km.kmIdaPago()).isEqualByComparingTo("46");
+            assertThat(km.kmVoltaPago()).isEqualByComparingTo("46");
+            assertThat(km.usouPercorrido()).isTrue();
+            assertThat(km.valorFixo()).isFalse();
         });
     }
 

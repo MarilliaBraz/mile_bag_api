@@ -10,6 +10,9 @@ import com.marillia.milebag.business.viagem.model.RegistrarPosicaoResponse;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.config.security.AuthenticatedUser;
 import com.marillia.milebag.core.exception.RegraNegocioException;
+import com.marillia.milebag.business.viagem.model.RegistrarPosicoesViagemRequest;
+import com.marillia.milebag.business.viagem.model.RegistrarPosicoesViagemResponse;
+import com.marillia.milebag.business.viagem.service.PosicaoViagemService;
 
 /**
  * Posicao atual do motorista para o link "Acompanhe sua bagagem" (HU31) - ver
@@ -20,9 +23,18 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
 public class PosicaoMotoristaController {
 
     private final ViagemService viagemService;
+    private final PosicaoViagemService posicaoViagemService;
 
-    public PosicaoMotoristaController(ViagemService viagemService) {
+    public PosicaoMotoristaController(ViagemService viagemService, PosicaoViagemService posicaoViagemService) {
         this.viagemService = viagemService;
+        this.posicaoViagemService = posicaoViagemService;
+    }
+
+    /** Item 9: pontos do caminho gravados pelo app durante a viagem (tambem os guardados sem internet). */
+    @PostMapping("/api/v1/motorista/viagem/posicoes")
+    public RegistrarPosicoesViagemResponse registrarCaminho(
+            @RequestBody RegistrarPosicoesViagemRequest request, @AuthenticationPrincipal AuthenticatedUser usuario) {
+        return posicaoViagemService.registrar(usuario.userId(), request);
     }
 
     @PostMapping("/api/v1/motorista/posicao")

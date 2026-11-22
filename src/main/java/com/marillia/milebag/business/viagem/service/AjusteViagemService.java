@@ -131,7 +131,11 @@ public class AjusteViagemService {
             throw new RecursoNaoEncontradoException("Esta entrega ainda nao tem trajeto consolidado; nao ha valor calculado a corrigir.");
         }
 
-        BigDecimal valorAnterior = resolverValorVigente(trajeto, campo)
+        // Item 9: no km, o valor anterior e o que estava sendo pago (o percorrido, quando ele passou o calculado).
+        Optional<BigDecimal> vigente = campo == CampoAjusteViagem.KM_IDA ? kmPagos(trajeto).map(KmPagos::ida)
+                : campo == CampoAjusteViagem.KM_VOLTA ? kmPagos(trajeto).map(KmPagos::volta)
+                : resolverValorVigente(trajeto, campo);
+        BigDecimal valorAnterior = vigente
                 .orElseThrow(() -> new RegraNegocioException(
                         "Nao ha valor calculado de " + campo + " para corrigir nesta entrega (ver limitacao conhecida em research.md)."));
 
@@ -177,16 +181,54 @@ public class AjusteViagemService {
         if (regra == RegraCobranca.FIXO_CIDADE_BASE) {
             return Optional.ofNullable(tarifa.get().getValorFixo());
         }
-        Optional<BigDecimal> kmIda = resolverValorVigente(trajeto, CampoAjusteViagem.KM_IDA);
-        Optional<BigDecimal> kmVolta = resolverValorVigente(trajeto, CampoAjusteViagem.KM_VOLTA);
-        if (kmIda.isEmpty() || kmVolta.isEmpty() || tarifa.get().getValorPorKm() == null) {
+        Optional<KmPagos> km = kmPagos(trajeto);
+        if (km.isEmpty() || tarifa.get().getValorPorKm() == null) {
             return Optional.empty();
         }
         BigDecimal kmComplementar = bagagemCaronaService.listarPorEntrega(entrega.getId()).stream()
                 .map(BagagemCarona::getQuilometragemComplementar)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal kmTotal = kmIda.get().add(kmVolta.get()).add(kmComplementar);
+        BigDecimal kmTotal = km.get().ida().add(km.get().volta()).add(kmComplementar);
         return Optional.of(tarifa.get().getValorPorKm().multiply(kmTotal));
+    }
+
+    /** Item 9: o km percorrido so substitui o calculado quando passa a ida calculada em mais que isto (oscilacao do GPS). */
+    static final BigDecimal TOLERANCIA_KM_PERCORRIDO = new BigDecimal("1.05");
+
+    /** Km da ida e da volta que entram no pagamento por km, e se vieram do caminho percorrido (item 9). */
+    public record KmPagos(BigDecimal ida, BigDecimal volta, boolean usouPercorrido) {
+    }
+
+    /**
+     * Item 9: na viagem paga por km, se a ida percorrida (GPS) passar a ida calculada em mais de 5%, paga a percorrida
+     * na ida e na volta (a volta espelha a ida, item 7). Um ajuste manual do motorista vale acima de tudo, como antes;
+     * percorrido menor que o calculado nunca reduz o pagamento.
+     */
+    private Optional<KmPagos> kmPagos(Trajeto trajeto) {
+        Optional<BigDecimal> kmIda = resolverValorVigente(trajeto, CampoAjusteViagem.KM_IDA);
+        Optional<BigDecimal> kmVolta = resolverValorVigente(trajeto, CampoAjusteViagem.KM_VOLTA);
+        if (kmIda.isEmpty() || kmVolta.isEmpty()) {
+            return Optional.empty();
+        }
+        BigDecimal percorrido = trajeto.getKmPercorrido();
+        boolean idaAjustada = temAjuste(trajeto, CampoAjusteViagem.KM_IDA);
+        boolean usaPercorrido = !idaAjustada && percorrido != null && trajeto.getKmIdaFinal() != null
+                && percorrido.compareTo(trajeto.getKmIdaFinal().multiply(TOLERANCIA_KM_PERCORRIDO)) > 0;
+        if (!usaPercorrido) {
+            return Optional.of(new KmPagos(kmIda.get(), kmVolta.get(), false));
+        }
+        BigDecimal volta = temAjuste(trajeto, CampoAjusteViagem.KM_VOLTA) ? kmVolta.get() : percorrido;
+        return Optional.of(new KmPagos(percorrido, volta, true));
+    }
+
+    /** Item 9: os km pagos da viagem, para a auditoria da empresa (vazio se ainda nao ha km consolidado). */
+    @Transactional(readOnly = true)
+    public Optional<KmPagos> kmPagos(UUID viagemId) {
+        return trajetoRepository.findById(viagemId).flatMap(this::kmPagos);
+    }
+
+    private boolean temAjuste(Trajeto trajeto, CampoAjusteViagem campo) {
+        return ajusteViagemRepository.findFirstByViagemIdAndCampoOrderByCriadoEmDesc(trajeto.getId(), campo).isPresent();
     }
 
     private RegraCobranca regraDaViagem(Trajeto trajeto, Entrega entrega) {
