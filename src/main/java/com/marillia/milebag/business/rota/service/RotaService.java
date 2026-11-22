@@ -103,13 +103,15 @@ public class RotaService implements SelecaoRotaProvider {
     public Optional<Coordenada> buscarDestino(UUID entregaId) {
         return propostaRotaRepository.findById(entregaId)
                 .map(PropostaRota::getDestino)
-                .map(json -> {
-                    try {
-                        return objectMapper.readValue(json, Coordenada.class);
-                    } catch (JsonProcessingException e) {
-                        throw new IllegalStateException("Falha ao ler o destino persistido.", e);
-                    }
-                });
+                .map(this::lerCoordenada);
+    }
+
+    private Coordenada lerCoordenada(String json) {
+        try {
+            return objectMapper.readValue(json, Coordenada.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Falha ao ler o destino persistido.", e);
+        }
     }
 
     @Transactional
@@ -123,9 +125,13 @@ public class RotaService implements SelecaoRotaProvider {
         EntregaService.exigirNaoCancelada(entrega);
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
 
+        Optional<PropostaRota> propostaAnterior = propostaRotaRepository.findById(entregaId);
         Coordenada destino = request.destinoManual() != null
                 ? request.destinoManual()
                 : geocodingClient.geocodificar(bdo.getEnderecoEntrega())
+                        // Endereco que o mapa nao acha (ex.: "QD 09 LT 25"): vale o destino ja marcado no mapa para esta
+                        // entrega - sem isso, sair da tela e voltar pedia a marcacao de novo e o mapa ficava sem rota.
+                        .or(() -> propostaAnterior.map(PropostaRota::getDestino).map(this::lerCoordenada))
                         .orElseThrow(() -> new EnderecoNaoGeocodificavelException(
                                 "Nao foi possivel geocodificar o endereco de entrega; informe uma coordenada manual."));
 
@@ -138,7 +144,7 @@ public class RotaService implements SelecaoRotaProvider {
 
         // Substitui a proposta anterior (Edge Case do spec.md): cada novo
         // calculo limpa qualquer selecao ja feita, ate a viagem comecar.
-        PropostaRota proposta = propostaRotaRepository.findById(entregaId).orElseGet(PropostaRota::new);
+        PropostaRota proposta = propostaAnterior.orElseGet(PropostaRota::new);
         proposta.setEntregaId(entregaId);
         proposta.setOrigem(escrever(origem));
         proposta.setDestino(escrever(destino));

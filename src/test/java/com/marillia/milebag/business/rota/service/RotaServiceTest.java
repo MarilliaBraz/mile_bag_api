@@ -35,6 +35,7 @@ import com.marillia.milebag.business.rota.model.SelecionarRotaResponse;
 import com.marillia.milebag.business.rota.repository.PropostaRotaRepository;
 import com.marillia.milebag.business.viagem.service.SelecaoRotaProvider;
 import com.marillia.milebag.business.viagem.service.ViagemService;
+import com.marillia.milebag.core.exception.EnderecoNaoGeocodificavelException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.geo.Coordenada;
 import com.marillia.milebag.core.geo.GeocodingClient;
@@ -175,6 +176,42 @@ class RotaServiceTest {
 
         assertThatThrownBy(() -> rotaService.calcular(entregaId, new CalcularRotaRequest(new Coordenada(0, 0), null)))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+        verify(propostaRotaRepository, never()).save(any());
+    }
+
+    @Test
+    void calcularReaproveitaODestinoJaMarcadoQuandoOEnderecoNaoEGeocodificavel() throws Exception {
+        // Motorista marcou o destino no mapa, saiu da tela e voltou: o recalculo nao pode pedir a marcacao de novo.
+        UUID entregaId = UUID.randomUUID();
+        UUID bdoId = UUID.randomUUID();
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaComBdo(entregaId, bdoId)));
+        Bdo bdo = new Bdo();
+        bdo.setEnderecoEntrega("AV PAULO LEIVAS MACALAO QD 09 LT 25, CALDAS NOVAS - GO");
+        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        when(geocodingClient.geocodificar(anyString())).thenReturn(Optional.empty());
+        Coordenada destinoMarcado = new Coordenada(-17.724, -48.633);
+        PropostaRota anterior = new PropostaRota();
+        anterior.setEntregaId(entregaId);
+        anterior.setDestino(new ObjectMapper().writeValueAsString(destinoMarcado));
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.of(anterior));
+        Coordenada origem = new Coordenada(-16.63, -49.21);
+        when(routingClient.calcularAlternativasComTracado(origem, destinoMarcado))
+                .thenReturn(new RoutingClient.ResultadoRotas(true, List.of()));
+
+        CalcularRotaResponse resposta = rotaService.calcular(entregaId, new CalcularRotaRequest(origem, null));
+
+        assertThat(resposta.destino()).isEqualTo(destinoMarcado);
+        verify(routingClient).calcularAlternativasComTracado(origem, destinoMarcado);
+    }
+
+    @Test
+    void calcularPedeDestinoManualQuandoOEnderecoNaoEGeocodificavelESemDestinoAnterior() {
+        UUID entregaId = UUID.randomUUID();
+        prepararCalculo(entregaId);
+        when(geocodingClient.geocodificar(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> rotaService.calcular(entregaId, new CalcularRotaRequest(new Coordenada(-16.63, -49.21), null)))
+                .isInstanceOf(EnderecoNaoGeocodificavelException.class);
         verify(propostaRotaRepository, never()).save(any());
     }
 
