@@ -42,6 +42,10 @@ import com.marillia.milebag.business.rastreabilidade.model.HistoricoEntregaRespo
 import com.marillia.milebag.business.segundavia.service.SegundaViaBdoService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.model.Trajeto;
+import java.util.Optional;
+import com.marillia.milebag.business.viagem.service.AjusteViagemService;
+import com.marillia.milebag.business.viagem.model.RegraCobranca;
+import com.marillia.milebag.business.rastreabilidade.model.KmViagemResponse;
 import com.marillia.milebag.core.util.EnderecoComparavel;
 import com.marillia.milebag.business.viagem.service.ViagemService;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
@@ -73,6 +77,8 @@ public class RastreabilidadeEntregaService {
     private final BaseAeroportuariaService baseAeroportuariaService;
     private final TrocaBaseBdoService trocaBaseBdoService;
 
+    private final AjusteViagemService ajusteViagemService;
+
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
             BdoService bdoService,
@@ -89,7 +95,9 @@ public class RastreabilidadeEntregaService {
             SegundaViaBdoService segundaViaBdoService,
             CorrecaoEntregaService correcaoEntregaService,
             BaseAeroportuariaService baseAeroportuariaService,
-            TrocaBaseBdoService trocaBaseBdoService) {
+            TrocaBaseBdoService trocaBaseBdoService,
+            AjusteViagemService ajusteViagemService) {
+        this.ajusteViagemService = ajusteViagemService;
         this.baseAeroportuariaService = baseAeroportuariaService;
         this.trocaBaseBdoService = trocaBaseBdoService;
         this.entregaService = entregaService;
@@ -186,7 +194,11 @@ public class RastreabilidadeEntregaService {
 
         // A ocorrencia nao guarda o motorista: ele vem da viagem que ela encerrou.
         Map<UUID, UUID> motoristaPorOcorrencia = new HashMap<>();
+        List<KmViagemResponse> quilometragem = new ArrayList<>();
         for (Trajeto viagem : viagemService.listarViagensDaEntrega(entregaId)) {
+            if (viagem.getKmIdaFinal() != null) {
+                quilometragem.add(kmDaViagem(viagem, nomes));
+            }
             eventos.add(new EventoRastreabilidade(
                     TipoEventoRastreabilidade.VIAGEM_INICIADA, viagem.getDataInicio(), nome(viagem.getMotoristaId(), nomes), null, null));
             if (viagem.getOcorrenciaId() != null && viagem.getMotoristaId() != null) {
@@ -233,7 +245,17 @@ public class RastreabilidadeEntregaService {
         }
         eventos.sort(Comparator.comparing(EventoRastreabilidade::dataHora, Comparator.nullsLast(Comparator.naturalOrder())));
         return new HistoricoEntregaResponse(
-                resumo(entrega, bdoService.buscarPorId(entrega.getBdoId()).orElse(null), nomes, !correcoes.isEmpty()), eventos);
+                resumo(entrega, bdoService.buscarPorId(entrega.getBdoId()).orElse(null), nomes, !correcoes.isEmpty()), eventos,
+                quilometragem);
+    }
+
+    /** Item 9: calculado x percorrido x pago, para a empresa auditar a viagem. */
+    private KmViagemResponse kmDaViagem(Trajeto viagem, Map<UUID, String> nomes) {
+        Optional<AjusteViagemService.KmPagos> pagos = ajusteViagemService.kmPagos(viagem.getId());
+        return new KmViagemResponse(viagem.getDataInicio(), nome(viagem.getMotoristaId(), nomes), viagem.getKmIdaFinal(),
+                viagem.getKmVoltaFinal(), viagem.getKmPercorrido(), pagos.map(AjusteViagemService.KmPagos::ida).orElse(null),
+                pagos.map(AjusteViagemService.KmPagos::volta).orElse(null), pagos.map(AjusteViagemService.KmPagos::usouPercorrido).orElse(false),
+                viagem.getRegraCobranca() == RegraCobranca.FIXO_CIDADE_BASE);
     }
 
     /** V48: as fotos da entrega, na ordem em que foram tiradas, inclusive a do BDO assinado (do comprovante). */

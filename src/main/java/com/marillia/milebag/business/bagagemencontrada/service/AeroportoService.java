@@ -19,7 +19,6 @@ import com.marillia.milebag.business.bagagemencontrada.repository.AeroportoRepos
 @Service
 public class AeroportoService {
 
-    private static final double RAIO_TERRA_METROS = 6_371_000;
 
     private final AeroportoRepository aeroportoRepository;
     private volatile List<Aeroporto> aeroportos;
@@ -58,10 +57,6 @@ public class AeroportoService {
 
     /** Distancia geodesica pela formula de haversine - precisa o bastante para escolher o aeroporto mais perto. */
     static double distanciaMetros(double lat1, double lon1, double lat2, double lon2) {
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        return 2 * RAIO_TERRA_METROS * Math.asin(Math.sqrt(a));
+        return com.marillia.milebag.core.geo.GeometriaRota.distanciaMetros(lat1, lon1, lat2, lon2);
     }
 }

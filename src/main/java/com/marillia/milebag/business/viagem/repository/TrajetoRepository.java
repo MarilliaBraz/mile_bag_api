@@ -32,6 +32,14 @@ public interface TrajetoRepository extends BaseRepository<Trajeto, UUID> {
 
     List<Trajeto> findByEntregaIdOrderByDataInicioAsc(UUID entregaId);
 
+    /**
+     * Item 9: as viagens da entrega travadas para escrita - dois lotes de pontos da mesma viagem entram um de cada vez,
+     * e o km recalculado por um ve os pontos do outro.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Trajeto t WHERE t.entregaId = :entregaId ORDER BY t.dataInicio")
+    List<Trajeto> findByEntregaIdParaAtualizar(@Param("entregaId") UUID entregaId);
+
     /** Se a entrega ja teve alguma viagem (de qualquer tentativa): a proxima dispensa exige motivo. */
     boolean existsByEntregaId(UUID entregaId);
 
