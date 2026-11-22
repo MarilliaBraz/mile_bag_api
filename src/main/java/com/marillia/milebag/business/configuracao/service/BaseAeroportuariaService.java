@@ -44,9 +44,10 @@ public class BaseAeroportuariaService {
             throw new RegraNegocioException("codigoIata e obrigatorio.");
         }
         String codigo = codigoIata.strip().toUpperCase(Locale.ROOT);
-        if (aeroportoService.buscar(codigo).isEmpty()) {
-            throw new RegraNegocioException("Aeroporto " + codigo + " nao encontrado no cadastro de aeroportos.");
-        }
+        var aeroporto = aeroportoService.buscar(codigo)
+                .orElseThrow(() -> new RegraNegocioException("Aeroporto " + codigo + " nao encontrado no cadastro de aeroportos."));
+        // V53: sem nome, vale o do aeroporto.
+        nome = nome == null || nome.isBlank() ? aeroporto.getNome() : nome.strip();
         if (baseAeroportuariaRepository.findByCodigoIata(codigo).isPresent()) {
             throw new ConflitoException("Ja existe uma base aeroportuaria com este codigoIata.");
         }
