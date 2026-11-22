@@ -96,7 +96,7 @@ public class PainelEntregasService {
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entregaId);
         return mapper.toDetalhe(
-                entrega, bdo, bagagensCarona, this::etiquetaDoBdo, viagemService.marcoMaisRecente(entregaId).orElse(null),
+                entrega, bdo, bagagensCarona, this::bdoDe, viagemService.marcoMaisRecente(entregaId).orElse(null),
                 dispensaEntregaService.exigeMotivo(entregaId),
                 retiradaBagagemService.temRetiradaPendente(entregaId, motoristaId),
                 corrigivelAte(entrega));
@@ -131,13 +131,13 @@ public class PainelEntregasService {
         Bdo bdo = buscarBdoOuFalhar(entrega.getBdoId());
         List<BagagemCarona> bagagensCarona = bagagemCaronaService.listarPorEntrega(entrega.getId());
         String marcoMaisRecente = viagemService.marcoMaisRecente(entrega.getId()).orElse(null);
-        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::etiquetaDoBdo, marcoMaisRecente,
+        return mapper.toItemPainel(entrega, bdo, bagagensCarona, this::bdoDe, marcoMaisRecente,
                 retiradaBagagemService.temRetiradaPendente(entrega.getId(), entrega.getMotoristaResponsavel()));
     }
 
-    /** Bagagem carona referencia o proprio BDO (nao o da entrega principal) para a etiqueta exibida no resumo. */
-    private String etiquetaDoBdo(UUID bdoId) {
-        return bdoService.buscarPorId(bdoId).map(Bdo::getEtiquetaBagagem).orElse(null);
+    /** Bagagem carona referencia o proprio BDO (nao o da entrega principal): etiqueta, numero e malas do resumo. */
+    private Bdo bdoDe(UUID bdoId) {
+        return bdoService.buscarPorId(bdoId).orElse(null);
     }
 
     private Entrega buscarEntregaOuFalhar(UUID entregaId) {
