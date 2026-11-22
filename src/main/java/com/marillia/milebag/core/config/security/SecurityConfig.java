@@ -137,7 +137,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/companhia/funcionarios/**").hasRole(Papeis.ADMINISTRADOR_COMPANHIA)
                         .requestMatchers("/api/v1/companhia/**").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA)
                         // HU34: lista de aeroportos para o registro de bagagem.
-                        .requestMatchers("/api/v1/aeroportos").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA)
+                        // V53: tambem para o administrador da empresa escolher a base pelo nome da cidade.
+                        .requestMatchers("/api/v1/aeroportos").hasAnyRole(Papeis.ADMINISTRADOR_COMPANHIA, Papeis.FUNCIONARIO_COMPANHIA,
+                                Papeis.ADMINISTRADOR_TENANT)
+                        // V53: lista de companhias aereas para a busca pelo nome em Configuracoes.
+                        .requestMatchers("/api/v1/catalogo/companhias-aereas").hasRole(Papeis.ADMINISTRADOR_TENANT)
                         // HU33: o que antes so exigia login e e das empresas de entrega fica
                         // fechado aos perfis da companhia (a RLS ja isolava os dados; isto
                         // tira as funcoes de vista).
