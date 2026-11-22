@@ -42,12 +42,15 @@ class MotoristaServiceTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @org.mockito.Mock
+    private com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService baseAeroportuariaService;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private MotoristaService service;
 
     @BeforeEach
     void setUp() {
-        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, sessaoUsuarioService, redefinicaoSenhaRepository, transactionManager);
+        service = new MotoristaService(usuarioRepository, autenticacaoService, passwordEncoder, sessaoUsuarioService, redefinicaoSenhaRepository,
+                transactionManager, baseAeroportuariaService);
     }
 
     @Test
@@ -270,5 +273,32 @@ class MotoristaServiceTest {
         Usuario motorista = new Usuario("joao", passwordEncoder.encode("senha-forte-1"), Papeis.MOTORISTA, "Joao");
         motorista.setId(UUID.randomUUID());
         return motorista;
+    }
+
+    /** V52: todo motorista tem base - sem ela, ou com uma base que nao e da empresa, nada e criado. */
+    @Test
+    void criarExigeUmaBaseDaEmpresa() {
+        UUID inexistente = UUID.randomUUID();
+        when(baseAeroportuariaService.buscar(inexistente)).thenReturn(java.util.Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.criarNaBase("Joao", "joao@empresa.com", "segura123", null))
+                .hasMessageStartingWith("Informe a base do motorista.");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.criarNaBase("Joao", "joao@empresa.com", "segura123", inexistente))
+                .hasMessage("Base nao encontrada.");
+        org.mockito.Mockito.verify(usuarioRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void criarNaBaseGravaABaseDoMotorista() {
+        com.marillia.milebag.business.configuracao.model.BaseAeroportuaria gyn = new com.marillia.milebag.business.configuracao.model.BaseAeroportuaria("GYN", null);
+        UUID baseId = UUID.randomUUID();
+        gyn.setId(baseId);
+        when(baseAeroportuariaService.buscar(baseId)).thenReturn(java.util.Optional.of(gyn));
+        when(autenticacaoService.loginJaExiste("joao@empresa.com")).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> chamada.getArgument(0));
+
+        Usuario criado = service.criarNaBase("Joao", "joao@empresa.com", "segura123", baseId);
+
+        org.assertj.core.api.Assertions.assertThat(criado.getBaseId()).isEqualTo(baseId);
     }
 }

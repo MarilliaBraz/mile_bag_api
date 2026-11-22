@@ -34,11 +34,18 @@ class BdosDisponiveisServiceTest {
     @Mock
     private EntregaRepository entregaRepository;
 
+    @Mock
+    private com.marillia.milebag.business.tenant.service.UsuarioConsultaService usuarioConsultaService;
+
+    private static final java.util.UUID MOTORISTA = java.util.UUID.randomUUID();
+    private static final java.util.UUID BASE = java.util.UUID.randomUUID();
+
     private BdosDisponiveisService bdosDisponiveisService;
 
     @BeforeEach
     void setUp() {
-        bdosDisponiveisService = new BdosDisponiveisService(bdoRepository, entregaRepository, new PainelEntregasMapper());
+        bdosDisponiveisService = new BdosDisponiveisService(bdoRepository, entregaRepository, new PainelEntregasMapper(), usuarioConsultaService);
+        org.mockito.Mockito.lenient().when(usuarioConsultaService.baseDoMotorista(MOTORISTA)).thenReturn(java.util.Optional.of(BASE));
     }
 
     @Test
@@ -53,7 +60,7 @@ class BdosDisponiveisServiceTest {
         bdo.setDataCaptura(Instant.now());
         when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of(bdo));
 
-        BdosDisponiveisResponse resposta = bdosDisponiveisService.consultarDisponiveis();
+        BdosDisponiveisResponse resposta = bdosDisponiveisService.consultarDisponiveis(MOTORISTA);
 
         assertThat(resposta.bdos()).hasSize(1);
         var item = resposta.bdos().get(0);
@@ -71,7 +78,7 @@ class BdosDisponiveisServiceTest {
         bdo.setDataCaptura(Instant.now());
         when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of(bdo));
 
-        var item = bdosDisponiveisService.consultarDisponiveis().bdos().get(0);
+        var item = bdosDisponiveisService.consultarDisponiveis(MOTORISTA).bdos().get(0);
 
         assertThat(item.pendenciasContato())
                 .containsExactly(PendenciaContatoBdo.ENDERECO_SEM_NUMERO, PendenciaContatoBdo.TELEFONE_AUSENTE);
@@ -92,7 +99,7 @@ class BdosDisponiveisServiceTest {
         when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of(bdo));
         when(entregaRepository.findByBdoId(bdo.getId())).thenReturn(Optional.of(reaberta));
 
-        var item = bdosDisponiveisService.consultarDisponiveis().bdos().get(0);
+        var item = bdosDisponiveisService.consultarDisponiveis(MOTORISTA).bdos().get(0);
 
         assertThat(item.reaberta()).isTrue();
         assertThat(item.janelaReagendamento()).isEqualTo(janela);
@@ -102,6 +109,37 @@ class BdosDisponiveisServiceTest {
     void consultarDisponiveisVazioNaoQuebra() {
         when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(List.of());
 
-        assertThat(bdosDisponiveisService.consultarDisponiveis().bdos()).isEmpty();
+        assertThat(bdosDisponiveisService.consultarDisponiveis(MOTORISTA).bdos()).isEmpty();
+    }
+
+    /** V52: o motorista so ve os BDOs da base dele; sem base, nenhum (e o aviso para a empresa definir). */
+    @Test
+    void soOsBdosDaBaseDoMotorista() {
+        com.marillia.milebag.business.bdo.model.Bdo daBase = new com.marillia.milebag.business.bdo.model.Bdo();
+        daBase.setId(java.util.UUID.randomUUID());
+        daBase.setBaseId(BASE);
+        daBase.setDataCaptura(java.time.Instant.now());
+        com.marillia.milebag.business.bdo.model.Bdo deOutra = new com.marillia.milebag.business.bdo.model.Bdo();
+        deOutra.setId(java.util.UUID.randomUUID());
+        deOutra.setBaseId(java.util.UUID.randomUUID());
+        deOutra.setDataCaptura(java.time.Instant.now());
+        org.mockito.Mockito.when(bdoRepository.findDisponiveisParaAutoatribuicao()).thenReturn(java.util.List.of(daBase, deOutra));
+
+        var resposta = bdosDisponiveisService.consultarDisponiveis(MOTORISTA);
+
+        org.assertj.core.api.Assertions.assertThat(resposta.bdos()).extracting("bdoId").containsExactly(daBase.getId());
+        org.assertj.core.api.Assertions.assertThat(resposta.semBase()).isFalse();
+    }
+
+    @Test
+    void motoristaSemBaseNaoVeBdos() {
+        java.util.UUID semBase = java.util.UUID.randomUUID();
+        org.mockito.Mockito.when(usuarioConsultaService.baseDoMotorista(semBase)).thenReturn(java.util.Optional.empty());
+
+        var resposta = bdosDisponiveisService.consultarDisponiveis(semBase);
+
+        org.assertj.core.api.Assertions.assertThat(resposta.bdos()).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(resposta.semBase()).isTrue();
+        org.mockito.Mockito.verifyNoInteractions(bdoRepository);
     }
 }

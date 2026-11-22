@@ -46,7 +46,23 @@ public class UsuarioConsultaService {
                 .toList();
     }
 
-    /** HU32: motoristas ativos do tenant, que recebem o aviso de BDO novo. */
+    /** V52: a base do motorista (vazio se ele ainda nao tem). */
+    @Transactional(readOnly = true)
+    public Optional<UUID> baseDoMotorista(UUID usuarioId) {
+        return usuarioRepository.findById(usuarioId).map(Usuario::getBaseId);
+    }
+
+    /** V52: so os motoristas ativos de uma base - quem recebe o aviso de BDO novo daquela base. */
+    @Transactional(readOnly = true)
+    public List<UUID> idsDosMotoristasAtivosDaBase(UUID baseId) {
+        return usuarioRepository.findByPapelOrderByNomeAscEmailAsc(Papeis.MOTORISTA).stream()
+                .filter(Usuario::isAtivo)
+                .filter(usuario -> baseId.equals(usuario.getBaseId()))
+                .map(Usuario::getId)
+                .toList();
+    }
+
+    /** HU32: motoristas ativos do tenant (todas as bases). */
     @Transactional(readOnly = true)
     public List<UUID> idsDosMotoristasAtivos() {
         return usuarioRepository.findByPapelOrderByNomeAscEmailAsc(Papeis.MOTORISTA).stream()

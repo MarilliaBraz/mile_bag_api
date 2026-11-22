@@ -73,6 +73,10 @@ public class BagagemCaronaService {
         }
 
         Bdo bdoPrincipal = buscarBdoOuFalhar(entregaPrincipal.getBdoId());
+        // V52: a carona sai do mesmo aeroporto da principal.
+        if (bdoCarona.getBaseId() != null && bdoPrincipal.getBaseId() != null && !bdoCarona.getBaseId().equals(bdoPrincipal.getBaseId())) {
+            throw new ConflitoException("A bagagem carona precisa ser da mesma base da entrega principal.");
+        }
         BigDecimal quilometragemComplementar = calcularQuilometragemComplementar(bdoPrincipal, bdoCarona);
 
         BagagemCarona bagagemCarona =

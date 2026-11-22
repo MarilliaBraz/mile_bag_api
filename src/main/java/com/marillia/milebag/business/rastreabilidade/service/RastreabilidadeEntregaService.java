@@ -13,6 +13,8 @@ import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService;
+import com.marillia.milebag.business.basebdo.service.TrocaBaseBdoService;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
@@ -67,6 +69,8 @@ public class RastreabilidadeEntregaService {
     private final FotoEntregaService fotoEntregaService;
     private final SegundaViaBdoService segundaViaBdoService;
     private final CorrecaoEntregaService correcaoEntregaService;
+    private final BaseAeroportuariaService baseAeroportuariaService;
+    private final TrocaBaseBdoService trocaBaseBdoService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -82,7 +86,11 @@ public class RastreabilidadeEntregaService {
             RetiradaBagagemService retiradaBagagemService,
             FotoEntregaService fotoEntregaService,
             SegundaViaBdoService segundaViaBdoService,
-            CorrecaoEntregaService correcaoEntregaService) {
+            CorrecaoEntregaService correcaoEntregaService,
+            BaseAeroportuariaService baseAeroportuariaService,
+            TrocaBaseBdoService trocaBaseBdoService) {
+        this.baseAeroportuariaService = baseAeroportuariaService;
+        this.trocaBaseBdoService = trocaBaseBdoService;
         this.entregaService = entregaService;
         this.bdoService = bdoService;
         this.viagemService = viagemService;
@@ -108,9 +116,11 @@ public class RastreabilidadeEntregaService {
         List<Bdo> semEntrega = status == null || status == EntregaStatus.AGUARDANDO_ATRIBUICAO ? bdoService.listarSemEntrega() : List.of();
         Set<UUID> caronas = bagagemCaronaService.bdosQueSaoCarona(semEntrega.stream().map(Bdo::getId).toList());
         Set<UUID> corrigidas = correcaoEntregaService.entregasCorrigidas(entregas.stream().map(Entrega::getId).toList());
+        Map<UUID, String> bases = codigosDasBases();
         return Stream.concat(
-                        entregas.stream().map(entrega -> resumo(entrega, bdos.get(entrega.getBdoId()), nomes, corrigidas.contains(entrega.getId()))),
-                        semEntrega.stream().map(bdo -> resumoSemEntrega(bdo, caronas.contains(bdo.getId()))))
+                        entregas.stream().map(entrega -> comBase(resumo(entrega, bdos.get(entrega.getBdoId()), nomes,
+                                corrigidas.contains(entrega.getId())), bdos.get(entrega.getBdoId()), bases)),
+                        semEntrega.stream().map(bdo -> comBase(resumoSemEntrega(bdo, caronas.contains(bdo.getId())), bdo, bases)))
                 .sorted(Comparator.comparing(EntregaGestaoResponse::atualizadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
@@ -169,6 +179,12 @@ public class RastreabilidadeEntregaService {
                 TipoEventoRastreabilidade.ENTREGUE, comprovante.getDataHora(), nome(entrega.getMotoristaResponsavel(), nomes),
                 comprovante.getIdentificacaoRecebedor(), null)));
 
+        Map<UUID, String> codigos = codigosDasBases();
+        trocaBaseBdoService.listarPorBdo(entrega.getBdoId()).forEach(troca -> eventos.add(new EventoRastreabilidade(
+                TipoEventoRastreabilidade.BASE_ALTERADA, troca.getDataHora(), nome(troca.getAlteradoPor(), nomes),
+                codigos.getOrDefault(troca.getBaseAnteriorId(), "-") + " -> " + codigos.getOrDefault(troca.getBaseNovaId(), "-"),
+                troca.getMotivo())));
+
         List<CorrecaoEntrega> correcoes = correcaoEntregaService.listarPorEntrega(entregaId);
         for (CorrecaoEntrega correcao : correcoes) {
             eventos.add(new EventoRastreabilidade(TipoEventoRastreabilidade.CORRECAO, correcao.getDataHora(),
@@ -213,6 +229,18 @@ public class RastreabilidadeEntregaService {
         entregaService.buscarPorId(entregaId).orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 
+    private Map<UUID, String> codigosDasBases() {
+        Map<UUID, String> codigos = new HashMap<>();
+        baseAeroportuariaService.listar().forEach(base -> codigos.put(base.getId(), base.getCodigoIata()));
+        return codigos;
+    }
+
+    private static EntregaGestaoResponse comBase(EntregaGestaoResponse linha, Bdo bdo, Map<UUID, String> bases) {
+        String codigo = bdo == null || bdo.getBaseId() == null ? null : bases.get(bdo.getBaseId());
+        return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
+                linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(), codigo);
+    }
+
     /** "Motivo: Foto errada. Antes: ... Depois: ... (complemento)". */
     private String detalheDaCorrecao(CorrecaoEntrega correcao) {
         StringBuilder detalhe = new StringBuilder("Motivo: ")
@@ -238,7 +266,8 @@ public class RastreabilidadeEntregaService {
                 bdo == null ? null : bdo.getEnderecoEntrega(),
                 nome(entrega.getMotoristaResponsavel(), nomes),
                 entrega.getAtualizadoEm(),
-                corrigida);
+                corrigida,
+                null);
     }
 
     private static EntregaGestaoResponse resumoSemEntrega(Bdo bdo, boolean bagagemCarona) {
@@ -252,7 +281,8 @@ public class RastreabilidadeEntregaService {
                 bdo.getEnderecoEntrega(),
                 null,
                 bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm(),
-                false);
+                false,
+                null);
     }
 
     /** Nome para exibir, consultado uma vez por pessoa na mesma resposta. */

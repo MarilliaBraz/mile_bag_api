@@ -29,6 +29,8 @@ import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
+import com.marillia.milebag.business.configuracao.model.BaseAeroportuaria;
+import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService;
 import com.marillia.milebag.core.config.security.TenantContext;
 import com.marillia.milebag.core.exception.ConflitoException;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
@@ -50,9 +52,11 @@ public class BdoService {
     private final BdoMapper bdoMapper;
     private final LeitorTelexBdo leitorTelexBdo;
     private final ApplicationEventPublisher eventos;
+    private final BaseAeroportuariaService baseAeroportuariaService;
 
     public BdoService(BdoRepository bdoRepository, BdoMapper bdoMapper, LeitorTelexBdo leitorTelexBdo,
-            ApplicationEventPublisher eventos) {
+            ApplicationEventPublisher eventos, BaseAeroportuariaService baseAeroportuariaService) {
+        this.baseAeroportuariaService = baseAeroportuariaService;
         this.bdoRepository = bdoRepository;
         this.bdoMapper = bdoMapper;
         this.leitorTelexBdo = leitorTelexBdo;
@@ -182,6 +186,20 @@ public class BdoService {
         return leitorTelexBdo.ler(texto);
     }
 
+    /** V52: o BDO travado (FOR UPDATE) - troca de base x autoatribuir, um de cada vez. */
+    @Transactional
+    public Optional<Bdo> travar(UUID bdoId) {
+        return bdoRepository.findForUpdateById(bdoId);
+    }
+
+    /** V52: a base nova escolhida pela empresa (quem valida e registra o motivo e {@code TrocaBaseBdoService}). */
+    @Transactional
+    public void trocarBase(UUID bdoId, UUID baseId) {
+        Bdo bdo = bdoRepository.findById(bdoId).orElseThrow(() -> new RecursoNaoEncontradoException("BDO nao encontrado."));
+        bdo.setBaseId(baseId);
+        bdoRepository.save(bdo);
+    }
+
     /** BDOs ja registrados com este numero (sem diferenciar maiusculas nem espacos): o painel avisa e pergunta. */
     @Transactional(readOnly = true)
     public List<BdoResponse> buscarPorNumero(String numero) {
@@ -211,6 +229,8 @@ public class BdoService {
         bdo.setQuantidadeMalas(campos.quantidadeMalas());
         bdo.setCoresBagagem(campos.coresBagagem());
         bdo.setValorInformado(campos.valorInformado());
+        // V52: a base decide quais motoristas veem o BDO - o aeroporto de retirada, se for base da empresa; senao a principal.
+        bdo.setBaseId(baseAeroportuariaService.baseDoBdo(campos.aeroportoRetirada()).map(BaseAeroportuaria::getId).orElse(null));
     }
 
     /**

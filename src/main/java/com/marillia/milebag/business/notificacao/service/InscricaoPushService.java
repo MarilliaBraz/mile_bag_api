@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.notificacao.model.InscreverPushRequest;
 import com.marillia.milebag.business.notificacao.model.InscricaoPush;
 import com.marillia.milebag.business.notificacao.repository.InscricaoPushRepository;
@@ -19,9 +20,21 @@ public class InscricaoPushService {
     private final InscricaoPushRepository inscricaoPushRepository;
     private final UsuarioConsultaService usuarioConsultaService;
 
-    public InscricaoPushService(InscricaoPushRepository inscricaoPushRepository, UsuarioConsultaService usuarioConsultaService) {
+    private final BdoService bdoService;
+
+    public InscricaoPushService(InscricaoPushRepository inscricaoPushRepository, UsuarioConsultaService usuarioConsultaService,
+            BdoService bdoService) {
         this.inscricaoPushRepository = inscricaoPushRepository;
         this.usuarioConsultaService = usuarioConsultaService;
+        this.bdoService = bdoService;
+    }
+
+    /** V52: os aparelhos dos motoristas ativos da base do BDO (BDO sem base: de todos, como antes). */
+    @Transactional(readOnly = true)
+    public List<InscricaoPush> listarDosMotoristasDoBdo(UUID bdoId) {
+        UUID base = bdoService.buscarPorId(bdoId).map(com.marillia.milebag.business.bdo.model.Bdo::getBaseId).orElse(null);
+        List<UUID> motoristas = base == null ? usuarioConsultaService.idsDosMotoristasAtivos() : usuarioConsultaService.idsDosMotoristasAtivosDaBase(base);
+        return motoristas.isEmpty() ? List.of() : inscricaoPushRepository.findByUsuarioIdIn(motoristas);
     }
 
     /** RD18: o mesmo aparelho (endpoint) passa para a conta que se inscreveu por ultimo. */

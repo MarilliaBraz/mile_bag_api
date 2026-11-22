@@ -21,5 +21,7 @@ public record EntregaGestaoResponse(
         String motoristaNome,
         Instant atualizadoEm,
         /** V51: o motorista voltou e corrigiu alguma etapa (selo "Corrigida"; o detalhe esta no historico). */
-        boolean corrigida) {
+        boolean corrigida,
+        /** V52: codigo IATA da base do BDO (quem pode assumir). */
+        String baseCodigo) {
 }

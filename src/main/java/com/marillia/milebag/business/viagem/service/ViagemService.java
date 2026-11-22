@@ -18,6 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bagagemencontrada.model.Aeroporto;
 import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
@@ -25,6 +29,7 @@ import com.marillia.milebag.business.retirada.service.RetiradaBagagemService;
 import com.marillia.milebag.business.mensagem.model.TipoEventoNotificacao;
 import com.marillia.milebag.business.mensagem.service.MensagemService;
 import com.marillia.milebag.business.viagem.mapper.TrajetoMapper;
+import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import com.marillia.milebag.business.viagem.model.CalculoRota;
 import com.marillia.milebag.business.viagem.model.CheckpointGps;
 import com.marillia.milebag.business.viagem.model.CheckpointResponse;
@@ -84,6 +89,8 @@ public class ViagemService {
     private final PracaPedagioService pracaPedagioService;
     private final AcompanhamentoViagem acompanhamentoViagem;
     private final RetiradaBagagemService retiradaBagagemService;
+    private final BdoService bdoService;
+    private final CobrancaViagemService cobrancaViagemService;
 
     // @Lazy: a inversao por SelecaoRotaProvider tira a dependencia de PACOTE
     // (viagem nao importa nada de rota), mas em runtime o Spring ainda ve o
@@ -101,7 +108,11 @@ public class ViagemService {
             MensagemService mensagemService,
             PracaPedagioService pracaPedagioService,
             AcompanhamentoViagem acompanhamentoViagem,
-            RetiradaBagagemService retiradaBagagemService) {
+            RetiradaBagagemService retiradaBagagemService,
+            BdoService bdoService,
+            CobrancaViagemService cobrancaViagemService) {
+        this.bdoService = bdoService;
+        this.cobrancaViagemService = cobrancaViagemService;
         this.pracaPedagioService = pracaPedagioService;
         this.acompanhamentoViagem = acompanhamentoViagem;
         this.retiradaBagagemService = retiradaBagagemService;
@@ -399,9 +410,10 @@ public class ViagemService {
                     "A quilometragem final diverge da rota inicialmente sugerida acima do limiar permitido; informe uma justificativa.");
         }
 
+        BigDecimal[] kmCobrado = congelarCobranca(trajeto, entregaId, calculoFinal);
         trajeto.consolidar(
-                calculoFinal.getKmIda(),
-                calculoFinal.getKmVolta(),
+                kmCobrado[0],
+                kmCobrado[1],
                 calculoFinal.getPracasPedagio(),
                 calculoFinal.getTempoEstimado(),
                 divergenciaAtingida ? justificativa : null);
@@ -411,6 +423,38 @@ public class ViagemService {
                 "Trajeto {} encerrado (divergencia {} km, limiar {} km, justificativa {})",
                 trajeto.getId(), divergencia, limiar, divergenciaAtingida ? "informada" : "nao exigida");
         return montarDetalhado(trajeto);
+    }
+
+    /**
+     * V52 (item 7): base e regra da cobranca congeladas na viagem, e o km de ida e volta a partir do aeroporto base -
+     * nao da posicao do motorista. Se algo faltar (sem base, sem destino, motor de rotas fora), vale o km da rota do
+     * motorista, como antes; nunca impede o encerramento da entrega.
+     */
+    private BigDecimal[] congelarCobranca(Trajeto trajeto, UUID entregaId, CalculoRota calculoFinal) {
+        BigDecimal[] km = {calculoFinal.getKmIda(), calculoFinal.getKmVolta()};
+        try {
+            Optional<Bdo> bdo = entregaService.buscarPorId(entregaId).flatMap(entrega -> bdoService.buscarPorId(entrega.getBdoId()));
+            if (bdo.isEmpty()) {
+                return km;
+            }
+            CobrancaViagemService.Cobranca cobranca = cobrancaViagemService.cobrancaDe(bdo.get());
+            if (cobranca.regra() == null) {
+                // Servico de mapa fora: nao congela - o valor e decidido no calculo, quando ele voltar.
+                return km;
+            }
+            trajeto.definirCobranca(cobranca.base().map(Aeroporto::getCodigo).orElse(null), cobranca.regra());
+            Optional<Coordenada> destino = selecaoRotaProvider.buscarDestino(entregaId);
+            // Na cidade da base paga o valor fixo: o km nao entra na conta, nao precisa calcular.
+            if (cobranca.regra() == RegraCobranca.POR_KM && cobranca.base().isPresent() && destino.isPresent()) {
+                cobrancaViagemService.kmIdaEVolta(cobranca.base().get(), destino.get()).ifPresent(idaVolta -> {
+                    km[0] = idaVolta[0];
+                    km[1] = idaVolta[1];
+                });
+            }
+        } catch (RuntimeException e) {
+            log.warn("Cobranca da viagem {} nao calculada a partir do aeroporto - vale o km da rota do motorista.", trajeto.getId(), e);
+        }
+        return km;
     }
 
     private TrajetoDetalhadoResponse montarDetalhado(Trajeto trajeto) {

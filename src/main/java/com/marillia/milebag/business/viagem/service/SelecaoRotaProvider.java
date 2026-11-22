@@ -3,6 +3,7 @@ package com.marillia.milebag.business.viagem.service;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.marillia.milebag.core.geo.Coordenada;
 import com.marillia.milebag.core.geo.RotaAlternativa;
 import com.marillia.milebag.core.geo.TipoSelecao;
 
@@ -18,6 +19,9 @@ import com.marillia.milebag.core.geo.TipoSelecao;
 public interface SelecaoRotaProvider {
 
     Optional<RotaSelecionada> buscarSelecionada(UUID entregaId);
+
+    /** V52: o destino da entrega (endereco ja localizado no mapa), para a ida e a volta a partir do aeroporto. */
+    Optional<Coordenada> buscarDestino(UUID entregaId);
 
     record RotaSelecionada(TipoSelecao tipoSelecao, RotaAlternativa rotaEscolhida) {
     }

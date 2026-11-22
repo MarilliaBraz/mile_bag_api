@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.tenant.model;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import com.marillia.milebag.core.base.BaseEntity;
 
@@ -43,6 +44,10 @@ public class Usuario extends BaseEntity {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    /** V52: base aeroportuaria (so motoristas; obrigatoria no cadastro). */
+    @Column(name = "base_id")
+    private UUID baseId;
+
     /** Sessoes (JWT) emitidas antes deste instante nao valem mais; nulo = nenhuma revogacao. */
     @Column(name = "tokens_validos_desde")
     private Instant tokensValidosDesde;
@@ -68,6 +73,11 @@ public class Usuario extends BaseEntity {
 
     public void definirLogin(String novoLogin) {
         this.email = novoLogin;
+    }
+
+    /** V52: base aeroportuaria do motorista - ele so ve e so e avisado dos BDOs dessa base. */
+    public void definirBase(UUID baseId) {
+        this.baseId = baseId;
     }
 
     public void definirNome(String novoNome) {

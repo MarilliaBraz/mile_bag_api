@@ -50,7 +50,7 @@ public class PainelEntregasController {
     }
 
     @GetMapping("/api/v1/motorista/bdos-disponiveis")
-    public BdosDisponiveisResponse bdosDisponiveis() {
-        return bdosDisponiveisService.consultarDisponiveis();
+    public BdosDisponiveisResponse bdosDisponiveis(@AuthenticationPrincipal AuthenticatedUser usuario) {
+        return bdosDisponiveisService.consultarDisponiveis(usuario.userId());
     }
 }

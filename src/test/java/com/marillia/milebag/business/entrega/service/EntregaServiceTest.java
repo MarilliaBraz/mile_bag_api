@@ -49,8 +49,32 @@ class EntregaServiceTest {
     @Mock
     private BagagemCaronaRepository bagagemCaronaRepository;
 
+    @Mock
+    private com.marillia.milebag.business.tenant.service.UsuarioConsultaService usuarioConsultaService;
+
     @InjectMocks
     private EntregaService entregaService;
+
+    /** V52: o motorista dos testes tem base (o BDO de teste nao tem, entao qualquer base serve). */
+    @org.junit.jupiter.api.BeforeEach
+    void motoristaComBase() {
+        org.mockito.Mockito.lenient().when(usuarioConsultaService.baseDoMotorista(any())).thenReturn(Optional.of(UUID.randomUUID()));
+    }
+
+    @Test
+    void motoristaSemBaseNaoAssume() {
+        UUID bdoId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Bdo bdo = new Bdo();
+        bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
+        when(bdoService.travar(bdoId)).thenReturn(Optional.of(bdo));
+        when(usuarioConsultaService.baseDoMotorista(motorista)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, motorista))
+                .isInstanceOf(ConflitoException.class)
+                .hasMessageStartingWith("Sua empresa ainda nao definiu a sua base.");
+        verify(entregaRepository, never()).autoatribuirSeDisponivel(any(), any(), any(), any());
+    }
 
     private Entrega novaEntrega(UUID id, EntregaStatus status) {
         Entrega entrega = new Entrega();
@@ -163,7 +187,7 @@ class EntregaServiceTest {
         UUID motoristaId = UUID.randomUUID();
         Bdo bdo = new Bdo();
         bdo.setStatusConferencia(StatusConferencia.PENDENTE);
-        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        when(bdoService.travar(bdoId)).thenReturn(Optional.of(bdo));
 
         assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, motoristaId))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
@@ -176,7 +200,7 @@ class EntregaServiceTest {
         UUID motoristaId = UUID.randomUUID();
         Bdo bdo = new Bdo();
         bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
-        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        when(bdoService.travar(bdoId)).thenReturn(Optional.of(bdo));
         when(entregaRepository.autoatribuirSeDisponivel(any(), any(), any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, motoristaId))
@@ -188,7 +212,7 @@ class EntregaServiceTest {
         UUID bdoId = UUID.randomUUID();
         Bdo bdo = new Bdo();
         bdo.setStatusConferencia(StatusConferencia.CONFIRMADO);
-        when(bdoService.buscarPorId(bdoId)).thenReturn(Optional.of(bdo));
+        when(bdoService.travar(bdoId)).thenReturn(Optional.of(bdo));
         when(bagagemCaronaRepository.findByBdoId(bdoId)).thenReturn(Optional.of(new BagagemCarona(bdoId, UUID.randomUUID(), BigDecimal.ONE)));
 
         assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, UUID.randomUUID())).isInstanceOf(ConflitoException.class);
@@ -263,5 +287,23 @@ class EntregaServiceTest {
         assertThatThrownBy(() -> entregaService.cancelar(concluida)).isInstanceOf(ConflitoException.class);
         assertThatThrownBy(() -> entregaService.cancelar(jaCancelada)).isInstanceOf(ConflitoException.class);
         verify(entregaRepository, never()).save(any());
+    }
+
+    /** V52: o motorista so assume BDO da base dele (inclusive pela fila offline). */
+    @Test
+    void autoatribuirRecusaBdoDeOutraBase() {
+        UUID bdoId = UUID.randomUUID();
+        UUID motorista = UUID.randomUUID();
+        Bdo bdo = new Bdo();
+        bdo.setId(bdoId);
+        bdo.setStatusConferencia(com.marillia.milebag.business.bdo.model.StatusConferencia.CONFIRMADO);
+        bdo.setBaseId(UUID.randomUUID());
+        when(bdoService.travar(bdoId)).thenReturn(java.util.Optional.of(bdo));
+        when(usuarioConsultaService.baseDoMotorista(motorista)).thenReturn(java.util.Optional.of(UUID.randomUUID()));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> entregaService.autoatribuir(bdoId, motorista))
+                .isInstanceOf(com.marillia.milebag.core.exception.ConflitoException.class)
+                .hasMessage("Este BDO e de outra base.");
+        org.mockito.Mockito.verifyNoInteractions(entregaRepository);
     }
 }

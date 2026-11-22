@@ -186,7 +186,9 @@ public class FechamentoService {
         List<String> problemas = new ArrayList<>();
         Optional<BigDecimal> valorPagamento = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
         if (valorPagamento.isEmpty()) {
-            problemas.add("nenhuma tarifa aplicavel configurada para o motorista/regiao");
+            // V52: na cidade da base vale o valor fixo; fora dela, o valor por km - falta o que a regra da viagem pede.
+            problemas.add("nenhuma tarifa aplicavel configurada para o motorista/regiao (ou falta o valor fixo, para entrega na cidade"
+                    + " da base, ou o valor por km, fora dela)");
         }
         Optional<BigDecimal> valorPedagio = ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO);
         if (valorPedagio.isEmpty()) {
