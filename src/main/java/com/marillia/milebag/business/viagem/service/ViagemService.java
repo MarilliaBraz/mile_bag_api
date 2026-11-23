@@ -150,6 +150,16 @@ public class ViagemService {
         return trajetoDaTentativaAtual(entregaId).filter(trajeto -> trajeto.getStatus() == TrajetoStatus.EM_EXECUCAO).isPresent();
     }
 
+    /**
+     * Se a viagem da tentativa atual ja foi encerrada pelo proprio motorista ("Encerrar viagem" antes de finalizar) - o
+     * comprovante entao so finaliza a entrega, sem novo marco nem novo encerramento. Encerramentos por ocorrencia ou
+     * dispensa nao contam: abrem uma tentativa nova, sem viagem.
+     */
+    @Transactional(readOnly = true)
+    public boolean viagemJaEncerrada(UUID entregaId) {
+        return trajetoDaTentativaAtual(entregaId).filter(trajeto -> trajeto.getStatus() == TrajetoStatus.ENCERRADO).isPresent();
+    }
+
     /** Todas as viagens da entrega (uma por tentativa), da mais antiga para a mais recente - rastreabilidade (V46). */
     @Transactional(readOnly = true)
     public List<Trajeto> listarViagensDaEntrega(UUID entregaId) {
