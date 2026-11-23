@@ -10,7 +10,15 @@ import java.util.UUID;
  * ainda vigente hoje). {@code latitude}/{@code longitude} (HU24) ficam nulos
  * enquanto a praca nao tem localizacao (nao e detectada nas rotas).
  */
-public record PracaPedagioResponse(UUID id, String nome, BigDecimal valorVigente, LocalDate vigenteDesde, Double latitude, Double longitude) {
+public record PracaPedagioResponse(
+        UUID id,
+        String nome,
+        BigDecimal valorVigente,
+        LocalDate vigenteDesde,
+        Double latitude,
+        Double longitude,
+        /** V57: "Cidade/UF" da localizacao, so informativa. */
+        String cidade) {
 
     public static PracaPedagioResponse de(PracaPedagio praca, PracaPedagioValor valorVigente) {
         return new PracaPedagioResponse(
@@ -19,6 +27,7 @@ public record PracaPedagioResponse(UUID id, String nome, BigDecimal valorVigente
                 valorVigente == null ? null : valorVigente.getValor(),
                 valorVigente == null ? null : valorVigente.getVigenteDesde(),
                 praca.getLatitude(),
-                praca.getLongitude());
+                praca.getLongitude(),
+                praca.getCidade());
     }
 }

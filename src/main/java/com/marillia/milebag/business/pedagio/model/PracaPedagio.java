@@ -10,10 +10,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * Praca de pedagio (RD08, data-model.md desta HU). Sem endpoint de
- * renomeacao no contrato - so o historico de valores muda depois da
- * criacao ({@link PracaPedagioValor}), por isso {@code nome} nao tem
- * setter. A localizacao (HU24) e opcional e pode ser corrigida: sem ela a
+ * Praca de pedagio (RD08, data-model.md desta HU). O valor muda pelo
+ * historico ({@link PracaPedagioValor}); o nome pode ser corrigido
+ * (ajustes de 2026-11-22) - as viagens ja encerradas guardam o nome da
+ * epoca, no trecho de pedagio delas. A localizacao (HU24) e opcional e pode ser corrigida: sem ela a
  * praca nao e detectada nas rotas.
  */
 @Entity
@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PracaPedagio extends BaseEntity {
 
-    @Column(nullable = false, updatable = false, length = 200)
+    @Column(nullable = false, length = 200)
     private String nome;
 
     @Column
@@ -31,19 +31,23 @@ public class PracaPedagio extends BaseEntity {
     @Column
     private Double longitude;
 
+    /** V57: "Cidade/UF" descoberta pela localizacao - so informativa; nula sem localizacao ou se o mapa nao achar. */
+    @Column(length = 200)
+    private String cidade;
+
     public PracaPedagio(String nome) {
         this.nome = nome;
     }
 
-    public PracaPedagio(String nome, Double latitude, Double longitude) {
-        this.nome = nome;
-        this.latitude = latitude;
-        this.longitude = longitude;
-    }
-
-    public void definirLocalizacao(Double novaLatitude, Double novaLongitude) {
+    public void definirLocalizacao(Double novaLatitude, Double novaLongitude, String novaCidade) {
         this.latitude = novaLatitude;
         this.longitude = novaLongitude;
+        this.cidade = novaCidade;
+    }
+
+    /** Ajustes de 2026-11-22: a empresa corrige o nome. Viagens ja encerradas guardam o nome da epoca. */
+    public void renomear(String novoNome) {
+        this.nome = novoNome;
     }
 
     public boolean temLocalizacao() {
