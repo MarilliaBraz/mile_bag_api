@@ -20,6 +20,7 @@ import com.marillia.milebag.business.pedagio.model.AdicionarValorRequest;
 import com.marillia.milebag.business.pedagio.model.DefinirLocalizacaoRequest;
 import com.marillia.milebag.business.pedagio.model.CriarPracaPedagioRequest;
 import com.marillia.milebag.business.pedagio.model.PracaPedagioResponse;
+import com.marillia.milebag.business.pedagio.model.RenomearPracaRequest;
 import com.marillia.milebag.business.pedagio.model.ValorPedagioResponse;
 import com.marillia.milebag.business.pedagio.service.PracaPedagioService;
 
@@ -53,6 +54,12 @@ public class PracaPedagioController {
     @PutMapping("/{id}/localizacao")
     public PracaPedagioResponse definirLocalizacao(@PathVariable UUID id, @RequestBody DefinirLocalizacaoRequest request) {
         return pracaPedagioService.definirLocalizacao(id, request.latitude(), request.longitude());
+    }
+
+    /** Ajustes de 2026-11-22: corrige o nome da praca. */
+    @PutMapping("/{id}/nome")
+    public PracaPedagioResponse renomear(@PathVariable UUID id, @RequestBody RenomearPracaRequest request) {
+        return pracaPedagioService.renomear(id, request.nome());
     }
 
     @GetMapping("/{id}/valores")

@@ -96,6 +96,44 @@ public class GeocodingClient {
         }
     }
 
+    /**
+     * A cidade de uma coordenada, como "Cidade/UF" (API {@code /reverse}) - para mostrar onde fica uma praca de
+     * pedagio. Vazio se o servico nao achar ou estiver fora: e so informativo, nunca impede gravar a localizacao.
+     */
+    public Optional<String> cidadeEm(double latitude, double longitude) {
+        try {
+            ResultadoComEndereco resultado = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/reverse")
+                            .queryParam("lat", latitude)
+                            .queryParam("lon", longitude)
+                            .queryParam("format", "json")
+                            .queryParam("addressdetails", 1)
+                            .queryParam("zoom", 10)
+                            .build())
+                    .header(HttpHeaders.USER_AGENT, properties.userAgent())
+                    .retrieve()
+                    .body(ResultadoComEndereco.class);
+            return resultado == null ? Optional.empty() : cidadeComUf(resultado.address());
+        } catch (RestClientException e) {
+            log.warn("Falha ao descobrir a cidade da coordenada {}, {} via Nominatim.", latitude, longitude, e);
+            return Optional.empty();
+        }
+    }
+
+    /** "Cidade/UF" a partir do endereco do Nominatim; so a cidade se nao vier a UF (codigo ISO "BR-SP"). */
+    static Optional<String> cidadeComUf(Map<String, String> partes) {
+        if (partes == null) {
+            return Optional.empty();
+        }
+        Optional<String> cidade = List.of("city", "town", "municipality", "village").stream()
+                .map(partes::get)
+                .filter(valor -> valor != null && !valor.isBlank())
+                .findFirst();
+        String iso = partes.get("ISO3166-2-lvl4");
+        String uf = iso != null && iso.startsWith("BR-") ? iso.substring(3) : null;
+        return cidade.map(nome -> uf == null ? nome : nome + "/" + uf);
+    }
+
     private record ResultadoNominatim(String lat, String lon) {
     }
 

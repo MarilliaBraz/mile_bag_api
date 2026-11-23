@@ -19,6 +19,7 @@ import com.marillia.milebag.business.pedagio.repository.PracaPedagioRepository;
 import com.marillia.milebag.business.pedagio.repository.PracaPedagioValorRepository;
 import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 import com.marillia.milebag.core.geo.Coordenada;
+import com.marillia.milebag.core.geo.GeocodingClient;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 
 /**
@@ -33,10 +34,15 @@ public class PracaPedagioService {
 
     private final PracaPedagioRepository pracaPedagioRepository;
     private final PracaPedagioValorRepository pracaPedagioValorRepository;
+    private final GeocodingClient geocodingClient;
 
-    public PracaPedagioService(PracaPedagioRepository pracaPedagioRepository, PracaPedagioValorRepository pracaPedagioValorRepository) {
+    public PracaPedagioService(
+            PracaPedagioRepository pracaPedagioRepository,
+            PracaPedagioValorRepository pracaPedagioValorRepository,
+            GeocodingClient geocodingClient) {
         this.pracaPedagioRepository = pracaPedagioRepository;
         this.pracaPedagioValorRepository = pracaPedagioValorRepository;
+        this.geocodingClient = geocodingClient;
     }
 
     @Transactional
@@ -53,7 +59,9 @@ public class PracaPedagioService {
         validarVigencia(vigenteDesde);
 
         validarLocalizacao(latitude, longitude);
-        PracaPedagio praca = pracaPedagioRepository.save(new PracaPedagio(nome, latitude, longitude));
+        PracaPedagio nova = new PracaPedagio(nome.trim());
+        nova.definirLocalizacao(latitude, longitude, cidadeEm(latitude, longitude));
+        PracaPedagio praca = pracaPedagioRepository.save(nova);
         PracaPedagioValor primeiroValor = pracaPedagioValorRepository.save(new PracaPedagioValor(praca.getId(), valor, vigenteDesde));
 
         log.info("Praca de pedagio {} criada com valor inicial {} (vigente desde {})", praca.getId(), valor, vigenteDesde);
@@ -82,9 +90,31 @@ public class PracaPedagioService {
     public PracaPedagioResponse definirLocalizacao(UUID pracaId, Double latitude, Double longitude) {
         PracaPedagio praca = buscarPracaOuFalhar(pracaId);
         validarLocalizacao(latitude, longitude);
-        praca.definirLocalizacao(latitude, longitude);
+        praca.definirLocalizacao(latitude, longitude, cidadeEm(latitude, longitude));
         pracaPedagioRepository.save(praca);
         return PracaPedagioResponse.de(praca, valorVigenteEmOuNulo(praca.getId(), LocalDate.now()));
+    }
+
+    /** Ajustes de 2026-11-22: corrige o nome da praca. As viagens ja encerradas guardam o nome da epoca. */
+    @Transactional
+    public PracaPedagioResponse renomear(UUID pracaId, String nome) {
+        if (nome == null || nome.isBlank()) {
+            throw new RegraNegocioException("nome e obrigatorio.");
+        }
+        PracaPedagio praca = buscarPracaOuFalhar(pracaId);
+        String anterior = praca.getNome();
+        praca.renomear(nome.trim());
+        pracaPedagioRepository.save(praca);
+        log.info("Praca de pedagio {} renomeada de '{}' para '{}'.", pracaId, anterior, praca.getNome());
+        return PracaPedagioResponse.de(praca, valorVigenteEmOuNulo(praca.getId(), LocalDate.now()));
+    }
+
+    /** V57: so informativa - sem localizacao, ou se o mapa nao achar, fica sem cidade. */
+    private String cidadeEm(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return null;
+        }
+        return geocodingClient.cidadeEm(latitude, longitude).orElse(null);
     }
 
     /** HU24: pracas com localizacao e o valor vigente em {@code data} - sem valor vigente o valor vem nulo (a praca ainda e detectada, mas nao valorada). */
