@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
-import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
+import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
@@ -41,7 +41,7 @@ public class RelatorioMotoristaService {
     private final ViagemService viagemService;
     private final AjusteViagemService ajusteViagemService;
     private final BdoService bdoService;
-    private final ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
+    private final UsuarioConsultaService usuarioConsultaService;
 
     public RelatorioMotoristaService(
             ComprovanteEntregaService comprovanteEntregaService,
@@ -49,13 +49,13 @@ public class RelatorioMotoristaService {
             ViagemService viagemService,
             AjusteViagemService ajusteViagemService,
             BdoService bdoService,
-            ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService) {
+            UsuarioConsultaService usuarioConsultaService) {
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.entregaService = entregaService;
         this.viagemService = viagemService;
         this.ajusteViagemService = ajusteViagemService;
         this.bdoService = bdoService;
-        this.exibicaoTarifaMotoristaService = exibicaoTarifaMotoristaService;
+        this.usuarioConsultaService = usuarioConsultaService;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +69,7 @@ public class RelatorioMotoristaService {
 
         Instant inicioInstant = periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant fimInstant = periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        boolean tarifaOculta = exibicaoTarifaMotoristaService.ocultarTarifa();
+        boolean tarifaOculta = usuarioConsultaService.ocultaTarifa(motoristaId);
 
         List<ItemRelatorioMotoristaResponse> itens = new ArrayList<>(comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
                 .map(ComprovanteEntrega::getEntregaId)

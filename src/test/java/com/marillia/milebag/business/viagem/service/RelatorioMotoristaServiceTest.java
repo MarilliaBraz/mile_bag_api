@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 
-import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
+import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -48,7 +48,7 @@ class RelatorioMotoristaServiceTest {
     @Mock
     private BdoService bdoService;
     @Mock
-    private ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
+    private UsuarioConsultaService usuarioConsultaService;
 
     private RelatorioMotoristaService relatorioMotoristaService;
 
@@ -56,7 +56,7 @@ class RelatorioMotoristaServiceTest {
     void setUp() {
         relatorioMotoristaService =
                 new RelatorioMotoristaService(comprovanteEntregaService, entregaService, viagemService, ajusteViagemService, bdoService,
-                        exibicaoTarifaMotoristaService);
+                        usuarioConsultaService);
     }
 
     private Entrega entregaDe(UUID id, UUID motoristaId) {
@@ -167,7 +167,7 @@ class RelatorioMotoristaServiceTest {
         Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
         trajeto.consolidar(new BigDecimal("8.000"), new BigDecimal("8.000"), "[]", 600L, null);
         when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
-        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+        when(usuarioConsultaService.ocultaTarifa(any())).thenReturn(true);
         when(ajusteViagemService.regraCobranca(trajeto.getId())).thenReturn(Optional.of(RegraCobranca.FIXO_CIDADE_BASE));
         when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_IDA)).thenReturn(Optional.of(new BigDecimal("8.000")));
         when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_VOLTA)).thenReturn(Optional.of(new BigDecimal("8.000")));

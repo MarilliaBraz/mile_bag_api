@@ -301,4 +301,46 @@ class MotoristaServiceTest {
 
         org.assertj.core.api.Assertions.assertThat(criado.getBaseId()).isEqualTo(baseId);
     }
+
+    @Test
+    void criarNaBaseGuardaATarifaOcultaEscolhidaPelaEmpresa() {
+        com.marillia.milebag.business.configuracao.model.BaseAeroportuaria gyn = new com.marillia.milebag.business.configuracao.model.BaseAeroportuaria("GYN", null);
+        UUID baseId = UUID.randomUUID();
+        gyn.setId(baseId);
+        when(baseAeroportuariaService.buscar(baseId)).thenReturn(java.util.Optional.of(gyn));
+        when(autenticacaoService.loginJaExiste("joao@empresa.com")).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> chamada.getArgument(0));
+
+        assertThat(service.criarNaBase("Joao", "joao@empresa.com", "segura123", baseId, true).isOcultarTarifa()).isTrue();
+    }
+
+    @Test
+    void atualizarSoATarifaOcultaDoMotorista() {
+        Usuario motorista = new Usuario("joao@empresa.com", "hash", Papeis.MOTORISTA, "Joao");
+        UUID id = UUID.randomUUID();
+        when(usuarioRepository.findById(id)).thenReturn(java.util.Optional.of(motorista));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(chamada -> chamada.getArgument(0));
+
+        Usuario atualizado = service.atualizarComBase(id, null, null, null, null, true);
+
+        assertThat(atualizado.isOcultarTarifa()).isTrue();
+        assertThat(atualizado.getNome()).isEqualTo("Joao");
+    }
+
+    @Test
+    void tarifaOcultaSoValeParaMotorista() {
+        Usuario administrador = new Usuario("adm@empresa.com", "hash", Papeis.ADMINISTRADOR_TENANT, "Adm");
+        UUID id = UUID.randomUUID();
+        when(usuarioRepository.findById(id)).thenReturn(java.util.Optional.of(administrador));
+
+        assertThatThrownBy(() -> service.atualizarComBase(id, null, null, null, null, true))
+                .isInstanceOf(com.marillia.milebag.core.exception.RecursoNaoEncontradoException.class);
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void atualizarSemNenhumCampoERecusado() {
+        assertThatThrownBy(() -> service.atualizarComBase(UUID.randomUUID(), null, null, null, null, null))
+                .isInstanceOf(com.marillia.milebag.core.exception.RegraNegocioException.class);
+    }
 }

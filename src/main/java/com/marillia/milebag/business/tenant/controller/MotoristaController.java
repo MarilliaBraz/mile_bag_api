@@ -24,7 +24,8 @@ import com.marillia.milebag.business.tenant.service.MotoristaService;
 public class MotoristaController {
 
     /** V52: {@code baseId} obrigatorio - a base aeroportuaria do motorista. */
-    public record CriarMotoristaRequest(String nome, String login, String senha, UUID baseId) {
+    /** V58: {@code ocultarTarifa} opcional (ausente = a tarifa aparece). */
+    public record CriarMotoristaRequest(String nome, String login, String senha, UUID baseId, Boolean ocultarTarifa) {
     }
 
     /** Ao menos um dos tres campos. Trocar o login (HU26) cancela pedidos de redefinicao de senha pendentes. */
@@ -42,18 +43,18 @@ public class MotoristaController {
     public record ResultadoLoteResponse(int criados, int comErro, List<ResultadoLinhaResponse> resultados) {
     }
 
-    public record AtualizarMotoristaRequest(String nome, String login, Boolean ativo, UUID baseId) {
+    public record AtualizarMotoristaRequest(String nome, String login, Boolean ativo, UUID baseId, Boolean ocultarTarifa) {
     }
 
     public record RedefinirSenhaRequest(String senha) {
     }
 
     /** {@code nome} cai no login quando nulo (nunca acontece para motoristas criados por aqui). */
-    public record MotoristaResponse(UUID id, String nome, String login, boolean ativo, Instant criadoEm, UUID baseId) {
+    public record MotoristaResponse(UUID id, String nome, String login, boolean ativo, Instant criadoEm, UUID baseId, boolean ocultarTarifa) {
         static MotoristaResponse de(Usuario usuario) {
             return new MotoristaResponse(
                     usuario.getId(), usuario.getNome() != null ? usuario.getNome() : usuario.getEmail(), usuario.getEmail(), usuario.isAtivo(),
-                    usuario.getCriadoEm(), usuario.getBaseId());
+                    usuario.getCriadoEm(), usuario.getBaseId(), usuario.isOcultarTarifa());
         }
     }
 
@@ -71,7 +72,8 @@ public class MotoristaController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MotoristaResponse criar(@RequestBody CriarMotoristaRequest request) {
-        return MotoristaResponse.de(motoristaService.criarNaBase(request.nome(), request.login(), request.senha(), request.baseId()));
+        return MotoristaResponse.de(motoristaService.criarNaBase(
+                request.nome(), request.login(), request.senha(), request.baseId(), Boolean.TRUE.equals(request.ocultarTarifa())));
     }
 
     /**
@@ -93,7 +95,8 @@ public class MotoristaController {
     @PatchMapping("/{id}")
     public MotoristaResponse atualizar(@PathVariable UUID id, @RequestBody AtualizarMotoristaRequest request) {
         return MotoristaResponse.de(
-                motoristaService.atualizarComBase(id, request.nome(), request.login(), request.ativo(), request.baseId()));
+                motoristaService.atualizarComBase(
+                        id, request.nome(), request.login(), request.ativo(), request.baseId(), request.ocultarTarifa()));
     }
 
     @PutMapping("/{id}/senha")
