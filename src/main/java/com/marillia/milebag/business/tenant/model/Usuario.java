@@ -48,6 +48,10 @@ public class Usuario extends BaseEntity {
     @Column(name = "base_id")
     private UUID baseId;
 
+    /** V58: so motoristas - a empresa oculta dele a tarifa paga por viagem (o relatorio mostra km e pedagio). */
+    @Column(name = "ocultar_tarifa", nullable = false)
+    private boolean ocultarTarifa;
+
     /** Sessoes (JWT) emitidas antes deste instante nao valem mais; nulo = nenhuma revogacao. */
     @Column(name = "tokens_validos_desde")
     private Instant tokensValidosDesde;
@@ -78,6 +82,10 @@ public class Usuario extends BaseEntity {
     /** V52: base aeroportuaria do motorista - ele so ve e so e avisado dos BDOs dessa base. */
     public void definirBase(UUID baseId) {
         this.baseId = baseId;
+    }
+
+    public void definirOcultarTarifa(boolean ocultar) {
+        this.ocultarTarifa = ocultar;
     }
 
     public void definirNome(String novoNome) {

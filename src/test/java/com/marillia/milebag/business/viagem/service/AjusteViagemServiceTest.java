@@ -17,7 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
-import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
+import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,7 +57,7 @@ class AjusteViagemServiceTest {
     @Mock
     private CobrancaViagemService cobrancaViagemService;
     @Mock
-    private ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
+    private UsuarioConsultaService usuarioConsultaService;
 
     private AjusteViagemService ajusteViagemService;
 
@@ -65,7 +65,7 @@ class AjusteViagemServiceTest {
     void setUp() {
         ajusteViagemService = new AjusteViagemService(
                 ajusteViagemRepository, trajetoRepository, entregaService, tabelaTarifaService, bagagemCaronaService, new ObjectMapper(),
-                bdoService, cobrancaViagemService, exibicaoTarifaMotoristaService);
+                bdoService, cobrancaViagemService, usuarioConsultaService);
     }
 
     private Trajeto trajetoConsolidado(UUID entregaId, String kmIda, String kmVolta, String pracasPedagioFinal) {
@@ -369,7 +369,7 @@ class AjusteViagemServiceTest {
 
     @Test
     void registrarAjusteDeTarifaERecusadoQuandoAEmpresaOcultaATarifa() {
-        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+        when(usuarioConsultaService.ocultaTarifa(any())).thenReturn(true);
 
         assertThatThrownBy(() -> ajusteViagemService.registrarAjuste(
                 UUID.randomUUID(), UUID.randomUUID(), CampoAjusteViagem.TARIFA_APLICADA, "100", "justificativa"))
@@ -387,7 +387,7 @@ class AjusteViagemServiceTest {
         AjusteViagem km = new AjusteViagem(trajeto.getId(), CampoAjusteViagem.KM_IDA, "10", "12", "desvio", motoristaId);
         AjusteViagem tarifa = new AjusteViagem(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA, "90", "95", "acerto", motoristaId);
         when(ajusteViagemRepository.findByViagemIdOrderByCriadoEmDesc(trajeto.getId())).thenReturn(List.of(tarifa, km));
-        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+        when(usuarioConsultaService.ocultaTarifa(any())).thenReturn(true);
 
         assertThat(ajusteViagemService.listarPorViagem(trajeto.getId(), motoristaId)).containsExactly(km);
     }

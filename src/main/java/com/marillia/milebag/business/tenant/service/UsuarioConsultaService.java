@@ -46,6 +46,12 @@ public class UsuarioConsultaService {
                 .toList();
     }
 
+    /** V58: se a empresa oculta deste motorista a tarifa paga por viagem. Conta inexistente: a tarifa aparece. */
+    @Transactional(readOnly = true)
+    public boolean ocultaTarifa(UUID motoristaId) {
+        return usuarioRepository.findById(motoristaId).map(Usuario::isOcultarTarifa).orElse(false);
+    }
+
     /** V52: a base do motorista (vazio se ele ainda nao tem). */
     @Transactional(readOnly = true)
     public Optional<UUID> baseDoMotorista(UUID usuarioId) {

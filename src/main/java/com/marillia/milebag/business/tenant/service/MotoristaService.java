@@ -42,9 +42,18 @@ public class MotoristaService extends CadastroContasService {
     /** V52: todo motorista tem base (ele so ve e so e avisado dos BDOs dela). A base e validada antes de criar a conta. */
     @Transactional
     public Usuario criarNaBase(String nome, String login, String senha, UUID baseId) {
-        UUID base = exigirBase(baseId);
-        return gravarBase(criar(nome, login, senha), base);
+        return criarNaBase(nome, login, senha, baseId, false);
     }
+
+    /** V58: ja com a escolha da empresa sobre a tarifa (oculta ou nao). */
+    @Transactional
+    public Usuario criarNaBase(String nome, String login, String senha, UUID baseId, boolean ocultarTarifa) {
+        UUID base = exigirBase(baseId);
+        Usuario motorista = criar(nome, login, senha);
+        motorista.definirOcultarTarifa(ocultarTarifa);
+        return gravarBase(motorista, base);
+    }
+
 
     /** V52: o lote vai inteiro para a base escolhida na importacao. */
     public List<ResultadoLote> criarEmLoteNaBase(List<NovaConta> linhas, UUID baseId) {
@@ -64,6 +73,12 @@ public class MotoristaService extends CadastroContasService {
     /** V52: PATCH com base - a base e validada antes de qualquer outra alteracao, tudo numa transacao. */
     @Transactional
     public Usuario atualizarComBase(UUID id, String nome, String login, Boolean ativo, UUID baseId) {
+        return atualizarComBase(id, nome, login, ativo, baseId, null);
+    }
+
+    /** V58: {@code ocultarTarifa} nulo nao mexe na escolha atual. */
+    @Transactional
+    public Usuario atualizarComBase(UUID id, String nome, String login, Boolean ativo, UUID baseId, Boolean ocultarTarifa) {
         UUID base = baseId == null ? null : exigirBase(baseId);
         Usuario atualizado = null;
         if (nome != null || login != null || ativo != null) {
@@ -72,8 +87,11 @@ public class MotoristaService extends CadastroContasService {
         if (base != null) {
             atualizado = definirBase(id, base);
         }
+        if (ocultarTarifa != null) {
+            atualizado = definirOcultarTarifa(id, ocultarTarifa);
+        }
         if (atualizado == null) {
-            throw new RegraNegocioException("informe nome, login, ativo e/ou base.");
+            throw new RegraNegocioException("informe nome, login, ativo, base e/ou ocultarTarifa.");
         }
         return atualizado;
     }
@@ -85,6 +103,15 @@ public class MotoristaService extends CadastroContasService {
                 .filter(usuario -> Papeis.MOTORISTA.equals(usuario.getPapel()))
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Motorista nao encontrado."));
         return gravarBase(motorista, base);
+    }
+
+    private Usuario definirOcultarTarifa(UUID id, boolean ocultar) {
+        Usuario motorista = usuarioRepository.findById(id)
+                .filter(usuario -> Papeis.MOTORISTA.equals(usuario.getPapel()))
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Motorista nao encontrado."));
+        motorista.definirOcultarTarifa(ocultar);
+        log.info("Tarifa {} para o motorista {}.", ocultar ? "oculta" : "visivel", id);
+        return usuarioRepository.save(motorista);
     }
 
     private UUID exigirBase(UUID baseId) {
