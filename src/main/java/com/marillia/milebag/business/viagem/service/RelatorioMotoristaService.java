@@ -13,12 +13,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
 import com.marillia.milebag.business.entrega.service.EntregaService;
 import com.marillia.milebag.business.viagem.model.CampoAjusteViagem;
 import com.marillia.milebag.business.viagem.model.ItemRelatorioMotoristaResponse;
+import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import com.marillia.milebag.business.viagem.model.RelatorioQuinzenalResponse;
 import com.marillia.milebag.business.viagem.model.Trajeto;
 import com.marillia.milebag.business.viagem.model.TrajetoStatus;
@@ -39,18 +41,21 @@ public class RelatorioMotoristaService {
     private final ViagemService viagemService;
     private final AjusteViagemService ajusteViagemService;
     private final BdoService bdoService;
+    private final ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
 
     public RelatorioMotoristaService(
             ComprovanteEntregaService comprovanteEntregaService,
             EntregaService entregaService,
             ViagemService viagemService,
             AjusteViagemService ajusteViagemService,
-            BdoService bdoService) {
+            BdoService bdoService,
+            ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService) {
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.entregaService = entregaService;
         this.viagemService = viagemService;
         this.ajusteViagemService = ajusteViagemService;
         this.bdoService = bdoService;
+        this.exibicaoTarifaMotoristaService = exibicaoTarifaMotoristaService;
     }
 
     @Transactional(readOnly = true)
@@ -64,46 +69,48 @@ public class RelatorioMotoristaService {
 
         Instant inicioInstant = periodoInicio.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant fimInstant = periodoFim.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        boolean tarifaOculta = exibicaoTarifaMotoristaService.ocultarTarifa();
 
         List<ItemRelatorioMotoristaResponse> itens = new ArrayList<>(comprovanteEntregaService.listarPorPeriodo(inicioInstant, fimInstant).stream()
                 .map(ComprovanteEntrega::getEntregaId)
                 .map(entregaService::buscarPorId)
                 .flatMap(Optional::stream)
                 .filter(entrega -> motoristaId.equals(entrega.getMotoristaResponsavel()))
-                .map(this::montarItem)
+                .map(entrega -> montarItem(entrega, tarifaOculta))
                 .flatMap(Optional::stream)
                 .toList());
         // Tentativas sem sucesso (HU07) do motorista: a viagem tambem e paga a ele.
         viagemService.listarTentativasSemSucesso(inicioInstant, fimInstant).stream()
                 .filter(trajeto -> motoristaId.equals(trajeto.getMotoristaId()))
                 .forEach(trajeto -> entregaService.buscarPorId(trajeto.getEntregaId())
-                        .ifPresent(entrega -> itens.add(montarItem(entrega, trajeto, true))));
+                        .ifPresent(entrega -> itens.add(montarItem(entrega, trajeto, true, tarifaOculta))));
 
-        return new RelatorioQuinzenalResponse(periodoInicio, periodoFim, itens);
+        return new RelatorioQuinzenalResponse(periodoInicio, periodoFim, itens, tarifaOculta);
     }
 
-    private Optional<ItemRelatorioMotoristaResponse> montarItem(Entrega entrega) {
+    private Optional<ItemRelatorioMotoristaResponse> montarItem(Entrega entrega, boolean tarifaOculta) {
         Trajeto trajeto = viagemService.buscarTrajetoPorEntrega(entrega.getId()).orElse(null);
         if (trajeto == null || trajeto.getStatus() != TrajetoStatus.ENCERRADO) {
             return Optional.empty();
         }
-        return Optional.of(montarItem(entrega, trajeto, false));
+        return Optional.of(montarItem(entrega, trajeto, false, tarifaOculta));
     }
 
-    private ItemRelatorioMotoristaResponse montarItem(Entrega entrega, Trajeto trajeto, boolean tentativaSemSucesso) {
+    private ItemRelatorioMotoristaResponse montarItem(Entrega entrega, Trajeto trajeto, boolean tentativaSemSucesso, boolean tarifaOculta) {
         String bdoNumero = bdoService.buscarPorId(entrega.getBdoId()).map(Bdo::getNumero).orElse(null);
         // TARIFA_APLICADA/VALOR_PEDAGIO podem vir vazios quando nao ha base
         // de calculo ainda (ver AjusteViagemService) - null no relatorio
-        // pessoal do motorista, nunca um zero inventado.
+        // pessoal do motorista, nunca um zero inventado. Com a tarifa oculta (V56), ela nem sai do servidor.
         return new ItemRelatorioMotoristaResponse(
                 entrega.getId(),
                 trajeto.getId(),
                 bdoNumero,
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_IDA).orElse(null),
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_VOLTA).orElse(null),
-                ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA).orElse(null),
+                tarifaOculta ? null : ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA).orElse(null),
                 ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO).orElse(null),
                 ajusteViagemService.temAjuste(trajeto.getId()),
-                tentativaSemSucesso);
+                tentativaSemSucesso,
+                ajusteViagemService.regraCobranca(trajeto.getId()).filter(RegraCobranca.FIXO_CIDADE_BASE::equals).isPresent());
     }
 }

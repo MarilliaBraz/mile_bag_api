@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCarona;
 import com.marillia.milebag.business.entrega.bagagemcarona.BagagemCaronaService;
 import com.marillia.milebag.business.entrega.model.Entrega;
@@ -65,6 +66,7 @@ public class AjusteViagemService {
     private final ObjectMapper objectMapper;
     private final BdoService bdoService;
     private final CobrancaViagemService cobrancaViagemService;
+    private final ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
 
     public AjusteViagemService(
             AjusteViagemRepository ajusteViagemRepository,
@@ -74,9 +76,11 @@ public class AjusteViagemService {
             BagagemCaronaService bagagemCaronaService,
             ObjectMapper objectMapper,
             BdoService bdoService,
-            CobrancaViagemService cobrancaViagemService) {
+            CobrancaViagemService cobrancaViagemService,
+            ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService) {
         this.bdoService = bdoService;
         this.cobrancaViagemService = cobrancaViagemService;
+        this.exibicaoTarifaMotoristaService = exibicaoTarifaMotoristaService;
         this.ajusteViagemRepository = ajusteViagemRepository;
         this.trajetoRepository = trajetoRepository;
         this.entregaService = entregaService;
@@ -101,7 +105,18 @@ public class AjusteViagemService {
     public List<AjusteViagem> listarPorViagem(UUID viagemId, UUID motoristaId) {
         Trajeto trajeto = buscarTrajetoOuFalhar(viagemId);
         validarPertenceAoMotorista(trajeto, motoristaId);
-        return ajusteViagemRepository.findByViagemIdOrderByCriadoEmDesc(viagemId);
+        List<AjusteViagem> ajustes = ajusteViagemRepository.findByViagemIdOrderByCriadoEmDesc(viagemId);
+        // V56: com a tarifa oculta, o historico tambem nao mostra as correcoes de tarifa (valor anterior e novo).
+        if (!exibicaoTarifaMotoristaService.ocultarTarifa()) {
+            return ajustes;
+        }
+        return ajustes.stream().filter(ajuste -> ajuste.getCampo() != CampoAjusteViagem.TARIFA_APLICADA).toList();
+    }
+
+    /** V52: a regra de cobranca da viagem (cidade da base ou por km); vazia se a viagem nao existe. */
+    @Transactional(readOnly = true)
+    public Optional<RegraCobranca> regraCobranca(UUID viagemId) {
+        return trajetoRepository.findById(viagemId).map(trajeto -> regraDaViagem(trajeto, entregaDoTrajeto(trajeto)));
     }
 
     /** Ponto de leitura publico para {@code RelatorioMotoristaService}. */
@@ -122,6 +137,9 @@ public class AjusteViagemService {
     public AjusteViagem registrarAjuste(UUID viagemId, UUID motoristaId, CampoAjusteViagem campo, String valorNovo, String justificativa) {
         if (justificativa == null || justificativa.isBlank()) {
             throw new RegraNegocioException("justificativa e obrigatoria para registrar um ajuste.");
+        }
+        if (campo == CampoAjusteViagem.TARIFA_APLICADA && exibicaoTarifaMotoristaService.ocultarTarifa()) {
+            throw new RegraNegocioException("A empresa nao mostra a tarifa ao motorista; a correcao de tarifa e feita pela empresa.");
         }
         BigDecimal valorNovoDecimal = parseValor(valorNovo);
 

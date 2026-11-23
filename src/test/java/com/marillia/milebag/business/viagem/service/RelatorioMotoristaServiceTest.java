@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+
+import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
+import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
@@ -44,13 +47,16 @@ class RelatorioMotoristaServiceTest {
     private AjusteViagemService ajusteViagemService;
     @Mock
     private BdoService bdoService;
+    @Mock
+    private ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
 
     private RelatorioMotoristaService relatorioMotoristaService;
 
     @BeforeEach
     void setUp() {
         relatorioMotoristaService =
-                new RelatorioMotoristaService(comprovanteEntregaService, entregaService, viagemService, ajusteViagemService, bdoService);
+                new RelatorioMotoristaService(comprovanteEntregaService, entregaService, viagemService, ajusteViagemService, bdoService,
+                        exibicaoTarifaMotoristaService);
     }
 
     private Entrega entregaDe(UUID id, UUID motoristaId) {
@@ -146,5 +152,35 @@ class RelatorioMotoristaServiceTest {
         assertThat(item.kmIda()).isEqualByComparingTo("10.000");
         assertThat(item.tarifaAplicada()).isEqualByComparingTo("90.00");
         assertThat(item.temAjuste()).isTrue();
+    }
+
+    @Test
+    void consultarRelatorioComTarifaOcultaNaoEnviaATarifaEMarcaCidadeBase() {
+        LocalDate inicio = LocalDate.of(2026, 1, 1);
+        LocalDate fim = LocalDate.of(2026, 1, 15);
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        ComprovanteEntrega comprovante =
+                new ComprovanteEntrega(entregaId, "foto.jpg", "Fulano", Instant.parse("2026-01-05T12:00:00Z"), 0, 0, false, null);
+        when(comprovanteEntregaService.listarPorPeriodo(any(), any())).thenReturn(List.of(comprovante));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
+        Trajeto trajeto = new Trajeto(entregaId, null, Instant.now());
+        trajeto.consolidar(new BigDecimal("8.000"), new BigDecimal("8.000"), "[]", 600L, null);
+        when(viagemService.buscarTrajetoPorEntrega(entregaId)).thenReturn(Optional.of(trajeto));
+        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+        when(ajusteViagemService.regraCobranca(trajeto.getId())).thenReturn(Optional.of(RegraCobranca.FIXO_CIDADE_BASE));
+        when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_IDA)).thenReturn(Optional.of(new BigDecimal("8.000")));
+        when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.KM_VOLTA)).thenReturn(Optional.of(new BigDecimal("8.000")));
+        when(ajusteViagemService.resolverValorVigente(trajeto.getId(), CampoAjusteViagem.VALOR_PEDAGIO)).thenReturn(Optional.of(new BigDecimal("12.40")));
+
+        RelatorioQuinzenalResponse relatorio = relatorioMotoristaService.consultarRelatorio(motoristaId, inicio, fim);
+
+        assertThat(relatorio.tarifaOculta()).isTrue();
+        ItemRelatorioMotoristaResponse item = relatorio.entregas().get(0);
+        assertThat(item.tarifaAplicada()).isNull();
+        assertThat(item.cidadeBase()).isTrue();
+        assertThat(item.valorPedagio()).isEqualByComparingTo("12.40");
+        org.mockito.Mockito.verify(ajusteViagemService, org.mockito.Mockito.never())
+                .resolverValorVigente(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA);
     }
 }
