@@ -11,9 +11,12 @@ public record ItemRelatorioMotoristaResponse(
         String bdoNumero,
         BigDecimal kmIda,
         BigDecimal kmVolta,
+        /** Nula tambem quando a empresa oculta a tarifa do motorista (V56). */
         BigDecimal tarifaAplicada,
         BigDecimal valorPedagio,
         boolean temAjuste,
         /** Viagem de uma tentativa sem sucesso (HU07): paga ao motorista que dirigiu, mesmo sem a entrega concluida. */
-        boolean tentativaSemSucesso) {
+        boolean tentativaSemSucesso,
+        /** V52: entrega na cidade da base (valor fixo) - com a tarifa oculta (V56), e o que o motorista ve no lugar dela. */
+        boolean cidadeBase) {
 }

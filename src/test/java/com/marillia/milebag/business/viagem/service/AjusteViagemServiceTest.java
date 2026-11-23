@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+
+import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -54,6 +56,8 @@ class AjusteViagemServiceTest {
     private com.marillia.milebag.business.bdo.service.BdoService bdoService;
     @Mock
     private CobrancaViagemService cobrancaViagemService;
+    @Mock
+    private ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
 
     private AjusteViagemService ajusteViagemService;
 
@@ -61,7 +65,7 @@ class AjusteViagemServiceTest {
     void setUp() {
         ajusteViagemService = new AjusteViagemService(
                 ajusteViagemRepository, trajetoRepository, entregaService, tabelaTarifaService, bagagemCaronaService, new ObjectMapper(),
-                bdoService, cobrancaViagemService);
+                bdoService, cobrancaViagemService, exibicaoTarifaMotoristaService);
     }
 
     private Trajeto trajetoConsolidado(UUID entregaId, String kmIda, String kmVolta, String pracasPedagioFinal) {
@@ -362,5 +366,29 @@ class AjusteViagemServiceTest {
         // Ida ajustada 15 + volta calculada 10 = 25 km x 2,00 (o percorrido de 11 km nao entra).
         assertThat(tarifaComPercorrido("11.000", ajuste).get()).isEqualByComparingTo("50.00");
     }
-}
 
+    @Test
+    void registrarAjusteDeTarifaERecusadoQuandoAEmpresaOcultaATarifa() {
+        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+
+        assertThatThrownBy(() -> ajusteViagemService.registrarAjuste(
+                UUID.randomUUID(), UUID.randomUUID(), CampoAjusteViagem.TARIFA_APLICADA, "100", "justificativa"))
+                .isInstanceOf(RegraNegocioException.class);
+        org.mockito.Mockito.verifyNoInteractions(ajusteViagemRepository);
+    }
+
+    @Test
+    void listarPorViagemEscondeCorrecoesDeTarifaQuandoAEmpresaOcultaATarifa() {
+        UUID entregaId = UUID.randomUUID();
+        UUID motoristaId = UUID.randomUUID();
+        Trajeto trajeto = trajetoConsolidado(entregaId, "10.000", "10.000", "[]");
+        when(trajetoRepository.findById(trajeto.getId())).thenReturn(Optional.of(trajeto));
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entregaDe(entregaId, motoristaId)));
+        AjusteViagem km = new AjusteViagem(trajeto.getId(), CampoAjusteViagem.KM_IDA, "10", "12", "desvio", motoristaId);
+        AjusteViagem tarifa = new AjusteViagem(trajeto.getId(), CampoAjusteViagem.TARIFA_APLICADA, "90", "95", "acerto", motoristaId);
+        when(ajusteViagemRepository.findByViagemIdOrderByCriadoEmDesc(trajeto.getId())).thenReturn(List.of(tarifa, km));
+        when(exibicaoTarifaMotoristaService.ocultarTarifa()).thenReturn(true);
+
+        assertThat(ajusteViagemService.listarPorViagem(trajeto.getId(), motoristaId)).containsExactly(km);
+    }
+}

@@ -24,12 +24,15 @@ import com.marillia.milebag.business.configuracao.model.CodigoNomeRequest;
 import com.marillia.milebag.business.configuracao.model.BaseAeroportuariaResponse;
 import com.marillia.milebag.business.configuracao.model.CodigoNomeResponse;
 import com.marillia.milebag.business.configuracao.model.CriarMotivoOcorrenciaRequest;
+import com.marillia.milebag.business.configuracao.model.ExibicaoTarifaMotoristaRequest;
+import com.marillia.milebag.business.configuracao.model.ExibicaoTarifaMotoristaResponse;
 import com.marillia.milebag.business.configuracao.model.FinalidadeMotivo;
 import com.marillia.milebag.business.configuracao.model.MotivoOcorrenciaResponse;
 import com.marillia.milebag.business.configuracao.model.PeriodicidadeAtualResponse;
 import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService;
 import com.marillia.milebag.business.configuracao.service.CampoBaixaConfigService;
 import com.marillia.milebag.business.configuracao.service.CompanhiaAereaAtendidaService;
+import com.marillia.milebag.business.configuracao.service.ExibicaoTarifaMotoristaService;
 import com.marillia.milebag.business.configuracao.service.MotivoOcorrenciaService;
 import com.marillia.milebag.business.configuracao.service.PeriodicidadeFechamentoConfigService;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -49,18 +52,21 @@ public class ConfiguracaoTenantController {
     private final BaseAeroportuariaService baseAeroportuariaService;
     private final CompanhiaAereaAtendidaService companhiaAereaAtendidaService;
     private final PeriodicidadeFechamentoConfigService periodicidadeFechamentoConfigService;
+    private final ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService;
 
     public ConfiguracaoTenantController(
             MotivoOcorrenciaService motivoOcorrenciaService,
             CampoBaixaConfigService campoBaixaConfigService,
             BaseAeroportuariaService baseAeroportuariaService,
             CompanhiaAereaAtendidaService companhiaAereaAtendidaService,
-            PeriodicidadeFechamentoConfigService periodicidadeFechamentoConfigService) {
+            PeriodicidadeFechamentoConfigService periodicidadeFechamentoConfigService,
+            ExibicaoTarifaMotoristaService exibicaoTarifaMotoristaService) {
         this.motivoOcorrenciaService = motivoOcorrenciaService;
         this.campoBaixaConfigService = campoBaixaConfigService;
         this.baseAeroportuariaService = baseAeroportuariaService;
         this.companhiaAereaAtendidaService = companhiaAereaAtendidaService;
         this.periodicidadeFechamentoConfigService = periodicidadeFechamentoConfigService;
+        this.exibicaoTarifaMotoristaService = exibicaoTarifaMotoristaService;
     }
 
     // --- Motivos de ocorrencia ---
@@ -160,5 +166,20 @@ public class ConfiguracaoTenantController {
     public PeriodicidadeAtualResponse agendarPeriodicidadeFechamento(@RequestBody AgendarPeriodicidadeRequest request) {
         periodicidadeFechamentoConfigService.agendarNovaPeriodicidade(request.periodicidade(), request.vigenteDesde());
         return periodicidadeFechamentoConfigService.consultarAtual();
+    }
+
+    // --- Tarifa por viagem visivel ao motorista (V56) ---
+
+    @GetMapping("/exibicao-tarifa-motorista")
+    public ExibicaoTarifaMotoristaResponse consultarExibicaoTarifaMotorista() {
+        return new ExibicaoTarifaMotoristaResponse(exibicaoTarifaMotoristaService.ocultarTarifa());
+    }
+
+    @PutMapping("/exibicao-tarifa-motorista")
+    public ExibicaoTarifaMotoristaResponse definirExibicaoTarifaMotorista(@RequestBody ExibicaoTarifaMotoristaRequest request) {
+        if (request.ocultarTarifa() == null) {
+            throw new RegraNegocioException("ocultarTarifa e obrigatorio.");
+        }
+        return new ExibicaoTarifaMotoristaResponse(exibicaoTarifaMotoristaService.definir(request.ocultarTarifa()));
     }
 }
