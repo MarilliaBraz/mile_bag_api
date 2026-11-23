@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService;
 import com.marillia.milebag.business.basebdo.service.TrocaBaseBdoService;
+import com.marillia.milebag.business.dadosbdo.service.AlteracaoDadosBdoService;
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
@@ -76,6 +77,7 @@ public class RastreabilidadeEntregaService {
     private final CorrecaoEntregaService correcaoEntregaService;
     private final BaseAeroportuariaService baseAeroportuariaService;
     private final TrocaBaseBdoService trocaBaseBdoService;
+    private final AlteracaoDadosBdoService alteracaoDadosBdoService;
 
     private final AjusteViagemService ajusteViagemService;
 
@@ -96,7 +98,9 @@ public class RastreabilidadeEntregaService {
             CorrecaoEntregaService correcaoEntregaService,
             BaseAeroportuariaService baseAeroportuariaService,
             TrocaBaseBdoService trocaBaseBdoService,
+            AlteracaoDadosBdoService alteracaoDadosBdoService,
             AjusteViagemService ajusteViagemService) {
+        this.alteracaoDadosBdoService = alteracaoDadosBdoService;
         this.ajusteViagemService = ajusteViagemService;
         this.baseAeroportuariaService = baseAeroportuariaService;
         this.trocaBaseBdoService = trocaBaseBdoService;
@@ -237,6 +241,14 @@ public class RastreabilidadeEntregaService {
                 TipoEventoRastreabilidade.BASE_ALTERADA, troca.getDataHora(), nome(troca.getAlteradoPor(), nomes),
                 codigos.getOrDefault(troca.getBaseAnteriorId(), "-") + " -> " + codigos.getOrDefault(troca.getBaseNovaId(), "-"),
                 troca.getMotivo())));
+
+        // V59: correcao dos dados do passageiro pela empresa - o que mudou (antes -> depois) e o motivo.
+        alteracaoDadosBdoService.listarPorBdo(entrega.getBdoId()).forEach(alteracao -> {
+            String mudancas = alteracao.anterior().diferencasPara(alteracao.novo());
+            eventos.add(new EventoRastreabilidade(TipoEventoRastreabilidade.DADOS_ALTERADOS, alteracao.getDataHora(),
+                    nome(alteracao.getAlteradoPor(), nomes), mudancas.isEmpty() ? "Cidade, UF ou CEP" : mudancas,
+                    alteracao.getMotivo()));
+        });
 
         List<CorrecaoEntrega> correcoes = correcaoEntregaService.listarPorEntrega(entregaId);
         for (CorrecaoEntrega correcao : correcoes) {

@@ -27,6 +27,7 @@ import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
 import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.model.CamposExtraidosBdo;
+import com.marillia.milebag.business.bdo.model.DadosPassageiroBdo;
 import com.marillia.milebag.business.bdo.model.StatusConferencia;
 import com.marillia.milebag.business.bdo.repository.BdoRepository;
 import com.marillia.milebag.business.configuracao.model.BaseAeroportuaria;
@@ -238,13 +239,22 @@ public class BdoService {
      * logradouro ja termina nela (o telex as vezes escreve tudo na linha PA).
      */
     static String enderecoCompleto(CamposExtraidosBdo campos) {
-        String logradouro = vazioParaNulo(campos.enderecoEntrega());
+        return enderecoCompleto(campos.enderecoEntrega(), campos.cidade(), campos.uf(), campos.cep());
+    }
+
+    /** Endereco completo que {@link #alterarDadosDoPassageiro} grava - para comparar e registrar o antes e o depois. */
+    public static String enderecoCompleto(DadosPassageiroBdo dados) {
+        return enderecoCompleto(dados.enderecoEntrega(), dados.cidade(), dados.uf(), dados.cep());
+    }
+
+    private static String enderecoCompleto(String logradouroInformado, String cidadeInformada, String ufInformada, String cepInformado) {
+        String logradouro = vazioParaNulo(logradouroInformado);
         List<String> partes = new ArrayList<>();
         if (logradouro != null) {
             partes.add(logradouro);
         }
-        String cidade = vazioParaNulo(campos.cidade());
-        String uf = vazioParaNulo(campos.uf());
+        String cidade = vazioParaNulo(cidadeInformada);
+        String uf = vazioParaNulo(ufInformada);
         // So quando o logradouro TERMINA na cidade ("... APARECIDA DE GOIANIA"): "RUA GOIANIA 5" ainda precisa dela.
         boolean cidadeJaNoLogradouro = cidade != null && logradouro != null
                 && logradouro.toUpperCase(Locale.ROOT).endsWith(cidade.toUpperCase(Locale.ROOT));
@@ -253,11 +263,102 @@ public class BdoService {
         } else if (uf != null && cidade == null) {
             partes.add(uf);
         }
-        String cep = vazioParaNulo(campos.cep());
+        String cep = vazioParaNulo(cepInformado);
         if (cep != null) {
             partes.add(cep);
         }
         return partes.isEmpty() ? null : String.join(", ", partes);
+    }
+
+    /**
+     * O inverso de {@link #enderecoCompleto}: tira do endereco gravado o final ", cidade - UF, CEP" que a inclusao
+     * acrescentou, para o formulario de correcao mostrar so o logradouro. Endereco que nao termina assim (BDO antigo,
+     * cidade escrita so no logradouro) volta inteiro.
+     */
+    static String logradouroDe(String endereco, String cidade, String uf, String cep) {
+        String resto = vazioParaNulo(endereco);
+        if (resto == null) {
+            return null;
+        }
+        String cepLimpo = vazioParaNulo(cep);
+        if (cepLimpo != null) {
+            resto = semFinal(resto, cepLimpo);
+        }
+        String cidadeLimpa = vazioParaNulo(cidade);
+        String ufLimpa = vazioParaNulo(uf);
+        if (cidadeLimpa != null) {
+            resto = semFinal(resto, ufLimpa == null ? cidadeLimpa : cidadeLimpa + " - " + ufLimpa);
+        } else if (ufLimpa != null) {
+            resto = semFinal(resto, ufLimpa);
+        }
+        return vazioParaNulo(resto);
+    }
+
+    private static String semFinal(String texto, String parte) {
+        if (texto.equals(parte)) {
+            return "";
+        }
+        String sufixo = ", " + parte;
+        return texto.endsWith(sufixo) ? texto.substring(0, texto.length() - sufixo.length()) : texto;
+    }
+
+    /** Os dados do passageiro como o formulario de correcao os mostra: o logradouro separado de cidade, UF e CEP. */
+    public static DadosPassageiroBdo dadosDoPassageiro(Bdo bdo) {
+        return new DadosPassageiroBdo(
+                bdo.getPassageiroNome(),
+                logradouroDe(bdo.getEnderecoEntrega(), bdo.getCidade(), bdo.getUf(), bdo.getCep()),
+                bdo.getCidade(),
+                bdo.getUf(),
+                bdo.getCep(),
+                bdo.getTelefonePassageiro(),
+                bdo.getEmailPassageiro());
+    }
+
+    /**
+     * Correcao dos dados do passageiro pela empresa: as mesmas regras da inclusao (nome e endereco obrigatorios, formato
+     * do e-mail, da UF e do CEP). Devolve os dados aparados e normalizados.
+     */
+    public static DadosPassageiroBdo validarDadosDoPassageiro(DadosPassageiroBdo dados) {
+        if (dados == null) {
+            throw new RegraNegocioException("Informe os dados do passageiro.");
+        }
+        List<String> ausentes = new ArrayList<>();
+        if (vazioParaNulo(dados.passageiroNome()) == null) {
+            ausentes.add("nome do passageiro");
+        }
+        if (vazioParaNulo(dados.enderecoEntrega()) == null) {
+            ausentes.add("endereco de entrega");
+        }
+        if (!ausentes.isEmpty()) {
+            throw new RegraNegocioException("Campos obrigatorios ausentes: " + String.join(", ", ausentes) + ".");
+        }
+        return new DadosPassageiroBdo(
+                textoOpcional(dados.passageiroNome(), 200, "nome do passageiro"),
+                textoOpcional(dados.enderecoEntrega(), 300, "endereco de entrega"),
+                textoOpcional(dados.cidade(), 100, "cidade"),
+                validarUf(dados.uf()),
+                normalizarCep(dados.cep()),
+                textoOpcional(dados.telefonePassageiro(), 30, "telefone"),
+                validarEmail(dados.emailPassageiro()));
+    }
+
+    /**
+     * Grava os dados corrigidos (ja validados por {@link #validarDadosDoPassageiro}) no BDO travado pelo chamador. Sem
+     * {@code comEndereco}, o endereco gravado fica como esta (BDO antigo com o endereco num campo so nao e remontado). A
+     * base nao muda: ela segue o aeroporto de retirada, que nao faz parte desta correcao.
+     */
+    @Transactional
+    public void alterarDadosDoPassageiro(Bdo bdo, DadosPassageiroBdo validos, boolean comEndereco) {
+        bdo.setPassageiroNome(validos.passageiroNome());
+        if (comEndereco) {
+            bdo.setEnderecoEntrega(enderecoCompleto(validos));
+            bdo.setCidade(validos.cidade());
+            bdo.setUf(validos.uf());
+            bdo.setCep(validos.cep());
+        }
+        bdo.setTelefonePassageiro(validos.telefonePassageiro());
+        bdo.setEmailPassageiro(validos.emailPassageiro());
+        bdoRepository.save(bdo);
     }
 
     /**
@@ -282,26 +383,13 @@ public class BdoService {
         if (!numero.matches("[A-Z0-9]{4,30}")) {
             throw new RegraNegocioException("O numero do BDO deve ter de 4 a 30 letras e numeros, sem simbolos (ex.: GYNLA24713).");
         }
-        String email = textoOpcional(c.emailPassageiro(), 200, "e-mail");
-        if (email != null && !email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
-            throw new RegraNegocioException("O e-mail do passageiro nao parece valido.");
-        }
+        String email = validarEmail(c.emailPassageiro());
         String tipoProcesso = maiusculo(vazioParaNulo(c.tipoProcesso()));
         if (tipoProcesso != null && !tipoProcesso.matches("[A-Z]{1,10}")) {
             throw new RegraNegocioException("O tipo do processo deve ter so letras, sem acento (ex.: AHL).");
         }
-        String uf = maiusculo(vazioParaNulo(c.uf()));
-        if (uf != null && !uf.matches("[A-Z]{2}")) {
-            throw new RegraNegocioException("A UF deve ter duas letras (ex.: GO).");
-        }
-        String cep = vazioParaNulo(c.cep());
-        if (cep != null) {
-            String digitos = cep.replaceAll("\\D", "");
-            if (digitos.length() != 8) {
-                throw new RegraNegocioException("O CEP deve ter 8 numeros.");
-            }
-            cep = digitos.substring(0, 5) + "-" + digitos.substring(5);
-        }
+        String uf = validarUf(c.uf());
+        String cep = normalizarCep(c.cep());
         String aeroporto = maiusculo(vazioParaNulo(c.aeroportoRetirada()));
         if (aeroporto != null && !aeroporto.matches("[A-Z]{3}")) {
             throw new RegraNegocioException("O aeroporto de retirada deve ser o codigo de tres letras (ex.: GYN).");
@@ -328,6 +416,35 @@ public class BdoService {
                 c.quantidadeMalas(),
                 maiusculo(textoOpcional(c.coresBagagem(), 200, "cores das malas")),
                 textoOpcional(c.valorInformado(), 30, "valor informado"));
+    }
+
+    private static String validarEmail(String valor) {
+        String email = textoOpcional(valor, 200, "e-mail");
+        if (email != null && !email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
+            throw new RegraNegocioException("O e-mail do passageiro nao parece valido.");
+        }
+        return email;
+    }
+
+    private static String validarUf(String valor) {
+        String uf = maiusculo(vazioParaNulo(valor));
+        if (uf != null && !uf.matches("[A-Z]{2}")) {
+            throw new RegraNegocioException("A UF deve ter duas letras (ex.: GO).");
+        }
+        return uf;
+    }
+
+    /** CEP com ou sem traco vira "74000-000"; qualquer coisa diferente de 8 numeros e recusada. */
+    private static String normalizarCep(String valor) {
+        String cep = vazioParaNulo(valor);
+        if (cep == null) {
+            return null;
+        }
+        String digitos = cep.replaceAll("\\D", "");
+        if (digitos.length() != 8) {
+            throw new RegraNegocioException("O CEP deve ter 8 numeros.");
+        }
+        return digitos.substring(0, 5) + "-" + digitos.substring(5);
     }
 
     /** Texto opcional digitado: aparado, vazio vira nulo; acima do limite e recusado com o nome do campo. */

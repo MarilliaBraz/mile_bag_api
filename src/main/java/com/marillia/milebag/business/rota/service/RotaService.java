@@ -106,6 +106,40 @@ public class RotaService implements SelecaoRotaProvider {
                 .map(this::lerCoordenada);
     }
 
+    /**
+     * A empresa corrigiu o endereco de entrega do BDO. Antes da viagem, a rota calculada (e o destino marcado no mapa)
+     * para o endereco antigo e descartada: o motorista calcula de novo. Com a viagem em andamento, a rota escolhida fica
+     * e so o destino passa para o endereco novo - e dele que saem o link de acompanhamento e o km pago no encerramento.
+     * Se o mapa nao achar o endereco novo, o destino antigo fica e a empresa ajusta o km da viagem, se precisar.
+     */
+    @Transactional
+    public void aoCorrigirEnderecoDeEntrega(UUID entregaId, String enderecoNovo, boolean viagemEmAndamento) {
+        propostaRotaRepository.travarPorEntrega(entregaId);
+        Optional<PropostaRota> proposta = propostaRotaRepository.findById(entregaId);
+        if (proposta.isEmpty()) {
+            return;
+        }
+        if (!viagemEmAndamento) {
+            propostaRotaRepository.delete(proposta.get());
+            log.info("Rota da entrega {} descartada: a empresa corrigiu o endereco de entrega.", entregaId);
+            return;
+        }
+        Optional<Coordenada> destino;
+        try {
+            destino = geocodingClient.geocodificar(enderecoNovo);
+        } catch (RuntimeException e) {
+            log.warn("Endereco corrigido da entrega {} nao geocodificado - o destino anterior foi mantido.", entregaId, e);
+            return;
+        }
+        if (destino.isEmpty()) {
+            log.warn("Endereco corrigido da entrega {} nao encontrado no mapa - o destino anterior foi mantido.", entregaId);
+            return;
+        }
+        proposta.get().setDestino(escrever(destino.get()));
+        propostaRotaRepository.save(proposta.get());
+        log.info("Destino da entrega {} atualizado para o endereco corrigido pela empresa.", entregaId);
+    }
+
     private Coordenada lerCoordenada(String json) {
         try {
             return objectMapper.readValue(json, Coordenada.class);

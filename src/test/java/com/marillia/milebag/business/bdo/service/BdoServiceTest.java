@@ -23,6 +23,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import com.marillia.milebag.business.bdo.mapper.BdoMapper;
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.DadosPassageiroBdo;
 import com.marillia.milebag.business.bdo.model.BdoIncluidoPelaEmpresa;
 import com.marillia.milebag.business.bdo.model.BdoOrigem;
 import com.marillia.milebag.business.bdo.model.BdoRecebidoPorEmail;
@@ -223,5 +224,87 @@ class BdoServiceTest {
             String aeroporto, Integer malas, String cidade) {
         return new CamposExtraidosBdo(numero, passageiro, endereco, "LATAM", null, null, null, "AHL", cidade, uf, cep, null,
                 aeroporto, null, LocalDate.of(2026, 9, 15), malas, null, null);
+    }
+    // --- V59: correcao dos dados do passageiro ---
+
+    @Test
+    void logradouroDeTiraOFinalQueAInclusaoAcrescentou() {
+        assertThat(BdoService.logradouroDe("Rua 1, 10, Goiania - GO, 74000-000", "Goiania", "GO", "74000-000")).isEqualTo("Rua 1, 10");
+        assertThat(BdoService.logradouroDe("QD 3 APARECIDA DE GOIANIA, 74900-000", "Aparecida de Goiania", "GO", "74900-000"))
+                .isEqualTo("QD 3 APARECIDA DE GOIANIA");
+        assertThat(BdoService.logradouroDe("Rua 1, GO", null, "GO", null)).isEqualTo("Rua 1");
+        assertThat(BdoService.logradouroDe("Goiania - GO, 74000-000", "Goiania", "GO", "74000-000")).isNull();
+    }
+
+    @Test
+    void logradouroDeBdoAntigoSemCidadeSeparadaVoltaInteiro() {
+        assertThat(BdoService.logradouroDe("AV T-63 1200 SETOR BUENO GOIANIA", null, null, null)).isEqualTo("AV T-63 1200 SETOR BUENO GOIANIA");
+    }
+
+    @Test
+    void dadosDoPassageiroMontamDeNovoOMesmoEndereco() {
+        Bdo bdo = new Bdo();
+        bdo.setPassageiroNome("Ana");
+        bdo.setEnderecoEntrega("Rua 1, 10, Goiania - GO, 74000-000");
+        bdo.setCidade("Goiania");
+        bdo.setUf("GO");
+        bdo.setCep("74000-000");
+
+        DadosPassageiroBdo dados = BdoService.dadosDoPassageiro(bdo);
+
+        assertThat(dados.enderecoEntrega()).isEqualTo("Rua 1, 10");
+        assertThat(BdoService.enderecoCompleto(dados)).isEqualTo(bdo.getEnderecoEntrega());
+    }
+
+    @Test
+    void validarDadosDoPassageiroNormalizaComoNaInclusao() {
+        DadosPassageiroBdo validos = BdoService.validarDadosDoPassageiro(
+                new DadosPassageiroBdo(" Ana ", " Rua 2 ", "Goiania", "go", "74000000", " ", "ana@exemplo.com"));
+
+        assertThat(validos).isEqualTo(new DadosPassageiroBdo("Ana", "Rua 2", "Goiania", "GO", "74000-000", null, "ana@exemplo.com"));
+    }
+
+    @Test
+    void validarDadosDoPassageiroExigeNomeEEnderecoERecusaEmailInvalido() {
+        assertThatThrownBy(() -> BdoService.validarDadosDoPassageiro(new DadosPassageiroBdo(null, " ", null, null, null, null, null)))
+                .isInstanceOf(RegraNegocioException.class)
+                .hasMessage("Campos obrigatorios ausentes: nome do passageiro, endereco de entrega.");
+        assertThatThrownBy(() -> BdoService.validarDadosDoPassageiro(
+                new DadosPassageiroBdo("Ana", "Rua 2", null, null, null, null, "ana-sem-arroba")))
+                .isInstanceOf(RegraNegocioException.class)
+                .hasMessageContaining("e-mail");
+        assertThatThrownBy(() -> BdoService.validarDadosDoPassageiro(
+                new DadosPassageiroBdo("Ana", "Rua 2", null, null, "123", null, null)))
+                .isInstanceOf(RegraNegocioException.class)
+                .hasMessageContaining("CEP");
+    }
+
+    @Test
+    void alterarDadosDoPassageiroGravaOEnderecoCompletoSemMexerNaBase() {
+        Bdo bdo = new Bdo();
+        UUID base = UUID.randomUUID();
+        bdo.setBaseId(base);
+
+        bdoService.alterarDadosDoPassageiro(bdo,
+                new DadosPassageiroBdo("Ana", "Rua 2", "Goiania", "GO", "74000-000", "62 9", "ana@exemplo.com"), true);
+
+        assertThat(bdo.getEnderecoEntrega()).isEqualTo("Rua 2, Goiania - GO, 74000-000");
+        assertThat(bdo.getTelefonePassageiro()).isEqualTo("62 9");
+        assertThat(bdo.getBaseId()).isEqualTo(base);
+        verify(bdoRepository).save(bdo);
+    }
+
+    @Test
+    void alterarDadosDoPassageiroSemEnderecoDeixaOEnderecoGravadoComoEsta() {
+        Bdo bdo = new Bdo();
+        bdo.setEnderecoEntrega("AV T-63 1200 SETOR BUENO GOIANIA");
+        bdo.setCep("74000000");
+
+        bdoService.alterarDadosDoPassageiro(bdo,
+                new DadosPassageiroBdo("Ana", "AV T-63 1200 SETOR BUENO GOIANIA", null, null, "74000-000", "62 9", null), false);
+
+        assertThat(bdo.getEnderecoEntrega()).isEqualTo("AV T-63 1200 SETOR BUENO GOIANIA");
+        assertThat(bdo.getCep()).isEqualTo("74000000");
+        assertThat(bdo.getTelefonePassageiro()).isEqualTo("62 9");
     }
 }

@@ -29,6 +29,8 @@ public record EventoRastreabilidade(
         /** V51: correcao de etapa; {@code descricao} e a etapa (FOTO_PORTA...), {@code detalhe} o motivo, antes e depois. */
         CORRECAO,
         /** V52: a empresa trocou a base do BDO; {@code descricao} "GYN -> BSB", {@code detalhe} o motivo. */
-        BASE_ALTERADA
+        BASE_ALTERADA,
+        /** V59: a empresa corrigiu os dados do passageiro; {@code descricao} "Endereco: antes -> depois; ...", {@code detalhe} o motivo. */
+        DADOS_ALTERADOS
     }
 }
