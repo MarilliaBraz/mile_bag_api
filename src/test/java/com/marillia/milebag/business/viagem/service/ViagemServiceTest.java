@@ -278,6 +278,23 @@ class ViagemServiceTest {
     }
 
     @Test
+    void viagemJaEncerradaSoQuandoAViagemDaTentativaAtualFoiEncerrada() {
+        UUID encerrada = UUID.randomUUID();
+        UUID emRota = UUID.randomUUID();
+        UUID semViagem = UUID.randomUUID();
+        Trajeto fechada = new Trajeto(encerrada, UUID.randomUUID(), Instant.now());
+        fechada.consolidar(java.math.BigDecimal.ONE, java.math.BigDecimal.ONE, "[]", 60, null);
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(encerrada)).thenReturn(Optional.of(fechada));
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(emRota))
+                .thenReturn(Optional.of(new Trajeto(emRota, UUID.randomUUID(), Instant.now())));
+        when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(semViagem)).thenReturn(Optional.empty());
+
+        assertThat(viagemService.viagemJaEncerrada(encerrada)).isTrue();
+        assertThat(viagemService.viagemJaEncerrada(emRota)).isFalse();
+        assertThat(viagemService.viagemJaEncerrada(semViagem)).isFalse();
+    }
+
+    @Test
     void ocorrenciaSemViagemIniciadaNaoFazNada() {
         UUID entregaId = UUID.randomUUID();
         when(trajetoRepository.findFirstByEntregaIdOrderByDataInicioDesc(entregaId)).thenReturn(Optional.empty());

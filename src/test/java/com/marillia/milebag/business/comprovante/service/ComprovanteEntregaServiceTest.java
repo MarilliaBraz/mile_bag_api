@@ -155,6 +155,21 @@ class ComprovanteEntregaServiceTest {
         verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
     }
 
+    /** Motorista tocou em "Encerrar viagem" antes de finalizar: a entrega nao pode ficar presa sem comprovante. */
+    @Test
+    void finalizaAEntregaQuandoOMotoristaJaEncerrouAViagem() throws Exception {
+        entregaLivreParaRegistrar();
+        tipoRecebedorAtivo();
+        when(viagemService.viagemJaEncerrada(entregaId)).thenReturn(true);
+
+        var resultado = registrar(servicoAtual(), new DadosDaEntrega(fotoPorta, tipoId, "Ana", List.of(), null));
+
+        assertThat(resultado.novo()).isTrue();
+        verify(viagemService, never()).registrarCheckpoint(any(), any());
+        verify(viagemService, never()).encerrarTrajeto(any(), any());
+        verify(entregaService).marcarEncerradaComSucesso(entregaId);
+    }
+
     @Test
     void fotoNaPortaEObrigatoria() throws Exception {
         entregaLivreParaValidar();

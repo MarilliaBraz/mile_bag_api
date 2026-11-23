@@ -185,8 +185,12 @@ public class ComprovanteEntregaService {
         // CheckpointGps final e, em seguida, aciona a consolidacao do
         // trajeto (HU04) - dentro da mesma transacao, para que uma
         // divergencia sem justificativa desfaca tudo e permita reenvio.
-        viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.COMPROVANTE, latitude, longitude));
-        viagemService.encerrarTrajeto(entregaId, new EncerrarTrajetoRequest(justificativaDivergencia));
+        // Se o motorista ja encerrou a viagem pela tela de rota, ela ja esta consolidada: so falta finalizar a entrega
+        // (antes a entrega ficava presa - "nao aceita novos checkpoints"). A posicao da entrega fica no comprovante.
+        if (!viagemService.viagemJaEncerrada(entregaId)) {
+            viagemService.registrarCheckpoint(entregaId, new RegistrarCheckpointRequest(TipoCheckpoint.COMPROVANTE, latitude, longitude));
+            viagemService.encerrarTrajeto(entregaId, new EncerrarTrajetoRequest(justificativaDivergencia));
+        }
 
         entregaService.marcarEncerradaComSucesso(entregaId);
 
