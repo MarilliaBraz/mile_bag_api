@@ -221,6 +221,16 @@ public class EntregaService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));
     }
 
+    /**
+     * V59: a entrega do BDO travada (FOR UPDATE) ate o fim da transacao, para a correcao dos dados do passageiro ver a
+     * situacao final - um comprovante ou cancelamento ao mesmo tempo espera, ou e esperado. Quem chama ja travou o BDO
+     * (a mesma ordem do autoatribuir: BDO, depois entrega).
+     */
+    @Transactional
+    public Optional<Entrega> travarPorBdo(UUID bdoId) {
+        return entregaRepository.findForUpdateByBdoId(bdoId);
+    }
+
     private Entrega buscarParaMudarSituacao(UUID entregaId) {
         Entrega entrega = entregaRepository.findForUpdateById(entregaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Entrega nao encontrada."));

@@ -77,6 +77,8 @@ class RastreabilidadeEntregaServiceTest {
     @Mock
     private com.marillia.milebag.business.configuracao.service.BaseAeroportuariaService baseAeroportuariaService;
     @Mock
+    private com.marillia.milebag.business.dadosbdo.service.AlteracaoDadosBdoService alteracaoDadosBdoService;
+    @Mock
     private com.marillia.milebag.business.basebdo.service.TrocaBaseBdoService trocaBaseBdoService;
     @InjectMocks
     private RastreabilidadeEntregaService rastreabilidadeEntregaService;
@@ -226,6 +228,30 @@ class RastreabilidadeEntregaServiceTest {
             assertThat(evento.detalhe()).isEqualTo("duplicado no e-mail");
         });
         assertThat(historico.entrega().status()).isEqualTo(EntregaStatus.CANCELADA);
+    }
+
+    /** V59: a correcao dos dados do passageiro entra na linha do tempo com o que mudou e o motivo. */
+    @Test
+    void historicoMostraACorrecaoDosDadosDoPassageiroComOAntesEODepois() {
+        UUID entregaId = UUID.randomUUID();
+        Entrega entrega = new Entrega();
+        entrega.setId(entregaId);
+        entrega.setBdoId(UUID.randomUUID());
+        entrega.setStatus(EntregaStatus.ATRIBUIDA);
+        when(entregaService.buscarPorId(entregaId)).thenReturn(Optional.of(entrega));
+        var alteracao = new com.marillia.milebag.business.dadosbdo.model.AlteracaoDadosBdo(entrega.getBdoId(),
+                new com.marillia.milebag.business.dadosbdo.model.ValoresPassageiro("Ana", "Rua 1", "62 1", null),
+                new com.marillia.milebag.business.dadosbdo.model.ValoresPassageiro("Ana", "Rua 2", "62 1", null),
+                "passageiro ligou", UUID.randomUUID(), Instant.parse("2026-11-23T10:00:00Z"));
+        when(alteracaoDadosBdoService.listarPorBdo(entrega.getBdoId())).thenReturn(List.of(alteracao));
+
+        HistoricoEntregaResponse historico = rastreabilidadeEntregaService.historico(entregaId);
+
+        assertThat(historico.eventos()).singleElement().satisfies(evento -> {
+            assertThat(evento.tipo()).isEqualTo(TipoEventoRastreabilidade.DADOS_ALTERADOS);
+            assertThat(evento.descricao()).isEqualTo("Endereco: Rua 1 -> Rua 2");
+            assertThat(evento.detalhe()).isEqualTo("passageiro ligou");
+        });
     }
 
     private static Bdo bdoSemEntrega(String numero, Instant captura) {

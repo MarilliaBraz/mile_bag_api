@@ -123,6 +123,12 @@ public class BagagemCaronaService {
         return bagagemCaronaRepository.findByBdoId(bdoId).flatMap(carona -> entregaRepository.findById(carona.getEntregaPrincipalId()));
     }
 
+    /** V59: o id da entrega com que este BDO viaja como carona, sem carregar a entrega (quem chama a trava). */
+    @Transactional(readOnly = true)
+    public Optional<UUID> entregaPrincipalIdDe(UUID bdoId) {
+        return bagagemCaronaRepository.findByBdoId(bdoId).map(BagagemCarona::getEntregaPrincipalId);
+    }
+
     /** Tela "Entregas" da empresa (V47): quais destes BDOs viajam como carona de outra entrega - numa consulta so. */
     @Transactional(readOnly = true)
     public Set<UUID> bdosQueSaoCarona(Collection<UUID> bdoIds) {

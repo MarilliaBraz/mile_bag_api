@@ -334,4 +334,61 @@ class RotaServiceTest {
         assertThat(principal.possuiPedagio()).isTrue();
         assertThat(principal.pracasPedagio()).isEmpty();
     }
+    // --- V59: a empresa corrigiu o endereco de entrega ---
+
+    @Test
+    void enderecoCorrigidoAntesDaViagemDescartaARotaCalculada() {
+        UUID entregaId = UUID.randomUUID();
+        PropostaRota proposta = new PropostaRota();
+        proposta.setEntregaId(entregaId);
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.of(proposta));
+
+        rotaService.aoCorrigirEnderecoDeEntrega(entregaId, "Rua 2, Goiania - GO", false);
+
+        verify(propostaRotaRepository).delete(proposta);
+        verify(geocodingClient, never()).geocodificar(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void enderecoCorrigidoComAViagemEmAndamentoTrocaSoODestino() {
+        UUID entregaId = UUID.randomUUID();
+        PropostaRota proposta = new PropostaRota();
+        proposta.setEntregaId(entregaId);
+        proposta.setDestino("{\"latitude\":1.0,\"longitude\":1.0}");
+        proposta.setRotaEscolhida("{}");
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.of(proposta));
+        when(geocodingClient.geocodificar("Rua 2, Goiania - GO")).thenReturn(Optional.of(new Coordenada(-16.7, -49.3)));
+
+        rotaService.aoCorrigirEnderecoDeEntrega(entregaId, "Rua 2, Goiania - GO", true);
+
+        assertThat(proposta.getDestino()).contains("-16.7").contains("-49.3");
+        assertThat(proposta.getRotaEscolhida()).isEqualTo("{}");
+        verify(propostaRotaRepository).save(proposta);
+        verify(propostaRotaRepository, never()).delete(any());
+    }
+
+    @Test
+    void enderecoCorrigidoQueOMapaNaoAchaMantemODestinoAnterior() {
+        UUID entregaId = UUID.randomUUID();
+        PropostaRota proposta = new PropostaRota();
+        proposta.setDestino("{\"latitude\":1.0,\"longitude\":1.0}");
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.of(proposta));
+        when(geocodingClient.geocodificar("QD 9 LT 25")).thenReturn(Optional.empty());
+
+        rotaService.aoCorrigirEnderecoDeEntrega(entregaId, "QD 9 LT 25", true);
+
+        assertThat(proposta.getDestino()).isEqualTo("{\"latitude\":1.0,\"longitude\":1.0}");
+        verify(propostaRotaRepository, never()).save(any());
+    }
+
+    @Test
+    void enderecoCorrigidoSemRotaCalculadaNaoFazNada() {
+        UUID entregaId = UUID.randomUUID();
+        when(propostaRotaRepository.findById(entregaId)).thenReturn(Optional.empty());
+
+        rotaService.aoCorrigirEnderecoDeEntrega(entregaId, "Rua 2", true);
+
+        verify(propostaRotaRepository, never()).save(any());
+        verify(propostaRotaRepository, never()).delete(any());
+    }
 }
