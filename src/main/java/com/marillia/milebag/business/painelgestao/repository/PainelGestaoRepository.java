@@ -146,4 +146,50 @@ public interface PainelGestaoRepository extends Repository<Entrega, UUID> {
             ORDER BY a.data_inicio
             """, nativeQuery = true)
     List<Object[]> rotasAtivas(@Param("minutosParado") int minutosParado);
+
+    /**
+     * Fase 3 - viagens iniciadas ou encerradas desde a data, para custo e ocupacao. Colunas: trajeto, motorista, inicio,
+     * encerrada em, km rodados, malas levadas (as do BDO mais as das caronas), entregue (sem ocorrencia, dispensa nem
+     * cancelamento, e com comprovante).
+     */
+    @Query(value = """
+            SELECT t.id, t.motorista_id, t.data_inicio, t.encerrado_em,
+                   COALESCE(t.km_percorrido, t.km_ida_final + COALESCE(t.km_volta_final, 0), 0),
+                   COALESCE(b.quantidade_malas, 1) + COALESCE((
+                       SELECT sum(COALESCE(b2.quantidade_malas, 1)) FROM bagagem_carona bc JOIN bdo b2 ON b2.id = bc.bdo_id
+                       WHERE bc.entrega_principal_id = t.entrega_id), 0),
+                   t.ocorrencia_id IS NULL AND t.dispensa_id IS NULL AND t.cancelamento_id IS NULL
+                       AND EXISTS (SELECT 1 FROM comprovante_entrega c WHERE c.entrega_id = t.entrega_id)
+            FROM trajeto t
+            JOIN entrega e ON e.id = t.entrega_id
+            JOIN bdo b ON b.id = e.bdo_id
+            WHERE t.data_inicio >= :desde OR t.encerrado_em >= :desde
+            """, nativeQuery = true)
+    List<Object[]> viagensDoPeriodo(@Param("desde") Instant desde);
+
+    /**
+     * Fase 3 - motoristas ativos. Colunas: id, nome, base, ultimo acesso, em rota, entregas nos 30 dias, no prazo,
+     * na primeira tentativa (sem ocorrencia).
+     */
+    @Query(value = """
+            SELECT u.id, u.nome, ba.codigo_iata, u.ultimo_acesso_em,
+                   EXISTS (SELECT 1 FROM trajeto t WHERE t.motorista_id = u.id AND t.status = 'EM_EXECUCAO'
+                           AND t.data_inicio >= now() - interval '48 hours'),
+                   count(f.entrega_id), count(f.entrega_id) FILTER (WHERE f.no_prazo), count(f.entrega_id) FILTER (WHERE f.primeira)
+            FROM usuario u
+            LEFT JOIN base_aeroportuaria ba ON ba.id = u.base_id
+            LEFT JOIN LATERAL (
+                SELECT e.id AS entrega_id,
+                       c.data_hora <= """ + PRAZO + """
+                           AS no_prazo,
+                       NOT EXISTS (SELECT 1 FROM ocorrencia o WHERE o.entrega_id = e.id) AS primeira
+                FROM entrega e
+                JOIN bdo b ON b.id = e.bdo_id
+                JOIN LATERAL (SELECT max(c.data_hora) AS data_hora FROM comprovante_entrega c WHERE c.entrega_id = e.id) c ON true
+                WHERE e.motorista_responsavel = u.id AND e.status = 'ENCERRADA_COM_SUCESSO' AND c.data_hora >= :desde) f ON true
+            WHERE u.papel = 'MOTORISTA' AND u.ativo
+            GROUP BY u.id, u.nome, ba.codigo_iata, u.ultimo_acesso_em
+            ORDER BY u.nome
+            """, nativeQuery = true)
+    List<Object[]> motoristas(@Param("prazoHoras") int prazoHoras, @Param("desde") Instant desde);
 }

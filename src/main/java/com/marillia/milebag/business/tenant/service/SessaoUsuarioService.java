@@ -35,11 +35,14 @@ public class SessaoUsuarioService implements SessaoValidador {
     }
 
     private final UsuarioRepository usuarioRepository;
+    private final UltimoAcessoService ultimoAcessoService;
     private final TransactionTemplate leitura;
     private final Map<UUID, Situacao> cache = new ConcurrentHashMap<>();
 
-    public SessaoUsuarioService(UsuarioRepository usuarioRepository, PlatformTransactionManager transactionManager) {
+    public SessaoUsuarioService(UsuarioRepository usuarioRepository, UltimoAcessoService ultimoAcessoService,
+            PlatformTransactionManager transactionManager) {
         this.usuarioRepository = usuarioRepository;
+        this.ultimoAcessoService = ultimoAcessoService;
         this.leitura = new TransactionTemplate(transactionManager);
         this.leitura.setReadOnly(true);
     }
@@ -57,11 +60,13 @@ public class SessaoUsuarioService implements SessaoValidador {
         if (!situacao.ativo()) {
             return false;
         }
-        if (situacao.tokensValidosDesde() == null || usuario.emitidoEm() == null) {
-            return true;
-        }
         // O iat do JWT tem precisao de segundos; sem truncar, um login feito no mesmo segundo da revogacao seria recusado.
-        return !usuario.emitidoEm().isBefore(situacao.tokensValidosDesde().truncatedTo(ChronoUnit.SECONDS));
+        boolean valida = situacao.tokensValidosDesde() == null || usuario.emitidoEm() == null
+                || !usuario.emitidoEm().isBefore(situacao.tokensValidosDesde().truncatedTo(ChronoUnit.SECONDS));
+        if (valida && Papeis.MOTORISTA.equals(usuario.papel())) {
+            ultimoAcessoService.registrar(usuario.userId());
+        }
+        return valida;
     }
 
     /** Descarta a copia em memoria de uma conta que acabou de mudar (desativacao, senha), para valer na hora. */

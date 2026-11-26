@@ -26,6 +26,8 @@ import com.marillia.milebag.core.config.security.Papeis;
 class SessaoUsuarioServiceTest {
 
     @Mock
+    private UltimoAcessoService ultimoAcessoService;
+    @Mock
     private UsuarioRepository usuarioRepository;
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -35,7 +37,7 @@ class SessaoUsuarioServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SessaoUsuarioService(usuarioRepository, transactionManager);
+        service = new SessaoUsuarioService(usuarioRepository, ultimoAcessoService, transactionManager);
     }
 
     private Usuario conta() {
