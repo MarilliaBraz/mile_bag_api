@@ -49,6 +49,8 @@ class RelatorioMotoristaServiceTest {
     private BdoService bdoService;
     @Mock
     private UsuarioConsultaService usuarioConsultaService;
+    @Mock
+    private com.marillia.milebag.business.pagamento.service.PagamentoMotoristaService pagamentoMotoristaService;
 
     private RelatorioMotoristaService relatorioMotoristaService;
 
@@ -56,7 +58,7 @@ class RelatorioMotoristaServiceTest {
     void setUp() {
         relatorioMotoristaService =
                 new RelatorioMotoristaService(comprovanteEntregaService, entregaService, viagemService, ajusteViagemService, bdoService,
-                        usuarioConsultaService);
+                        usuarioConsultaService, pagamentoMotoristaService);
     }
 
     private Entrega entregaDe(UUID id, UUID motoristaId) {

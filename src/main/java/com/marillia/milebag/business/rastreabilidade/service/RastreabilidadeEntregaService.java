@@ -1,13 +1,17 @@
 package com.marillia.milebag.business.rastreabilidade.service;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
@@ -17,6 +21,7 @@ import com.marillia.milebag.business.configuracao.service.BaseAeroportuariaServi
 import com.marillia.milebag.business.basebdo.service.TrocaBaseBdoService;
 import com.marillia.milebag.business.dadosbdo.service.AlteracaoDadosBdoService;
 import com.marillia.milebag.business.bdo.model.Bdo;
+import com.marillia.milebag.business.bdo.model.BdoResponse;
 import com.marillia.milebag.business.bdo.service.BdoService;
 import com.marillia.milebag.business.cancelamento.service.CancelamentoBdoService;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
@@ -33,6 +38,7 @@ import com.marillia.milebag.business.ocorrencia.service.OcorrenciaService;
 import com.marillia.milebag.business.fotoentrega.model.TipoFotoEntrega;
 import com.marillia.milebag.business.fotoentrega.model.FotoEntrega;
 import com.marillia.milebag.business.fotoentrega.service.FotoEntregaService;
+import com.marillia.milebag.business.pagamento.service.PagamentoMotoristaService;
 import com.marillia.milebag.business.rastreabilidade.model.EntregaGestaoResponse;
 import com.marillia.milebag.business.rastreabilidade.model.FotoGestaoResponse;
 import com.marillia.milebag.business.retirada.model.RetiradaBagagem;
@@ -43,7 +49,6 @@ import com.marillia.milebag.business.rastreabilidade.model.HistoricoEntregaRespo
 import com.marillia.milebag.business.segundavia.service.SegundaViaBdoService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.viagem.model.Trajeto;
-import java.util.Optional;
 import com.marillia.milebag.business.viagem.service.AjusteViagemService;
 import com.marillia.milebag.business.viagem.model.RegraCobranca;
 import com.marillia.milebag.business.rastreabilidade.model.KmViagemResponse;
@@ -60,6 +65,9 @@ import com.marillia.milebag.core.exception.RecursoNaoEncontradoException;
 public class RastreabilidadeEntregaService {
 
     static final String TIPO_BDO_ASSINADO = "BDO_ASSINADO";
+
+    /** V60: a cancelada fica na tela de Entregas por estes dias (uma quinzena); depois, so pela busca. */
+    static final int DIAS_CANCELADA_NA_TELA = 15;
 
     private final EntregaService entregaService;
     private final BdoService bdoService;
@@ -80,6 +88,7 @@ public class RastreabilidadeEntregaService {
     private final AlteracaoDadosBdoService alteracaoDadosBdoService;
 
     private final AjusteViagemService ajusteViagemService;
+    private final PagamentoMotoristaService pagamentoMotoristaService;
 
     public RastreabilidadeEntregaService(
             EntregaService entregaService,
@@ -99,7 +108,9 @@ public class RastreabilidadeEntregaService {
             BaseAeroportuariaService baseAeroportuariaService,
             TrocaBaseBdoService trocaBaseBdoService,
             AlteracaoDadosBdoService alteracaoDadosBdoService,
-            AjusteViagemService ajusteViagemService) {
+            AjusteViagemService ajusteViagemService,
+            PagamentoMotoristaService pagamentoMotoristaService) {
+        this.pagamentoMotoristaService = pagamentoMotoristaService;
         this.alteracaoDadosBdoService = alteracaoDadosBdoService;
         this.ajusteViagemService = ajusteViagemService;
         this.baseAeroportuariaService = baseAeroportuariaService;
@@ -123,7 +134,7 @@ public class RastreabilidadeEntregaService {
     @Transactional(readOnly = true)
     public List<EntregaGestaoResponse> listar(EntregaStatus status) {
         Map<UUID, String> nomes = new HashMap<>();
-        List<Entrega> entregas = entregaService.listarParaGestao(status);
+        List<Entrega> entregas = naTela(entregaService.listarParaGestao(status));
         Map<UUID, Bdo> bdos = bdoService.buscarPorIds(entregas.stream().map(Entrega::getBdoId).toList());
         // V47: o BDO que ninguem assumiu ainda nao tem entrega, mas a empresa precisa ve-lo para poder cancela-lo.
         List<Bdo> semEntrega = status == null || status == EntregaStatus.AGUARDANDO_ATRIBUICAO ? bdoService.listarSemEntrega() : List.of();
@@ -139,6 +150,57 @@ public class RastreabilidadeEntregaService {
         Map<UUID, Bdo> todosOsBdos = new HashMap<>(bdos);
         semEntrega.forEach(bdo -> todosOsBdos.put(bdo.getId(), bdo));
         return comMesmoEndereco(linhas, todosOsBdos);
+    }
+
+    /**
+     * V60: a tela mostra o que ainda pede atencao. Sai a entrega ja paga ao motorista e a cancelada ha mais de
+     * {@value #DIAS_CANCELADA_NA_TELA} dias; as duas voltam pela busca do numero do BDO.
+     */
+    private List<Entrega> naTela(List<Entrega> entregas) {
+        Instant limiteCancelada = Instant.now().minus(Duration.ofDays(DIAS_CANCELADA_NA_TELA));
+        Set<UUID> pagas = pagamentoMotoristaService.pagasEntre(entregas.stream()
+                .filter(entrega -> entrega.getStatus() == EntregaStatus.ENCERRADA_COM_SUCESSO)
+                .map(Entrega::getId)
+                .toList()).keySet();
+        return entregas.stream()
+                .filter(entrega -> !pagas.contains(entrega.getId()))
+                .filter(entrega -> entrega.getStatus() != EntregaStatus.CANCELADA || entrega.getAtualizadoEm() == null
+                        || entrega.getAtualizadoEm().isAfter(limiteCancelada))
+                .toList();
+    }
+
+    /**
+     * V60: busca pelo numero do BDO (sem diferenciar maiusculas nem espacos) em tudo, inclusive no que ja saiu da tela
+     * (pago ou cancelado ha tempo). A entrega paga vem com a data do pagamento.
+     */
+    @Transactional(readOnly = true)
+    public List<EntregaGestaoResponse> buscarPorNumero(String numero) {
+        List<UUID> bdoIds = bdoService.buscarPorNumero(numero).stream().map(BdoResponse::id).toList();
+        if (bdoIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Bdo> bdos = bdoService.buscarPorIds(bdoIds);
+        Map<UUID, String> nomes = new HashMap<>();
+        Map<UUID, String> bases = codigosDasBases();
+        List<Entrega> entregas = bdoIds.stream().map(entregaService::buscarPorBdo).flatMap(Optional::stream).toList();
+        Set<UUID> comEntrega = entregas.stream().map(Entrega::getBdoId).collect(Collectors.toSet());
+        Map<UUID, LocalDate> pagas = pagamentoMotoristaService.pagasEntre(entregas.stream().map(Entrega::getId).toList());
+        Set<UUID> corrigidas = correcaoEntregaService.entregasCorrigidas(entregas.stream().map(Entrega::getId).toList());
+        List<UUID> semEntrega = bdoIds.stream().filter(id -> !comEntrega.contains(id)).toList();
+        Set<UUID> caronas = bagagemCaronaService.bdosQueSaoCarona(semEntrega);
+        return Stream.concat(
+                        entregas.stream().map(entrega -> comPagamento(comBase(resumo(entrega, bdos.get(entrega.getBdoId()), nomes,
+                                corrigidas.contains(entrega.getId())), bdos.get(entrega.getBdoId()), bases), pagas.get(entrega.getId()))),
+                        semEntrega.stream().map(bdos::get).filter(java.util.Objects::nonNull)
+                                .map(bdo -> comBase(resumoSemEntrega(bdo, caronas.contains(bdo.getId())), bdo, bases)))
+                .sorted(Comparator.comparing(EntregaGestaoResponse::atualizadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    private static EntregaGestaoResponse comPagamento(EntregaGestaoResponse linha, LocalDate pagoEm) {
+        return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
+                linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(),
+                linha.baseCodigo(), linha.mesmoEnderecoQue(), pagoEm);
     }
 
     /**
@@ -175,7 +237,7 @@ public class RastreabilidadeEntregaService {
     private static EntregaGestaoResponse comOutros(EntregaGestaoResponse linha, List<String> outros) {
         return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
                 linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(),
-                linha.baseCodigo(), outros);
+                linha.baseCodigo(), outros, linha.pagoEm());
     }
 
     @Transactional(readOnly = true)
@@ -314,7 +376,7 @@ public class RastreabilidadeEntregaService {
         String codigo = bdo == null || bdo.getBaseId() == null ? null : bases.get(bdo.getBaseId());
         return new EntregaGestaoResponse(linha.entregaId(), linha.bdoId(), linha.bagagemCarona(), linha.status(), linha.bdoNumero(),
                 linha.passageiroNome(), linha.endereco(), linha.motoristaNome(), linha.atualizadoEm(), linha.corrigida(), codigo,
-                linha.mesmoEnderecoQue());
+                linha.mesmoEnderecoQue(), linha.pagoEm());
     }
 
     /** "Motivo: Foto errada. Antes: ... Depois: ... (complemento)". */
@@ -344,7 +406,8 @@ public class RastreabilidadeEntregaService {
                 entrega.getAtualizadoEm(),
                 corrigida,
                 null,
-                List.of());
+                List.of(),
+                null);
     }
 
     private static EntregaGestaoResponse resumoSemEntrega(Bdo bdo, boolean bagagemCarona) {
@@ -360,7 +423,8 @@ public class RastreabilidadeEntregaService {
                 bdo.getDataCaptura() != null ? bdo.getDataCaptura() : bdo.getAtualizadoEm(),
                 false,
                 null,
-                List.of());
+                List.of(),
+                null);
     }
 
     /** Nome para exibir, consultado uma vez por pessoa na mesma resposta. */

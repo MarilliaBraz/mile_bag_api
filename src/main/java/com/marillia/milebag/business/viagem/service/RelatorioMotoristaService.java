@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.bdo.model.Bdo;
 import com.marillia.milebag.business.bdo.service.BdoService;
+import com.marillia.milebag.business.pagamento.service.PagamentoMotoristaService;
 import com.marillia.milebag.business.tenant.service.UsuarioConsultaService;
 import com.marillia.milebag.business.comprovante.model.ComprovanteEntrega;
 import com.marillia.milebag.business.comprovante.service.ComprovanteEntregaService;
@@ -42,6 +43,7 @@ public class RelatorioMotoristaService {
     private final AjusteViagemService ajusteViagemService;
     private final BdoService bdoService;
     private final UsuarioConsultaService usuarioConsultaService;
+    private final PagamentoMotoristaService pagamentoMotoristaService;
 
     public RelatorioMotoristaService(
             ComprovanteEntregaService comprovanteEntregaService,
@@ -49,13 +51,15 @@ public class RelatorioMotoristaService {
             ViagemService viagemService,
             AjusteViagemService ajusteViagemService,
             BdoService bdoService,
-            UsuarioConsultaService usuarioConsultaService) {
+            UsuarioConsultaService usuarioConsultaService,
+            PagamentoMotoristaService pagamentoMotoristaService) {
         this.comprovanteEntregaService = comprovanteEntregaService;
         this.entregaService = entregaService;
         this.viagemService = viagemService;
         this.ajusteViagemService = ajusteViagemService;
         this.bdoService = bdoService;
         this.usuarioConsultaService = usuarioConsultaService;
+        this.pagamentoMotoristaService = pagamentoMotoristaService;
     }
 
     @Transactional(readOnly = true)
@@ -85,7 +89,8 @@ public class RelatorioMotoristaService {
                 .forEach(trajeto -> entregaService.buscarPorId(trajeto.getEntregaId())
                         .ifPresent(entrega -> itens.add(montarItem(entrega, trajeto, true, tarifaOculta))));
 
-        return new RelatorioQuinzenalResponse(periodoInicio, periodoFim, itens, tarifaOculta);
+        return new RelatorioQuinzenalResponse(periodoInicio, periodoFim, itens, tarifaOculta,
+                pagamentoMotoristaService.situacaoParaMotorista(motoristaId, periodoInicio, periodoFim).orElse(null));
     }
 
     private Optional<ItemRelatorioMotoristaResponse> montarItem(Entrega entrega, boolean tarifaOculta) {

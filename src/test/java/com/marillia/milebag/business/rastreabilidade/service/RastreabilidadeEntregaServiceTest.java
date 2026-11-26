@@ -80,6 +80,8 @@ class RastreabilidadeEntregaServiceTest {
     private com.marillia.milebag.business.dadosbdo.service.AlteracaoDadosBdoService alteracaoDadosBdoService;
     @Mock
     private com.marillia.milebag.business.basebdo.service.TrocaBaseBdoService trocaBaseBdoService;
+    @Mock
+    private com.marillia.milebag.business.pagamento.service.PagamentoMotoristaService pagamentoMotoristaService;
     @InjectMocks
     private RastreabilidadeEntregaService rastreabilidadeEntregaService;
 

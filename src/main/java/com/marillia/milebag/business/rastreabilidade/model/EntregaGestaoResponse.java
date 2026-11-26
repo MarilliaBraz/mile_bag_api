@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.rastreabilidade.model;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,5 +27,7 @@ public record EntregaGestaoResponse(
         /** V52: codigo IATA da base do BDO (quem pode assumir). */
         String baseCodigo,
         /** Item 8: numeros dos outros BDOs em aberto que vao para o mesmo endereco (vazio se nenhum). */
-        List<String> mesmoEnderecoQue) {
+        List<String> mesmoEnderecoQue,
+        /** V60: dia em que a empresa pagou esta entrega ao motorista (so na busca pelo numero; a paga sai da lista). */
+        LocalDate pagoEm) {
 }

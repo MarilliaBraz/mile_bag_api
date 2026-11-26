@@ -30,7 +30,12 @@ public class GestaoEntregasController {
     }
 
     @GetMapping
-    public List<EntregaGestaoResponse> listar(@RequestParam(required = false) EntregaStatus status) {
+    public List<EntregaGestaoResponse> listar(@RequestParam(required = false) EntregaStatus status,
+            @RequestParam(required = false) String bdoNumero) {
+        // V60: com o numero, busca em tudo (inclusive o que ja saiu da tela: pago ou cancelado ha tempo).
+        if (bdoNumero != null && !bdoNumero.isBlank()) {
+            return rastreabilidadeEntregaService.buscarPorNumero(bdoNumero);
+        }
         return rastreabilidadeEntregaService.listar(status);
     }
 
