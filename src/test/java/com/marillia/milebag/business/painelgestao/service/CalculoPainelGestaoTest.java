@@ -42,7 +42,7 @@ class CalculoPainelGestaoTest {
                 entregue("HOJE-ATRASO", agora.minus(Duration.ofHours(1)), Duration.ofMinutes(30), Duration.ofMinutes(120), false, true, true),
                 entregue("ONTEM", inicioHoje.minus(Duration.ofHours(5)), Duration.ofHours(-2), Duration.ofMinutes(30), true, false, false));
 
-        PainelGestaoResponse painel = CalculoPainelGestao.calcular(abertas, entregues, agora, inicioHoje, 24, 4);
+        PainelGestaoResponse painel = CalculoPainelGestao.calcular(abertas, entregues, agora, inicioHoje, 24, 4, 95);
 
         assertThat(painel.radar().noPrazo()).isEqualTo(1);
         assertThat(painel.radar().alerta()).extracting(ItemMala::numero).containsExactly("ALERTA");
@@ -59,5 +59,16 @@ class CalculoPainelGestaoTest {
                         org.assertj.core.groups.Tuple.tuple("ONTEM", CalculoPainelGestao.SEM_ASSINATURA));
         assertThat(painel.excecoes().avarias().naEntrega()).isEqualTo(1);
         assertThat(painel.excecoes().avarias().entregues30Dias()).isEqualTo(3);
+        // Serie de 30 dias terminando hoje: hoje com 2 entregas (50% no prazo), ontem com 1, o resto zerado.
+        assertThat(painel.metaOtd()).isEqualTo(95);
+        assertThat(painel.serie()).hasSize(30);
+        PainelGestaoResponse.DiaOperacao hoje = painel.serie().get(29);
+        assertThat(hoje.dia()).isEqualTo(java.time.LocalDate.of(2026, 11, 26));
+        assertThat(hoje.entregues()).isEqualTo(2);
+        assertThat(hoje.otd()).isEqualTo(50.0);
+        assertThat(hoje.cicloMinutos()).isEqualTo(90L);
+        assertThat(painel.serie().get(28).entregues()).isEqualTo(1);
+        assertThat(painel.serie().get(0).entregues()).isZero();
+        assertThat(painel.serie().get(0).otd()).isNull();
     }
 }

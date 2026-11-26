@@ -2,12 +2,17 @@ package com.marillia.milebag.business.painelgestao.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 /** Painel de gestao, fase 3: custo por mala, ocupacao das saidas e a situacao dos motoristas. */
 public record PainelFrotaResponse(Instant geradoEm, Custo custoHoje, Custo custo30Dias, Ocupacao ocupacao30Dias, List<Praca> pracas,
-        List<MotoristaStatus> motoristas) {
+        List<MotoristaStatus> motoristas, List<DiaFrota> serie) {
+
+    /** Um dia dos ultimos 30: custo por mala das viagens encerradas no dia e malas por saida das iniciadas (nulos sem viagem). */
+    public record DiaFrota(LocalDate dia, BigDecimal custoPorMala, Double malasPorSaida) {
+    }
 
     /**
      * Custo das viagens encerradas no periodo (pagamento ao motorista + pedagio, inclusive das tentativas sem sucesso)

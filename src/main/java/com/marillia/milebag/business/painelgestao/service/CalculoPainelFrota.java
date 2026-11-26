@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.marillia.milebag.business.painelgestao.model.MotoristaPeriodo;
 import com.marillia.milebag.business.painelgestao.model.PainelFrotaResponse;
@@ -42,11 +44,31 @@ final class CalculoPainelFrota {
                         .thenComparing(MotoristaStatus::entregas, Comparator.reverseOrder()))
                 .toList();
         return new PainelFrotaResponse(agora, custo(viagens, inicioHoje), custo(viagens, inicio30Dias), ocupacao(saidas30), pracas(status),
-                status);
+                status, serie(viagens, inicioHoje));
+    }
+
+    /** Os ultimos dias da serie do cockpit, hoje incluido, no horario de Brasilia. */
+    private static List<PainelFrotaResponse.DiaFrota> serie(List<ViagemPeriodo> viagens, Instant inicioHoje) {
+        LocalDate hoje = inicioHoje.atZone(CalculoPainelGestao.BRASILIA).toLocalDate();
+        Map<LocalDate, List<ViagemPeriodo>> encerradasPorDia = viagens.stream()
+                .filter(v -> v.encerradaEm() != null)
+                .collect(Collectors.groupingBy(v -> v.encerradaEm().atZone(CalculoPainelGestao.BRASILIA).toLocalDate()));
+        Map<LocalDate, List<ViagemPeriodo>> saidasPorDia = viagens.stream()
+                .filter(v -> v.inicio() != null)
+                .collect(Collectors.groupingBy(v -> v.inicio().atZone(CalculoPainelGestao.BRASILIA).toLocalDate()));
+        return IntStream.rangeClosed(0, CalculoPainelGestao.DIAS_SERIE - 1)
+                .mapToObj(atras -> hoje.minusDays(CalculoPainelGestao.DIAS_SERIE - 1L - atras))
+                .map(dia -> new PainelFrotaResponse.DiaFrota(dia,
+                        custoDoPeriodo(encerradasPorDia.getOrDefault(dia, List.of())).porMala(),
+                        malasPorSaida(saidasPorDia.getOrDefault(dia, List.of()))))
+                .toList();
     }
 
     private static Custo custo(List<ViagemPeriodo> viagens, Instant desde) {
-        List<ViagemPeriodo> encerradas = viagens.stream().filter(v -> v.encerradaEm() != null && !v.encerradaEm().isBefore(desde)).toList();
+        return custoDoPeriodo(viagens.stream().filter(v -> v.encerradaEm() != null && !v.encerradaEm().isBefore(desde)).toList());
+    }
+
+    private static Custo custoDoPeriodo(List<ViagemPeriodo> encerradas) {
         List<ViagemPeriodo> comValor = encerradas.stream().filter(v -> v.pagamento() != null && v.pedagio() != null).toList();
         BigDecimal pagamento = somar(comValor.stream().map(ViagemPeriodo::pagamento).toList());
         BigDecimal pedagios = somar(comValor.stream().map(ViagemPeriodo::pedagio).toList());
