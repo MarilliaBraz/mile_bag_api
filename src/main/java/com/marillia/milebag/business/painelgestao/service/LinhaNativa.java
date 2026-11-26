@@ -35,6 +35,10 @@ final class LinhaNativa {
         };
     }
 
+    Double decimal(int i) {
+        return colunas[i] == null ? null : ((Number) colunas[i]).doubleValue();
+    }
+
     long numero(int i) {
         return colunas[i] == null ? 0 : ((Number) colunas[i]).longValue();
     }

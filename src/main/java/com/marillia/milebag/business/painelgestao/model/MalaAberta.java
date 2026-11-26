@@ -17,5 +17,6 @@ public record MalaAberta(
         Instant ultimaAtualizacao,
         long tentativas,
         String ultimoMotivo,
-        boolean avariaRetirada) {
+        boolean avariaRetirada,
+        Instant registradoEm) {
 }

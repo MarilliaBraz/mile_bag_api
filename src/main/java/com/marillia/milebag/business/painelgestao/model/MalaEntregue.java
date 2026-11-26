@@ -18,5 +18,6 @@ public record MalaEntregue(
         boolean fotoBdoAssinado,
         boolean recebedor,
         boolean avariaRetirada,
-        boolean avariaEntrega) {
+        boolean avariaEntrega,
+        Instant registradoEm) {
 }

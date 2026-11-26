@@ -9,11 +9,14 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.painelgestao.model.BaseCadastrada;
 import com.marillia.milebag.business.painelgestao.model.ConfigPainelGestao;
 import com.marillia.milebag.business.painelgestao.model.MalaAberta;
 import com.marillia.milebag.business.painelgestao.model.MalaEntregue;
+import com.marillia.milebag.business.painelgestao.model.PainelGeograficoResponse;
 import com.marillia.milebag.business.painelgestao.model.PainelGestaoConfig;
 import com.marillia.milebag.business.painelgestao.model.PainelGestaoResponse;
+import com.marillia.milebag.business.painelgestao.model.ViagemAtiva;
 import com.marillia.milebag.business.painelgestao.repository.PainelGestaoConfigRepository;
 import com.marillia.milebag.business.painelgestao.repository.PainelGestaoRepository;
 import com.marillia.milebag.core.exception.RegraNegocioException;
@@ -50,6 +53,23 @@ public class PainelGestaoService {
         return CalculoPainelGestao.calcular(abertas, entregues, agora, inicioHoje, config.prazoEntregaHoras(), config.horasSemAtualizacao());
     }
 
+    /** Fase 2: situacao de cada base (mapa e ranking das piores do dia) e as viagens em andamento. */
+    @Transactional(readOnly = true)
+    public PainelGeograficoResponse painelGeografico() {
+        ConfigPainelGestao config = configuracao();
+        Instant agora = Instant.now();
+        Instant inicioHoje = LocalDate.now(BRASILIA).atStartOfDay(BRASILIA).toInstant();
+        List<BaseCadastrada> bases = painelRepository.bases().stream().map(LinhaNativa::new)
+                .map(l -> new BaseCadastrada(l.texto(0), l.texto(1), l.texto(2), l.decimal(3), l.decimal(4))).toList();
+        List<MalaAberta> abertas = painelRepository.malasAbertas(config.prazoEntregaHoras()).stream()
+                .map(LinhaNativa::new).map(PainelGestaoService::aberta).toList();
+        List<MalaEntregue> entreguesHoje = painelRepository.malasEntregues(config.prazoEntregaHoras(), inicioHoje).stream()
+                .map(LinhaNativa::new).map(PainelGestaoService::entregue).toList();
+        List<ViagemAtiva> viagens = painelRepository.rotasAtivas(CalculoPainelGeografico.MINUTOS_PARADO).stream()
+                .map(LinhaNativa::new).map(PainelGestaoService::viagem).toList();
+        return CalculoPainelGeografico.calcular(bases, abertas, entreguesHoje, viagens, agora, inicioHoje);
+    }
+
     @Transactional(readOnly = true)
     public ConfigPainelGestao configuracao() {
         return configRepository.findFirstByOrderByCriadoEmAsc()
@@ -78,11 +98,17 @@ public class PainelGestaoService {
 
     private static MalaAberta aberta(LinhaNativa l) {
         return new MalaAberta(l.uuid(0), l.uuid(1), l.texto(2), l.texto(3), l.texto(4), l.texto(5), l.texto(6), l.instante(7),
-                l.instante(8), l.instante(9), l.numero(10), l.texto(11), l.logico(12));
+                l.instante(8), l.instante(9), l.numero(10), l.texto(11), l.logico(12), l.instante(13));
+    }
+
+    private static ViagemAtiva viagem(LinhaNativa l) {
+        return new ViagemAtiva(l.uuid(0), l.uuid(1), l.texto(2), l.texto(3), l.texto(4), l.texto(5), l.texto(6), l.instante(7), l.decimal(8),
+                l.logico(9), l.numero(10), l.logico(11), l.decimal(12) == null ? 0 : l.decimal(12), l.instante(13), l.decimal(14), l.decimal(15),
+                l.numero(16), l.decimal(17));
     }
 
     private static MalaEntregue entregue(LinhaNativa l) {
         return new MalaEntregue(l.uuid(0), l.uuid(1), l.texto(2), l.texto(3), l.texto(4), l.texto(5), l.instante(6), l.instante(7),
-                l.instante(8), l.logico(9), l.logico(10), l.logico(11), l.logico(12), l.logico(13));
+                l.instante(8), l.logico(9), l.logico(10), l.logico(11), l.logico(12), l.logico(13), l.instante(14));
     }
 }
