@@ -168,6 +168,17 @@ public class FechamentoService {
                 .toList();
     }
 
+    /** Painel de atividades: os itens calculados de todos os fechamentos, para achar os pagamentos ainda nao feitos. */
+    @Transactional(readOnly = true)
+    public List<ItemFechamento> todosItensCalculados() {
+        return itemFechamentoRepository.findByStatusItem(StatusItemFechamento.CALCULADO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Fechamento> todos() {
+        return fechamentoRepository.findAll();
+    }
+
     /** V60: o fechamento exatamente deste periodo, para o relatorio do motorista mostrar o pagamento. */
     @Transactional(readOnly = true)
     public Optional<Fechamento> buscarPorPeriodo(LocalDate periodoInicio, LocalDate periodoFim) {

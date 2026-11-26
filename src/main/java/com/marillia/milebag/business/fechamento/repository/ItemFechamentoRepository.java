@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.marillia.milebag.business.fechamento.model.ItemFechamento;
+import com.marillia.milebag.business.fechamento.model.StatusItemFechamento;
 import com.marillia.milebag.core.base.BaseRepository;
 
 public interface ItemFechamentoRepository extends BaseRepository<ItemFechamento, UUID> {
@@ -12,4 +13,6 @@ public interface ItemFechamentoRepository extends BaseRepository<ItemFechamento,
     List<ItemFechamento> findByFechamentoId(UUID fechamentoId);
 
     List<ItemFechamento> findByEntregaIdIn(Collection<UUID> entregaIds);
+
+    List<ItemFechamento> findByStatusItem(StatusItemFechamento statusItem);
 }

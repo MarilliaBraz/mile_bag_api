@@ -3,6 +3,7 @@ package com.marillia.milebag.business.pagamento.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,11 +23,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import com.marillia.milebag.business.fechamento.model.Fechamento;
 import com.marillia.milebag.business.fechamento.model.ItemFechamento;
 import com.marillia.milebag.business.fechamento.model.StatusItemFechamento;
 import com.marillia.milebag.business.fechamento.service.FechamentoService;
 import com.marillia.milebag.business.pagamento.model.EventoPagamentoMotorista;
 import com.marillia.milebag.business.pagamento.model.PagamentoMotorista;
+import com.marillia.milebag.business.pagamento.model.PagamentoPendenteResponse;
 import com.marillia.milebag.business.pagamento.model.SituacaoPagamento;
 import com.marillia.milebag.business.pagamento.model.TipoEventoPagamento;
 import com.marillia.milebag.business.pagamento.repository.EventoPagamentoMotoristaRepository;
@@ -131,5 +134,30 @@ class PagamentoMotoristaServiceTest {
         when(pagamentoRepository.findBySituacao(SituacaoPagamento.PAGO)).thenReturn(List.of(pago));
 
         assertThat(servico.pagasEntre(List.of(entregaPaga, entregaNaoPaga))).containsExactlyEntriesOf(java.util.Map.of(entregaPaga, hoje));
+    }
+
+    @Test
+    void pendentesTrazemSoQuemAindaNaoRecebeuComOAgendadoPrimeiro() {
+        UUID agendado = UUID.randomUUID();
+        UUID pago = UUID.randomUUID();
+        Fechamento fechamento = mock(Fechamento.class);
+        when(fechamento.getId()).thenReturn(fechamentoId);
+        when(fechamento.getPeriodoInicio()).thenReturn(hoje.minusDays(20));
+        when(fechamento.getPeriodoFim()).thenReturn(hoje.minusDays(6));
+        when(fechamentoService.todos()).thenReturn(List.of(fechamento));
+        when(fechamentoService.todosItensCalculados()).thenReturn(List.of(
+                item(motoristaId, UUID.randomUUID()), item(motoristaId, UUID.randomUUID()), item(agendado, UUID.randomUUID()),
+                item(pago, UUID.randomUUID())));
+        PagamentoMotorista doAgendado = new PagamentoMotorista(fechamentoId, agendado, adminId);
+        doAgendado.agendar(hoje.plusDays(2), adminId);
+        PagamentoMotorista doPago = new PagamentoMotorista(fechamentoId, pago, adminId);
+        doPago.marcarPago(hoje, adminId);
+        when(pagamentoRepository.findAll()).thenReturn(List.of(doAgendado, doPago));
+
+        List<PagamentoPendenteResponse> pendentes = servico.pendentes();
+
+        assertThat(pendentes).extracting(PagamentoPendenteResponse::motoristaId).containsExactly(agendado, motoristaId);
+        assertThat(pendentes.get(0).dataAgendada()).isEqualTo(hoje.plusDays(2));
+        assertThat(pendentes.get(1).situacao()).isEqualTo(SituacaoPagamento.A_AGENDAR);
     }
 }

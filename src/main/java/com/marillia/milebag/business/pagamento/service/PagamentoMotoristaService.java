@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,12 +17,14 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.marillia.milebag.business.fechamento.model.Fechamento;
 import com.marillia.milebag.business.fechamento.model.ItemFechamento;
 import com.marillia.milebag.business.fechamento.service.FechamentoService;
 import com.marillia.milebag.business.pagamento.model.EventoPagamentoMotorista;
 import com.marillia.milebag.business.pagamento.model.EventoPagamentoResponse;
 import com.marillia.milebag.business.pagamento.model.PagamentoMotorista;
 import com.marillia.milebag.business.pagamento.model.PagamentoMotoristaResponse;
+import com.marillia.milebag.business.pagamento.model.PagamentoPendenteResponse;
 import com.marillia.milebag.business.pagamento.model.SituacaoPagamento;
 import com.marillia.milebag.business.pagamento.model.SituacaoPagamentoMotorista;
 import com.marillia.milebag.business.pagamento.model.TipoEventoPagamento;
@@ -108,6 +111,33 @@ public class PagamentoMotoristaService {
         LocalDate pagoEm = pagamento.getPagoEm();
         pagamento.desfazerPago(usuarioId);
         registrar(pagamentoRepository.save(pagamento), TipoEventoPagamento.PAGAMENTO_DESFEITO, pagoEm, motivoLimpo, usuarioId);
+    }
+
+    /**
+     * Painel de atividades: cada motorista com entrega calculada numa quinzena e que ainda nao recebeu. Os agendados vem
+     * primeiro, pela data mais proxima; depois os a agendar, pela quinzena mais antiga.
+     */
+    @Transactional(readOnly = true)
+    public List<PagamentoPendenteResponse> pendentes() {
+        Map<UUID, Fechamento> fechamentos = fechamentoService.todos().stream()
+                .collect(Collectors.toMap(Fechamento::getId, Function.identity()));
+        Map<String, PagamentoMotorista> pagamentos = pagamentoRepository.findAll().stream()
+                .collect(Collectors.toMap(p -> chave(p.getFechamentoId(), p.getMotoristaId()), Function.identity()));
+        return fechamentoService.todosItensCalculados().stream()
+                .filter(item -> fechamentos.containsKey(item.getFechamentoId()))
+                .collect(Collectors.toMap(item -> chave(item.getFechamentoId(), item.getMotoristaId()), Function.identity(),
+                        (primeiro, outro) -> primeiro, LinkedHashMap::new))
+                .entrySet().stream()
+                .filter(par -> pagamentos.get(par.getKey()) == null || pagamentos.get(par.getKey()).getSituacao() != SituacaoPagamento.PAGO)
+                .map(par -> pendente(fechamentos.get(par.getValue().getFechamentoId()), par.getValue().getMotoristaId(), pagamentos.get(par.getKey())))
+                .sorted(Comparator.comparing(PagamentoPendenteResponse::dataAgendada, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(PagamentoPendenteResponse::periodoFim))
+                .toList();
+    }
+
+    private static PagamentoPendenteResponse pendente(Fechamento fechamento, UUID motoristaId, PagamentoMotorista pagamento) {
+        return new PagamentoPendenteResponse(fechamento.getId(), fechamento.getPeriodoInicio(), fechamento.getPeriodoFim(), motoristaId,
+                pagamento == null ? SituacaoPagamento.A_AGENDAR : pagamento.getSituacao(), pagamento == null ? null : pagamento.getDataAgendada());
     }
 
     /** Das entregas informadas, as ja pagas ao motorista, com a data do pagamento (para sair da tela de Entregas). */
