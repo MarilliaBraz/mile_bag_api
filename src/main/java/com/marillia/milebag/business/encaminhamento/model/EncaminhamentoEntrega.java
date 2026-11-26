@@ -67,9 +67,36 @@ public class EncaminhamentoEntrega {
     @Column(name = "atualizado_em", nullable = false)
     private Instant atualizadoEm;
 
+    /** V64: abertura do processo (PIR) pelo passageiro; o prazo da ANAC conta daqui. */
+    @Column(name = "processo_aberto_em", nullable = false, updatable = false)
+    private Instant processoAbertoEm;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_voo", nullable = false, updatable = false, length = 15)
+    private TipoVoo tipoVoo;
+
+    /** V64: horas de cada passo do parceiro, gravadas pelo gatilho do banco quando a etapa muda. */
+    @Column(name = "coletado_em", insertable = false, updatable = false)
+    private Instant coletadoEm;
+
+    @Column(name = "entregue_em", insertable = false, updatable = false)
+    private Instant entregueEm;
+
+    @Column(name = "nao_entregue_em", insertable = false, updatable = false)
+    private Instant naoEntregueEm;
+
     public EncaminhamentoEntrega(
             UUID bagagemId, UUID companhiaId, UUID empresaId, UUID bdoId, String numeroProcesso, String passageiroNome, String endereco,
             UUID encaminhadoPor, Instant agora) {
+        this(bagagemId, companhiaId, empresaId, bdoId, numeroProcesso, passageiroNome, endereco, encaminhadoPor, agora, agora,
+                TipoVoo.DOMESTICO);
+    }
+
+    public EncaminhamentoEntrega(
+            UUID bagagemId, UUID companhiaId, UUID empresaId, UUID bdoId, String numeroProcesso, String passageiroNome, String endereco,
+            UUID encaminhadoPor, Instant agora, Instant processoAbertoEm, TipoVoo tipoVoo) {
+        this.processoAbertoEm = processoAbertoEm;
+        this.tipoVoo = tipoVoo;
         this.id = UUID.randomUUID();
         this.bagagemId = bagagemId;
         this.companhiaId = companhiaId;

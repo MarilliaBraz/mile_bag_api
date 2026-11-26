@@ -1,4 +1,4 @@
-package com.marillia.milebag.business.painelgestao.service;
+package com.marillia.milebag.core.base;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -7,24 +7,24 @@ import java.time.ZonedDateTime;
 import java.util.UUID;
 
 /** Le as colunas de uma linha de consulta nativa, aceitando os tipos que o driver/Hibernate devolvem. */
-final class LinhaNativa {
+public final class LinhaNativa {
 
     private final Object[] colunas;
 
-    LinhaNativa(Object[] colunas) {
+    public LinhaNativa(Object[] colunas) {
         this.colunas = colunas;
     }
 
-    UUID uuid(int i) {
+    public UUID uuid(int i) {
         Object valor = colunas[i];
         return valor == null ? null : valor instanceof UUID id ? id : UUID.fromString(valor.toString());
     }
 
-    String texto(int i) {
+    public String texto(int i) {
         return colunas[i] == null ? null : colunas[i].toString();
     }
 
-    Instant instante(int i) {
+    public Instant instante(int i) {
         return switch (colunas[i]) {
             case null -> null;
             case Instant valor -> valor;
@@ -35,15 +35,15 @@ final class LinhaNativa {
         };
     }
 
-    Double decimal(int i) {
+    public Double decimal(int i) {
         return colunas[i] == null ? null : ((Number) colunas[i]).doubleValue();
     }
 
-    long numero(int i) {
+    public long numero(int i) {
         return colunas[i] == null ? 0 : ((Number) colunas[i]).longValue();
     }
 
-    boolean logico(int i) {
+    public boolean logico(int i) {
         return colunas[i] != null && (Boolean) colunas[i];
     }
 }
