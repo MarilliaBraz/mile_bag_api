@@ -27,6 +27,7 @@ import com.marillia.milebag.business.painelgestao.repository.PainelGestaoConfigR
 import com.marillia.milebag.business.painelgestao.repository.PainelGestaoRepository;
 import com.marillia.milebag.business.viagem.model.CampoAjusteViagem;
 import com.marillia.milebag.business.viagem.service.AjusteViagemService;
+import com.marillia.milebag.core.base.LinhaNativa;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 
 /** Painel de gestao da empresa de entrega (fase 1) e a sua configuracao (V61). */

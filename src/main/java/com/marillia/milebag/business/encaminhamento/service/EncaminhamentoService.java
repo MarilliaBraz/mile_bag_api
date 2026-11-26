@@ -23,6 +23,7 @@ import com.marillia.milebag.business.encaminhamento.model.BagagemEncaminhada;
 import com.marillia.milebag.business.encaminhamento.model.EncaminhamentoEntrega;
 import com.marillia.milebag.business.encaminhamento.model.EncaminharBagagemRequest;
 import com.marillia.milebag.business.encaminhamento.model.EtapaEntrega;
+import com.marillia.milebag.business.encaminhamento.model.TipoVoo;
 import com.marillia.milebag.business.encaminhamento.repository.EncaminhamentoEntregaRepository;
 import com.marillia.milebag.business.tenant.model.Tenant;
 import com.marillia.milebag.business.tenant.repository.TenantRepository;
@@ -41,6 +42,9 @@ import com.marillia.milebag.core.exception.RegraNegocioException;
  */
 @Service
 public class EncaminhamentoService {
+
+    /** Diferenca de relogio aceita entre o aparelho e o servidor na abertura do processo. */
+    static final java.time.Duration TOLERANCIA_RELOGIO = java.time.Duration.ofMinutes(5);
 
     private static final Logger log = LoggerFactory.getLogger(EncaminhamentoService.class);
 
@@ -92,6 +96,13 @@ public class EncaminhamentoService {
         if (email != null && email.length() > 200) {
             throw new RegraNegocioException("E-mail invalido.");
         }
+        TipoVoo tipoVoo = tipoVoo(request.tipoVoo());
+        Instant agora = Instant.now();
+        Instant processoAbertoEm = request.processoAbertoEm() != null ? request.processoAbertoEm()
+                : bagagem.getRegistradaEm() != null ? bagagem.getRegistradaEm() : agora;
+        if (processoAbertoEm.isAfter(agora.plus(TOLERANCIA_RELOGIO))) {
+            throw new RegraNegocioException("A abertura do processo nao pode ser no futuro.");
+        }
         if (!parceriaService.saoParceiras(companhiaId, request.empresaId())) {
             throw new RegraNegocioException("Escolha uma empresa de entrega parceira da sua companhia.");
         }
@@ -106,7 +117,8 @@ public class EncaminhamentoService {
         EncaminhamentoEntrega encaminhamento;
         try {
             encaminhamento = repository.saveAndFlush(new EncaminhamentoEntrega(
-                    bagagemId, companhiaId, empresa.getId(), bdoId, processo, passageiro, endereco, funcionarioId, Instant.now()));
+                    bagagemId, companhiaId, empresa.getId(), bdoId, processo, passageiro, endereco, funcionarioId, agora, processoAbertoEm,
+                    tipoVoo));
         } catch (DataIntegrityViolationException e) {
             // Dois encaminhamentos ao mesmo tempo: o indice unico do ativo (V45) segura o segundo, e o BDO dele volta junto.
             throw new ConflitoException("Esta bagagem ja foi encaminhada para entrega.");
@@ -173,5 +185,17 @@ public class EncaminhamentoService {
             throw new RegraNegocioException(mensagem);
         }
         return limpo;
+    }
+
+    /** V64: vazio vale voo domestico. */
+    private static TipoVoo tipoVoo(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return TipoVoo.DOMESTICO;
+        }
+        try {
+            return TipoVoo.valueOf(valor.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new RegraNegocioException("Tipo de voo invalido: use DOMESTICO ou INTERNACIONAL.");
+        }
     }
 }
