@@ -22,13 +22,13 @@ class CalculoPainelGestaoTest {
 
     private MalaAberta aberta(String numero, Duration paraOPrazo, Instant retirada, String status, Duration semAtualizar, long tentativas) {
         return new MalaAberta(UUID.randomUUID(), UUID.randomUUID(), numero, "Passageiro", "GYN", "Motorista", status,
-                agora.plus(paraOPrazo), retirada, agora.minus(semAtualizar), tentativas, tentativas > 0 ? "Passageiro ausente" : null, false);
+                agora.plus(paraOPrazo), retirada, agora.minus(semAtualizar), tentativas, tentativas > 0 ? "Passageiro ausente" : null, false, agora.minus(Duration.ofHours(10)));
     }
 
     private MalaEntregue entregue(String numero, Instant entregueEm, Duration atrasoSobreOPrazo, Duration ciclo, boolean fotoPorta,
             boolean recebedor, boolean avariaEntrega) {
         return new MalaEntregue(UUID.randomUUID(), UUID.randomUUID(), numero, "Passageiro", "GYN", "Motorista", entregueEm,
-                entregueEm.minus(atrasoSobreOPrazo), entregueEm.minus(ciclo), fotoPorta, false, recebedor, false, avariaEntrega);
+                entregueEm.minus(atrasoSobreOPrazo), entregueEm.minus(ciclo), fotoPorta, false, recebedor, false, avariaEntrega, entregueEm.minus(Duration.ofHours(10)));
     }
 
     @Test
