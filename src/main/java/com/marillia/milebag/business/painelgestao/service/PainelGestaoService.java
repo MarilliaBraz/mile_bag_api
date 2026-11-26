@@ -4,7 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,12 +15,17 @@ import com.marillia.milebag.business.painelgestao.model.BaseCadastrada;
 import com.marillia.milebag.business.painelgestao.model.ConfigPainelGestao;
 import com.marillia.milebag.business.painelgestao.model.MalaAberta;
 import com.marillia.milebag.business.painelgestao.model.MalaEntregue;
+import com.marillia.milebag.business.painelgestao.model.MotoristaPeriodo;
+import com.marillia.milebag.business.painelgestao.model.PainelFrotaResponse;
 import com.marillia.milebag.business.painelgestao.model.PainelGeograficoResponse;
 import com.marillia.milebag.business.painelgestao.model.PainelGestaoConfig;
 import com.marillia.milebag.business.painelgestao.model.PainelGestaoResponse;
 import com.marillia.milebag.business.painelgestao.model.ViagemAtiva;
+import com.marillia.milebag.business.painelgestao.model.ViagemPeriodo;
 import com.marillia.milebag.business.painelgestao.repository.PainelGestaoConfigRepository;
 import com.marillia.milebag.business.painelgestao.repository.PainelGestaoRepository;
+import com.marillia.milebag.business.viagem.model.CampoAjusteViagem;
+import com.marillia.milebag.business.viagem.service.AjusteViagemService;
 import com.marillia.milebag.core.exception.RegraNegocioException;
 
 /** Painel de gestao da empresa de entrega (fase 1) e a sua configuracao (V61). */
@@ -34,10 +41,13 @@ public class PainelGestaoService {
 
     private final PainelGestaoRepository painelRepository;
     private final PainelGestaoConfigRepository configRepository;
+    private final AjusteViagemService ajusteViagemService;
 
-    public PainelGestaoService(PainelGestaoRepository painelRepository, PainelGestaoConfigRepository configRepository) {
+    public PainelGestaoService(PainelGestaoRepository painelRepository, PainelGestaoConfigRepository configRepository,
+            AjusteViagemService ajusteViagemService) {
         this.painelRepository = painelRepository;
         this.configRepository = configRepository;
+        this.ajusteViagemService = ajusteViagemService;
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +78,39 @@ public class PainelGestaoService {
         List<ViagemAtiva> viagens = painelRepository.rotasAtivas(CalculoPainelGeografico.MINUTOS_PARADO).stream()
                 .map(LinhaNativa::new).map(PainelGestaoService::viagem).toList();
         return CalculoPainelGeografico.calcular(bases, abertas, entreguesHoje, viagens, agora, inicioHoje);
+    }
+
+    /**
+     * Fase 3: custo por mala (hoje e 30 dias), malas por saida e a situacao dos motoristas. O custo de cada viagem vem do
+     * mesmo valor vigente que o fechamento usa (tarifa aplicada e pedagio, com os ajustes da empresa).
+     */
+    @Transactional(readOnly = true)
+    public PainelFrotaResponse painelFrota() {
+        ConfigPainelGestao config = configuracao();
+        Instant agora = Instant.now();
+        Instant inicioHoje = LocalDate.now(BRASILIA).atStartOfDay(BRASILIA).toInstant();
+        Instant inicio30Dias = inicioHoje.minus(Duration.ofDays(DIAS_HISTORICO));
+        List<ViagemPeriodo> viagens = painelRepository.viagensDoPeriodo(inicio30Dias).stream().map(LinhaNativa::new)
+                .map(l -> viagemPeriodo(l, inicio30Dias)).toList();
+        List<MotoristaPeriodo> motoristas = painelRepository.motoristas(config.prazoEntregaHoras(), inicio30Dias).stream()
+                .map(LinhaNativa::new)
+                .map(l -> new MotoristaPeriodo(l.uuid(0), l.texto(1), l.texto(2), l.instante(3), l.logico(4), l.numero(5), l.numero(6),
+                        l.numero(7)))
+                .toList();
+        return CalculoPainelFrota.calcular(viagens, motoristas, agora, inicioHoje, inicio30Dias);
+    }
+
+    /** O valor so e resolvido para a viagem encerrada no periodo (a em andamento ainda nao tem custo fechado). */
+    private ViagemPeriodo viagemPeriodo(LinhaNativa l, Instant inicio30Dias) {
+        UUID trajetoId = l.uuid(0);
+        Instant encerradaEm = l.instante(3);
+        boolean comCusto = encerradaEm != null && !encerradaEm.isBefore(inicio30Dias);
+        BigDecimal pagamento = comCusto
+                ? ajusteViagemService.resolverValorVigente(trajetoId, CampoAjusteViagem.TARIFA_APLICADA).orElse(null) : null;
+        BigDecimal pedagio = comCusto
+                ? ajusteViagemService.resolverValorVigente(trajetoId, CampoAjusteViagem.VALOR_PEDAGIO).orElse(null) : null;
+        return new ViagemPeriodo(trajetoId, l.uuid(1), l.instante(2), encerradaEm, l.decimal(4) == null ? 0 : l.decimal(4), l.numero(5),
+                l.logico(6), pagamento, pedagio);
     }
 
     @Transactional(readOnly = true)

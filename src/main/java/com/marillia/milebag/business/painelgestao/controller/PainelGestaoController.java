@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.marillia.milebag.business.painelgestao.model.ConfigPainelGestao;
+import com.marillia.milebag.business.painelgestao.model.PainelFrotaResponse;
 import com.marillia.milebag.business.painelgestao.model.PainelGeograficoResponse;
 import com.marillia.milebag.business.painelgestao.model.PainelGestaoResponse;
 import com.marillia.milebag.business.painelgestao.service.PainelGestaoService;
@@ -28,6 +29,11 @@ public class PainelGestaoController {
     @GetMapping("/api/v1/gestao/painel/geografico")
     public PainelGeograficoResponse painelGeografico() {
         return service.painelGeografico();
+    }
+
+    @GetMapping("/api/v1/gestao/painel/frota")
+    public PainelFrotaResponse painelFrota() {
+        return service.painelFrota();
     }
 
     @GetMapping("/api/v1/configuracoes/painel-gestao")
