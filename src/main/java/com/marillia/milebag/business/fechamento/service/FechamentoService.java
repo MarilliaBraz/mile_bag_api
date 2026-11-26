@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,6 +146,32 @@ public class FechamentoService {
 
     List<ItemFechamento> itensDe(UUID fechamentoId) {
         return itemFechamentoRepository.findByFechamentoId(fechamentoId);
+    }
+
+    /** Pagamento do motorista (V60): os itens calculados (com valor) do fechamento, que e o que se paga. */
+    @Transactional(readOnly = true)
+    public List<ItemFechamento> itensCalculados(UUID fechamentoId) {
+        buscarOuFalhar(fechamentoId);
+        return itemFechamentoRepository.findByFechamentoId(fechamentoId).stream()
+                .filter(item -> item.getStatusItem() == StatusItemFechamento.CALCULADO)
+                .toList();
+    }
+
+    /** V60: itens calculados das entregas concluidas (sem as tentativas sem sucesso), para saber quais ja foram pagas. */
+    @Transactional(readOnly = true)
+    public List<ItemFechamento> itensCalculadosDasEntregas(Collection<UUID> entregaIds) {
+        if (entregaIds.isEmpty()) {
+            return List.of();
+        }
+        return itemFechamentoRepository.findByEntregaIdIn(entregaIds).stream()
+                .filter(item -> item.getStatusItem() == StatusItemFechamento.CALCULADO && !item.isTentativaSemSucesso())
+                .toList();
+    }
+
+    /** V60: o fechamento exatamente deste periodo, para o relatorio do motorista mostrar o pagamento. */
+    @Transactional(readOnly = true)
+    public Optional<Fechamento> buscarPorPeriodo(LocalDate periodoInicio, LocalDate periodoFim) {
+        return fechamentoRepository.findByPeriodoInicioAndPeriodoFim(periodoInicio, periodoFim);
     }
 
     /** FR-004: so entregas encerradas com comprovante cuja data/hora cai dentro do periodo. */
