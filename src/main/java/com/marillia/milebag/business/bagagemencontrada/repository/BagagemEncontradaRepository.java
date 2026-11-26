@@ -19,6 +19,11 @@ public interface BagagemEncontradaRepository extends BaseRepository<BagagemEncon
     /** Os mais recentes da companhia (RLS), para o inicio do funcionario. */
     List<BagagemEncontrada> findTop20BySituacaoOrderByRegistradaEmDesc(SituacaoBagagemEncontrada situacao);
 
+    /** Painel de atividades: rascunhos da companhia toda (RLS) ou so do funcionario. */
+    long countBySituacao(SituacaoBagagemEncontrada situacao);
+
+    long countByCriadoPorAndSituacao(UUID criadoPor, SituacaoBagagemEncontrada situacao);
+
     /** RD21: numero nacional do codigo SID (sequencia fora da RLS, unica entre as companhias). */
     @Query(value = "SELECT nextval('bagagem_sid_seq')", nativeQuery = true)
     long proximoNumeroSid();
