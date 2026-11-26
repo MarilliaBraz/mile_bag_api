@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.painelgestao.model;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,11 +13,17 @@ public record PainelGestaoResponse(
         Instant geradoEm,
         int prazoPadraoHoras,
         int horasSemAtualizacao,
+        int metaOtd,
         Radar radar,
         Funil funil,
         Otd otd,
         Ciclo ciclo,
-        Excecoes excecoes) {
+        Excecoes excecoes,
+        List<DiaOperacao> serie) {
+
+    /** Um dia dos ultimos 30 (horario de Brasilia): entregues, % no prazo e tempo medio base -> porta (nulos sem entrega). */
+    public record DiaOperacao(LocalDate dia, long entregues, Double otd, Long cicloMinutos) {
+    }
 
     /** Malas em aberto pelo prazo: no prazo, em alerta (menos de 2 h) e atrasadas. */
     public record Radar(long noPrazo, List<ItemMala> alerta, List<ItemMala> atrasadas) {

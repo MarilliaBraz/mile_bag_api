@@ -23,12 +23,17 @@ public class PainelGestaoConfig extends BaseEntity {
     @Column(name = "horas_sem_atualizacao", nullable = false)
     private int horasSemAtualizacao;
 
-    public PainelGestaoConfig(int prazoEntregaHoras, int horasSemAtualizacao) {
-        atualizar(prazoEntregaHoras, horasSemAtualizacao);
+    /** V63: meta de entregas no prazo (OTD), em %. */
+    @Column(name = "meta_otd", nullable = false)
+    private int metaOtd;
+
+    public PainelGestaoConfig(int prazoEntregaHoras, int horasSemAtualizacao, int metaOtd) {
+        atualizar(prazoEntregaHoras, horasSemAtualizacao, metaOtd);
     }
 
-    public void atualizar(int prazoEntregaHoras, int horasSemAtualizacao) {
+    public void atualizar(int prazoEntregaHoras, int horasSemAtualizacao, int metaOtd) {
         this.prazoEntregaHoras = prazoEntregaHoras;
         this.horasSemAtualizacao = horasSemAtualizacao;
+        this.metaOtd = metaOtd;
     }
 }

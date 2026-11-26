@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -38,6 +39,8 @@ public class PainelGestaoService {
     static final int PRAZO_MAXIMO_HORAS = 720;
     static final int HORAS_SEM_ATUALIZACAO_MAXIMO = 168;
     static final int DIAS_HISTORICO = 30;
+    static final int META_OTD_PADRAO = 95;
+    static final int META_OTD_MINIMA = 50;
 
     private final PainelGestaoRepository painelRepository;
     private final PainelGestaoConfigRepository configRepository;
@@ -60,7 +63,8 @@ public class PainelGestaoService {
         List<MalaEntregue> entregues = painelRepository
                 .malasEntregues(config.prazoEntregaHoras(), inicioHoje.minus(Duration.ofDays(DIAS_HISTORICO))).stream()
                 .map(LinhaNativa::new).map(PainelGestaoService::entregue).toList();
-        return CalculoPainelGestao.calcular(abertas, entregues, agora, inicioHoje, config.prazoEntregaHoras(), config.horasSemAtualizacao());
+        return CalculoPainelGestao.calcular(abertas, entregues, agora, inicioHoje, config.prazoEntregaHoras(), config.horasSemAtualizacao(),
+                config.metaOtd());
     }
 
     /** Fase 2: situacao de cada base (mapa e ranking das piores do dia) e as viagens em andamento. */
@@ -116,8 +120,8 @@ public class PainelGestaoService {
     @Transactional(readOnly = true)
     public ConfigPainelGestao configuracao() {
         return configRepository.findFirstByOrderByCriadoEmAsc()
-                .map(c -> new ConfigPainelGestao(c.getPrazoEntregaHoras(), c.getHorasSemAtualizacao()))
-                .orElse(new ConfigPainelGestao(PRAZO_PADRAO_HORAS, HORAS_SEM_ATUALIZACAO_PADRAO));
+                .map(c -> new ConfigPainelGestao(c.getPrazoEntregaHoras(), c.getHorasSemAtualizacao(), c.getMetaOtd()))
+                .orElse(new ConfigPainelGestao(PRAZO_PADRAO_HORAS, HORAS_SEM_ATUALIZACAO_PADRAO, META_OTD_PADRAO));
     }
 
     @Transactional
@@ -126,10 +130,17 @@ public class PainelGestaoService {
                 "O prazo padrao deve ficar entre 1 e " + PRAZO_MAXIMO_HORAS + " horas.");
         int parada = validar(pedido == null ? null : pedido.horasSemAtualizacao(), HORAS_SEM_ATUALIZACAO_MAXIMO,
                 "As horas sem atualizacao devem ficar entre 1 e " + HORAS_SEM_ATUALIZACAO_MAXIMO + ".");
-        PainelGestaoConfig config = configRepository.findFirstByOrderByCriadoEmAsc().orElseGet(() -> new PainelGestaoConfig(prazo, parada));
-        config.atualizar(prazo, parada);
+        Optional<PainelGestaoConfig> atual = configRepository.findFirstByOrderByCriadoEmAsc();
+        // Sem meta no pedido (app antigo), fica a que ja estava.
+        Integer metaPedida = pedido.metaOtd() != null ? pedido.metaOtd() : atual.map(PainelGestaoConfig::getMetaOtd).orElse(META_OTD_PADRAO);
+        if (metaPedida < META_OTD_MINIMA || metaPedida > 100) {
+            throw new RegraNegocioException("A meta de entregas no prazo deve ficar entre " + META_OTD_MINIMA + "% e 100%.");
+        }
+        int meta = metaPedida;
+        PainelGestaoConfig config = atual.orElseGet(() -> new PainelGestaoConfig(prazo, parada, meta));
+        config.atualizar(prazo, parada, meta);
         configRepository.save(config);
-        return new ConfigPainelGestao(prazo, parada);
+        return new ConfigPainelGestao(prazo, parada, meta);
     }
 
     private static int validar(Integer valor, int maximo, String mensagem) {

@@ -2,11 +2,16 @@ package com.marillia.milebag.business.painelgestao.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.marillia.milebag.business.painelgestao.model.MalaAberta;
@@ -16,6 +21,10 @@ import com.marillia.milebag.business.painelgestao.model.PainelGestaoResponse.Ite
 
 /** Regras do painel de gestao (fase 1) sobre as malas ja lidas: puro, sem banco, para testar cada numero. */
 final class CalculoPainelGestao {
+
+    static final ZoneId BRASILIA = ZoneId.of("America/Sao_Paulo");
+    /** Dias da serie diaria do cockpit (graficos e tendencias). */
+    static final int DIAS_SERIE = 30;
 
     /** Falta menos que isto para o prazo: alerta amarelo. */
     static final Duration ALERTA = Duration.ofHours(2);
@@ -34,12 +43,13 @@ final class CalculoPainelGestao {
     }
 
     static PainelGestaoResponse calcular(List<MalaAberta> abertas, List<MalaEntregue> entregues30Dias, Instant agora, Instant inicioHoje,
-            int prazoPadraoHoras, int horasSemAtualizacao) {
+            int prazoPadraoHoras, int horasSemAtualizacao, int metaOtd) {
         List<MalaEntregue> entreguesHoje = entregues30Dias.stream().filter(m -> !m.entregueEm().isBefore(inicioHoje)).toList();
         return new PainelGestaoResponse(
                 agora,
                 prazoPadraoHoras,
                 horasSemAtualizacao,
+                metaOtd,
                 radar(abertas, agora),
                 new PainelGestaoResponse.Funil(
                         abertas.stream().filter(m -> m.retiradaEm() == null).count(),
@@ -48,7 +58,22 @@ final class CalculoPainelGestao {
                         abertas.stream().filter(m -> m.tentativas() > 0).count()),
                 new PainelGestaoResponse.Otd(otd(entreguesHoje), otd(entregues30Dias), entreguesHoje.size(), entregues30Dias.size()),
                 new PainelGestaoResponse.Ciclo(cicloMedio(entreguesHoje), cicloMedio(entregues30Dias)),
-                excecoes(abertas, entregues30Dias, agora, horasSemAtualizacao));
+                excecoes(abertas, entregues30Dias, agora, horasSemAtualizacao),
+                serie(entregues30Dias, inicioHoje));
+    }
+
+    /** Os ultimos {@value #DIAS_SERIE} dias, hoje incluido, em ordem; dia sem entrega aparece com zero. */
+    static List<PainelGestaoResponse.DiaOperacao> serie(List<MalaEntregue> entregues, Instant inicioHoje) {
+        LocalDate hoje = inicioHoje.atZone(BRASILIA).toLocalDate();
+        Map<LocalDate, List<MalaEntregue>> porDia = entregues.stream()
+                .collect(Collectors.groupingBy(m -> m.entregueEm().atZone(BRASILIA).toLocalDate()));
+        return IntStream.rangeClosed(0, DIAS_SERIE - 1)
+                .mapToObj(atras -> hoje.minusDays(DIAS_SERIE - 1L - atras))
+                .map(dia -> {
+                    List<MalaEntregue> doDia = porDia.getOrDefault(dia, List.of());
+                    return new PainelGestaoResponse.DiaOperacao(dia, doDia.size(), otd(doDia), cicloMedio(doDia));
+                })
+                .toList();
     }
 
     private static PainelGestaoResponse.Radar radar(List<MalaAberta> abertas, Instant agora) {
