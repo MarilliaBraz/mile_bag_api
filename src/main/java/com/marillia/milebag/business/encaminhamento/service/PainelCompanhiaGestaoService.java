@@ -52,7 +52,7 @@ public class PainelCompanhiaGestaoService {
         Instant abertoEm = l.instante(5);
         TipoVoo tipoVoo = TipoVoo.valueOf(l.texto(4));
         return new CalculoPainelCompanhia.Encaminhamento(l.uuid(0), l.texto(1), l.texto(2), EtapaEntrega.valueOf(l.texto(3)), abertoEm,
-                abertoEm.plus(Duration.ofDays(tipoVoo.diasPrazoAnac())), l.instante(6), l.instante(8), l.instante(9), l.texto(10),
+                abertoEm.plus(Duration.ofDays(tipoVoo.diasPrazoAnac())), l.instante(6), l.instante(7), l.instante(8), l.instante(9), l.texto(10),
                 l.instante(11), l.texto(12));
     }
 }

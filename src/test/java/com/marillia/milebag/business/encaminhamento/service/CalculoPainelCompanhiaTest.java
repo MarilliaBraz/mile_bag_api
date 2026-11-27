@@ -22,7 +22,7 @@ class CalculoPainelCompanhiaTest {
     private CalculoPainelCompanhia.Encaminhamento aberto(String processo, EtapaEntrega etapa, Duration paraOPrazo) {
         Instant prazo = agora.plus(paraOPrazo);
         return new CalculoPainelCompanhia.Encaminhamento(UUID.randomUUID(), processo, "P", etapa, prazo.minus(Duration.ofDays(7)), prazo,
-                agora.minus(Duration.ofHours(5)), null, etapa == EtapaEntrega.NAO_ENTREGUE ? agora.minus(Duration.ofHours(1)) : null, "GYN",
+                agora.minus(Duration.ofHours(5)), null, null, etapa == EtapaEntrega.NAO_ENTREGUE ? agora.minus(Duration.ofHours(1)) : null, "GYN",
                 agora.minus(Duration.ofHours(6)), "Entregas GO");
     }
 
@@ -31,7 +31,8 @@ class CalculoPainelCompanhiaTest {
         Instant registrada = encaminhado.minus(Duration.ofHours(1));
         Instant aberto = registrada.minus(localizacao);
         return new CalculoPainelCompanhia.Encaminhamento(UUID.randomUUID(), processo, "P", EtapaEntrega.ENTREGUE, aberto,
-                aberto.plus(Duration.ofDays(7)), encaminhado, entregueEm, null, "BSB", registrada, "Entregas DF");
+                aberto.plus(Duration.ofDays(7)), encaminhado, encaminhado.plus(Duration.ofHours(1)), entregueEm, null, "BSB", registrada,
+                "Entregas DF");
     }
 
     @Test
@@ -60,5 +61,8 @@ class CalculoPainelCompanhiaTest {
                 org.assertj.core.groups.Tuple.tuple("PARADA_NA_SALA", "G31234"));
         assertThat(painel.aeroportos().get(0).codigo()).isEqualTo("GYN");
         assertThat(painel.aeroportos().get(0).estourados()).isEqualTo(1);
+        // SLA: em BSB a Entregas DF entregou as duas (coleta 1 h, entrega 6 h, 50% em 24 h); em GYN, a Entregas GO nada ainda.
+        PainelCompanhiaGestaoResponse.Parceiro df = painel.parceiros().stream().filter(p -> p.empresa().equals("Entregas DF")).findFirst().orElseThrow();
+        assertThat(df).isEqualTo(new PainelCompanhiaGestaoResponse.Parceiro("Entregas DF", "BSB", 2, 60L, 360L, 50.0, 0, 0));
     }
 }
