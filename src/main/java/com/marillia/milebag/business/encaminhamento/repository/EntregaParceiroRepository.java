@@ -15,14 +15,12 @@ import com.marillia.milebag.business.encaminhamento.model.EncaminhamentoEntrega;
  */
 public interface EntregaParceiroRepository extends Repository<EncaminhamentoEntrega, UUID> {
 
-    /** A entrega do BDO; para uma bagagem carona, a entrega principal com que ela viaja. */
-    @Query(value = """
-            SELECT id FROM (
-                SELECT e.id, 0 AS ordem FROM entrega e WHERE e.bdo_id = :bdoId
-                UNION ALL
-                SELECT bc.entrega_principal_id, 1 FROM bagagem_carona bc WHERE bc.bdo_id = :bdoId) x
-            ORDER BY ordem LIMIT 1
-            """, nativeQuery = true)
+    /**
+     * A entrega do proprio BDO. A bagagem carona nao tem entrega propria: viaja na de OUTRO BDO (outro passageiro, talvez
+     * outra companhia), cujo comprovante, fotos, ocorrencias e link nao podem aparecer aqui - para ela, so a etapa e os
+     * horarios do proprio encaminhamento.
+     */
+    @Query(value = "SELECT e.id FROM entrega e WHERE e.bdo_id = :bdoId", nativeQuery = true)
     List<UUID> entregaDoBdo(@Param("bdoId") UUID bdoId);
 
     /** Colunas: data e hora, nome de quem recebeu, tipo de recebedor, latitude, longitude. */
