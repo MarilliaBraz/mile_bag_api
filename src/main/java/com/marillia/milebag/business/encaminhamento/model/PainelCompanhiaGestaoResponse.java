@@ -14,7 +14,16 @@ public record PainelCompanhiaGestaoResponse(
         Tempos tempos,
         Custodia custodia,
         List<Aeroporto> aeroportos,
-        List<ItemAgir> agirAgora) {
+        List<ItemAgir> agirAgora,
+        List<Parceiro> parceiros) {
+
+    /**
+     * Fase 2, SLA por transportadora e praca (aeroporto), ultimos 30 dias: tempo medio de coleta (encaminhamento a
+     * coleta) e de entrega (encaminhamento a porta), % resolvida em 24 h, nao entregues e em aberto agora.
+     */
+    public record Parceiro(String empresa, String aeroporto, long entregues, Long coletaMinutos, Long entregaMinutos, Double resolucao24h,
+            long naoEntregues, long emAberto) {
+    }
 
     /** Processos em aberto pelo prazo da ANAC: no prazo, em atencao (2 dias ou menos) e com o prazo estourado. */
     public record Regulatorio(long noPrazo, long atencao, long estourados) {

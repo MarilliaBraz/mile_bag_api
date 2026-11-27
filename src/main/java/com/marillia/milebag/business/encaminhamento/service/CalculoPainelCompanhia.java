@@ -34,7 +34,7 @@ final class CalculoPainelCompanhia {
 
     /** Encaminhamento lido do banco, com o prazo da ANAC ja resolvido. */
     record Encaminhamento(UUID bagagemId, String processo, String passageiro, EtapaEntrega etapa, Instant processoAbertoEm,
-            Instant prazoAnac, Instant encaminhadoEm, Instant entregueEm, Instant naoEntregueEm, String aeroporto, Instant registradaEm,
+            Instant prazoAnac, Instant encaminhadoEm, Instant coletadoEm, Instant entregueEm, Instant naoEntregueEm, String aeroporto, Instant registradaEm,
             String empresa) {
     }
 
@@ -63,7 +63,34 @@ final class CalculoPainelCompanhia {
                         entregues.stream().filter(e -> !e.entregueEm().isBefore(inicioHoje)).count(),
                         abertos.stream().filter(e -> e.etapa() == EtapaEntrega.NAO_ENTREGUE).count()),
                 aeroportos(abertos, entregues, naSala, estourado),
-                agirAgora(abertos, naSala, agora, estourado, atencao));
+                agirAgora(abertos, naSala, agora, estourado, atencao),
+                parceiros(abertos, entregues));
+    }
+
+    /** SLA por empresa de entrega e aeroporto; o pior tempo de entrega primeiro. */
+    private static List<PainelCompanhiaGestaoResponse.Parceiro> parceiros(List<Encaminhamento> abertos, List<Encaminhamento> entregues) {
+        Map<List<String>, List<Encaminhamento>> todos = Stream.concat(abertos.stream(), entregues.stream())
+                .collect(Collectors.groupingBy(e -> List.of(Objects.requireNonNullElse(e.empresa(), ""), chave(e.aeroporto()))));
+        return todos.entrySet().stream()
+                .map(grupo -> {
+                    List<Encaminhamento> doGrupo = grupo.getValue();
+                    List<Encaminhamento> entreguesDoGrupo = doGrupo.stream().filter(e -> e.etapa() == EtapaEntrega.ENTREGUE).toList();
+                    return new PainelCompanhiaGestaoResponse.Parceiro(grupo.getKey().get(0), grupo.getKey().get(1), entreguesDoGrupo.size(),
+                            media(doGrupo.stream().filter(e -> e.coletadoEm() != null).map(e -> Duration.between(e.encaminhadoEm(), e.coletadoEm()))),
+                            media(entreguesDoGrupo.stream().map(e -> Duration.between(e.encaminhadoEm(), e.entregueEm()))),
+                            resolucao(entreguesDoGrupo),
+                            doGrupo.stream().filter(e -> e.etapa() == EtapaEntrega.NAO_ENTREGUE).count(),
+                            doGrupo.stream().filter(e -> EM_ABERTO.contains(e.etapa())).count());
+                })
+                .sorted(Comparator.comparing(PainelCompanhiaGestaoResponse.Parceiro::entregaMinutos, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PainelCompanhiaGestaoResponse.Parceiro::naoEntregues, Comparator.reverseOrder()))
+                .toList();
+    }
+
+    private static Double resolucao(List<Encaminhamento> entregues) {
+        return entregues.isEmpty() ? null
+                : Math.round(entregues.stream().filter(e -> !Duration.between(e.processoAbertoEm(), e.entregueEm()).minus(RESOLUCAO).isPositive()).count()
+                        * 1000.0 / entregues.size()) / 10.0;
     }
 
     private static PainelCompanhiaGestaoResponse.Tempos tempos(List<Encaminhamento> entregues) {
@@ -71,10 +98,7 @@ final class CalculoPainelCompanhia {
                 .filter(e -> e.registradaEm() != null && e.processoAbertoEm().isBefore(e.registradaEm()))
                 .map(e -> Duration.between(e.processoAbertoEm(), e.registradaEm())));
         Long entrega = media(entregues.stream().map(e -> Duration.between(e.encaminhadoEm(), e.entregueEm())));
-        Double resolucao = entregues.isEmpty() ? null
-                : Math.round(entregues.stream().filter(e -> !Duration.between(e.processoAbertoEm(), e.entregueEm()).minus(RESOLUCAO).isPositive()).count()
-                        * 1000.0 / entregues.size()) / 10.0;
-        return new PainelCompanhiaGestaoResponse.Tempos(localizacao, entrega, resolucao, entregues.size());
+        return new PainelCompanhiaGestaoResponse.Tempos(localizacao, entrega, resolucao(entregues), entregues.size());
     }
 
     private static List<Aeroporto> aeroportos(List<Encaminhamento> abertos, List<Encaminhamento> entregues, List<NaSala> naSala,
