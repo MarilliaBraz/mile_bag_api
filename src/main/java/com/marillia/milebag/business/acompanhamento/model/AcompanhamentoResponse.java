@@ -17,7 +17,13 @@ public record AcompanhamentoResponse(
         Instant iniciadaEm,
         Posicao posicao,
         Ponto destino,
-        Janela janelaReagendamento) {
+        Janela janelaReagendamento,
+        /** V65: so na etapa ENTREGUE - se o passageiro ja respondeu a pesquisa de satisfacao. */
+        Boolean avaliada) {
+
+    public AcompanhamentoResponse comAvaliada(boolean jaAvaliada) {
+        return new AcompanhamentoResponse(empresa, bdoNumero, etapa, iniciadaEm, posicao, destino, janelaReagendamento, jaAvaliada);
+    }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Empresa(String nome, String logotipoUrl) {

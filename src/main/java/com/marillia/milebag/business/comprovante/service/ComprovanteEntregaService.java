@@ -195,7 +195,7 @@ public class ComprovanteEntregaService {
         entregaService.marcarEncerradaComSucesso(entregaId);
 
         log.info("Comprovante {} registrado; entrega {} encerrada com sucesso.", comprovante.getId(), entregaId);
-        notificarAutomaticaComSeguranca(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
+        notificarEntregaConcluida(entregaId);
         return new ComprovanteEntregaResultado(comprovante, true);
     }
 
@@ -352,12 +352,16 @@ public class ComprovanteEntregaService {
         }
     }
 
-    /** FR-005/FR-005 (HU18/HU20): notificacao automatica nunca bloqueia nem falha o registro do comprovante. */
-    private void notificarAutomaticaComSeguranca(UUID entregaId, TipoEventoNotificacao tipoEvento) {
+    /**
+     * FR-005 (HU18/HU20): a notificacao automatica nunca bloqueia nem falha o registro do comprovante. V65: o aviso de
+     * entrega concluida leva o link do acompanhamento, que agora mostra a pesquisa de satisfacao.
+     */
+    private void notificarEntregaConcluida(UUID entregaId) {
         try {
-            mensagemService.notificarAutomatica(entregaId, tipoEvento);
+            String link = viagemService.linkAcompanhamento(entregaId).orElse(null);
+            mensagemService.notificarAutomatica(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO, link);
         } catch (RuntimeException e) {
-            log.warn("Falha ao notificar automaticamente a entrega {} do evento {} - comprovante ja registrado, seguindo.", entregaId, tipoEvento, e);
+            log.warn("Falha ao avisar a entrega concluida {} - comprovante ja registrado, seguindo.", entregaId, e);
         }
     }
 

@@ -1,6 +1,7 @@
 package com.marillia.milebag.business.encaminhamento.repository;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,4 +42,16 @@ public interface PainelCompanhiaRepository extends Repository<EncaminhamentoEntr
                               WHERE e.bagagem_id = b.id AND e.companhia_id = :companhiaId AND e.etapa <> 'CANCELADO')
             """, nativeQuery = true)
     List<Object[]> naSala(@Param("companhiaId") UUID companhiaId);
+
+    /** Fase 3: custos lancados desde a data (RLS da companhia). Colunas: bagagem, tipo, valor. */
+    @Query(value = "SELECT c.bagagem_id, c.tipo, c.valor FROM custo_processo c WHERE c.data >= CAST(:desde AS date)", nativeQuery = true)
+    List<Object[]> custos(@Param("desde") LocalDate desde);
+
+    /** Fase 3: pesquisas respondidas desde a data, das bagagens encaminhadas pela companhia. Colunas: nota, cordialidade, mala em bom estado. */
+    @Query(value = """
+            SELECT a.nota, a.cordialidade, a.mala_em_bom_estado
+            FROM avaliacao_entrega a JOIN encaminhamento_entrega e ON e.bdo_id = a.bdo_id
+            WHERE e.companhia_id = :companhiaId AND a.criado_em >= :desde
+            """, nativeQuery = true)
+    List<Object[]> avaliacoes(@Param("companhiaId") UUID companhiaId, @Param("desde") Instant desde);
 }

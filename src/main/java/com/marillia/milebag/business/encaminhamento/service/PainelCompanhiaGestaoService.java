@@ -1,5 +1,6 @@
 package com.marillia.milebag.business.encaminhamento.service;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.marillia.milebag.business.encaminhamento.model.EtapaEntrega;
 import com.marillia.milebag.business.encaminhamento.model.PainelCompanhiaGestaoResponse;
+import com.marillia.milebag.business.encaminhamento.model.TipoCusto;
 import com.marillia.milebag.business.encaminhamento.model.TipoVoo;
 import com.marillia.milebag.business.encaminhamento.repository.PainelCompanhiaRepository;
 import com.marillia.milebag.core.base.LinhaNativa;
@@ -45,7 +47,17 @@ public class PainelCompanhiaGestaoService {
                 .map(LinhaNativa::new)
                 .map(l -> new CalculoPainelCompanhia.NaSala(l.uuid(0), l.texto(1), l.instante(2), l.texto(3), l.texto(4)))
                 .toList();
-        return CalculoPainelCompanhia.calcular(encaminhamentos, naSala, agora, inicioHoje);
+        Instant inicio30Dias = inicioHoje.minus(Duration.ofDays(DIAS_HISTORICO));
+        List<CalculoPainelCompanhia.Custo> custos = repository.custos(LocalDate.ofInstant(inicio30Dias, BRASILIA)).stream()
+                .map(LinhaNativa::new)
+                .map(l -> new CalculoPainelCompanhia.Custo(l.uuid(0), TipoCusto.valueOf(l.texto(1)), new BigDecimal(l.texto(2))))
+                .toList();
+        List<CalculoPainelCompanhia.Avaliacao> avaliacoes = repository.avaliacoes(companhiaId, inicio30Dias).stream()
+                .map(LinhaNativa::new)
+                .map(l -> new CalculoPainelCompanhia.Avaliacao((int) l.numero(0), l.texto(1) == null ? null : (int) l.numero(1),
+                        l.texto(2) == null ? null : l.logico(2)))
+                .toList();
+        return CalculoPainelCompanhia.calcular(encaminhamentos, naSala, custos, avaliacoes, agora, inicioHoje);
     }
 
     private static CalculoPainelCompanhia.Encaminhamento encaminhamento(LinhaNativa l) {

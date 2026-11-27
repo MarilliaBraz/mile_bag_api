@@ -3,15 +3,22 @@ package com.marillia.milebag.business.acompanhamento.controller;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.marillia.milebag.business.acompanhamento.model.AcompanhamentoResponse;
+import com.marillia.milebag.business.acompanhamento.model.AvaliarEntregaRequest;
+import com.marillia.milebag.business.acompanhamento.model.EtapaAcompanhamento;
 import com.marillia.milebag.business.acompanhamento.service.AcompanhamentoService;
+import com.marillia.milebag.business.acompanhamento.service.AvaliacaoEntregaService;
 import com.marillia.milebag.business.configuracao.service.IdentidadeVisualTenantService.LogotipoArquivo;
 import com.marillia.milebag.business.viagem.model.LinkAcompanhamento;
 import com.marillia.milebag.core.config.security.TenantContext;
@@ -26,15 +33,31 @@ import com.marillia.milebag.core.config.security.TenantContext;
 public class AcompanhamentoController {
 
     private final AcompanhamentoService acompanhamentoService;
+    private final AvaliacaoEntregaService avaliacaoService;
 
-    public AcompanhamentoController(AcompanhamentoService acompanhamentoService) {
+    public AcompanhamentoController(AcompanhamentoService acompanhamentoService, AvaliacaoEntregaService avaliacaoService) {
         this.acompanhamentoService = acompanhamentoService;
+        this.avaliacaoService = avaliacaoService;
     }
 
     @GetMapping
     public AcompanhamentoResponse consultar(@PathVariable UUID codigo) {
         LinkAcompanhamento link = acompanhamentoService.resolver(codigo);
-        return noTenantDoLink(link, () -> acompanhamentoService.consultar(link));
+        return noTenantDoLink(link, () -> {
+            AcompanhamentoResponse resposta = acompanhamentoService.consultar(link);
+            return resposta.etapa() == EtapaAcompanhamento.ENTREGUE ? resposta.comAvaliada(avaliacaoService.avaliada(link.getEntregaId())) : resposta;
+        });
+    }
+
+    /** V65: pesquisa de satisfacao do passageiro, depois da entrega (uma por entrega). Publica, pelo link. */
+    @PostMapping("/avaliacao")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void avaliar(@PathVariable UUID codigo, @RequestBody AvaliarEntregaRequest pedido) {
+        LinkAcompanhamento link = acompanhamentoService.resolver(codigo);
+        noTenantDoLink(link, () -> {
+            avaliacaoService.registrar(link, pedido);
+            return null;
+        });
     }
 
     @GetMapping("/logotipo")

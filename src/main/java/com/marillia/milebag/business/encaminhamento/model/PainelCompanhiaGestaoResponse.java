@@ -1,7 +1,9 @@
 package com.marillia.milebag.business.encaminhamento.model;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -15,7 +17,21 @@ public record PainelCompanhiaGestaoResponse(
         Custodia custodia,
         List<Aeroporto> aeroportos,
         List<ItemAgir> agirAgora,
-        List<Parceiro> parceiros) {
+        List<Parceiro> parceiros,
+        Financeiro financeiro,
+        Satisfacao satisfacao) {
+
+    /**
+     * Fase 3, ultimos 30 dias: custos lancados (total e por tipo), custo medio por processo e a comparacao entre os
+     * processos resolvidos em ate 24 h e os demais - quanto se economiza entregando mais rapido. Medias nulas sem dado.
+     */
+    public record Financeiro(BigDecimal total, Map<TipoCusto, BigDecimal> porTipo, long processos, BigDecimal porProcesso,
+            BigDecimal porProcessoAte24h, BigDecimal porProcessoAcima24h) {
+    }
+
+    /** Fase 3, ultimos 30 dias: NPS (% notas 9-10 menos % 0-6), nota e cordialidade medias e malas que chegaram danificadas. */
+    public record Satisfacao(long respostas, Double nps, Double notaMedia, Double cordialidadeMedia, long malasDanificadas) {
+    }
 
     /**
      * Fase 2, SLA por transportadora e praca (aeroporto), ultimos 30 dias: tempo medio de coleta (encaminhamento a

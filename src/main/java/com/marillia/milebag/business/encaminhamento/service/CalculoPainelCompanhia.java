@@ -1,8 +1,11 @@
 package com.marillia.milebag.business.encaminhamento.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,6 +20,7 @@ import com.marillia.milebag.business.encaminhamento.model.EtapaEntrega;
 import com.marillia.milebag.business.encaminhamento.model.PainelCompanhiaGestaoResponse;
 import com.marillia.milebag.business.encaminhamento.model.PainelCompanhiaGestaoResponse.Aeroporto;
 import com.marillia.milebag.business.encaminhamento.model.PainelCompanhiaGestaoResponse.ItemAgir;
+import com.marillia.milebag.business.encaminhamento.model.TipoCusto;
 
 /** Regras do painel de gestao da companhia (fase 1) sobre o que ja foi lido: puro, sem banco. */
 final class CalculoPainelCompanhia {
@@ -38,6 +42,14 @@ final class CalculoPainelCompanhia {
             String empresa) {
     }
 
+    /** Fase 3: um custo lancado no periodo. */
+    record Custo(UUID bagagemId, TipoCusto tipo, BigDecimal valor) {
+    }
+
+    /** Fase 3: uma resposta da pesquisa de satisfacao. */
+    record Avaliacao(int nota, Integer cordialidade, Boolean malaEmBomEstado) {
+    }
+
     record NaSala(UUID bagagemId, String aeroporto, Instant registradaEm, String identificacao, String passageiro) {
     }
 
@@ -45,6 +57,11 @@ final class CalculoPainelCompanhia {
     }
 
     static PainelCompanhiaGestaoResponse calcular(List<Encaminhamento> encaminhamentos, List<NaSala> naSala, Instant agora, Instant inicioHoje) {
+        return calcular(encaminhamentos, naSala, List.of(), List.of(), agora, inicioHoje);
+    }
+
+    static PainelCompanhiaGestaoResponse calcular(List<Encaminhamento> encaminhamentos, List<NaSala> naSala, List<Custo> custos,
+            List<Avaliacao> avaliacoes, Instant agora, Instant inicioHoje) {
         List<Encaminhamento> abertos = encaminhamentos.stream().filter(e -> EM_ABERTO.contains(e.etapa())).toList();
         List<Encaminhamento> entregues = encaminhamentos.stream().filter(e -> e.etapa() == EtapaEntrega.ENTREGUE && e.entregueEm() != null).toList();
         Predicate<Encaminhamento> estourado = e -> e.prazoAnac().isBefore(agora);
@@ -64,7 +81,48 @@ final class CalculoPainelCompanhia {
                         abertos.stream().filter(e -> e.etapa() == EtapaEntrega.NAO_ENTREGUE).count()),
                 aeroportos(abertos, entregues, naSala, estourado),
                 agirAgora(abertos, naSala, agora, estourado, atencao),
-                parceiros(abertos, entregues));
+                parceiros(abertos, entregues),
+                financeiro(encaminhamentos, entregues, custos),
+                satisfacao(avaliacoes));
+    }
+
+    /** Custos dos ultimos 30 dias: total, por tipo e por processo; e a media dos resolvidos em ate 24 h contra os demais. */
+    private static PainelCompanhiaGestaoResponse.Financeiro financeiro(List<Encaminhamento> encaminhamentos, List<Encaminhamento> entregues,
+            List<Custo> custos) {
+        BigDecimal total = custos.stream().map(Custo::valor).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        Map<TipoCusto, BigDecimal> porTipo = new EnumMap<>(TipoCusto.class);
+        custos.forEach(c -> porTipo.merge(c.tipo(), c.valor(), BigDecimal::add));
+        Map<UUID, BigDecimal> porBagagem = custos.stream()
+                .collect(Collectors.toMap(Custo::bagagemId, Custo::valor, BigDecimal::add));
+        long processos = encaminhamentos.stream().map(Encaminhamento::bagagemId).distinct().count();
+        Predicate<Encaminhamento> em24h = e -> !Duration.between(e.processoAbertoEm(), e.entregueEm()).minus(RESOLUCAO).isPositive();
+        return new PainelCompanhiaGestaoResponse.Financeiro(total, porTipo, processos, dividir(total, processos),
+                mediaDeCusto(entregues.stream().filter(em24h), porBagagem), mediaDeCusto(entregues.stream().filter(em24h.negate()), porBagagem));
+    }
+
+    /** Media do custo lancado por processo do grupo; so conta processo com algum custo lancado. */
+    private static BigDecimal mediaDeCusto(Stream<Encaminhamento> grupo, Map<UUID, BigDecimal> porBagagem) {
+        List<BigDecimal> valores = grupo.map(e -> porBagagem.get(e.bagagemId())).filter(Objects::nonNull).toList();
+        return dividir(valores.stream().reduce(BigDecimal.ZERO, BigDecimal::add), valores.size());
+    }
+
+    private static BigDecimal dividir(BigDecimal valor, long quantidade) {
+        return quantidade == 0 ? null : valor.divide(BigDecimal.valueOf(quantidade), 2, RoundingMode.HALF_UP);
+    }
+
+    /** NPS = % de promotores (9 e 10) menos % de detratores (0 a 6). */
+    private static PainelCompanhiaGestaoResponse.Satisfacao satisfacao(List<Avaliacao> avaliacoes) {
+        if (avaliacoes.isEmpty()) {
+            return new PainelCompanhiaGestaoResponse.Satisfacao(0, null, null, null, 0);
+        }
+        long promotores = avaliacoes.stream().filter(a -> a.nota() >= 9).count();
+        long detratores = avaliacoes.stream().filter(a -> a.nota() <= 6).count();
+        double nps = Math.round((promotores - detratores) * 1000.0 / avaliacoes.size()) / 10.0;
+        double notaMedia = Math.round(avaliacoes.stream().mapToInt(Avaliacao::nota).average().orElse(0) * 10) / 10.0;
+        Double cordialidade = avaliacoes.stream().map(Avaliacao::cordialidade).filter(Objects::nonNull).mapToInt(Integer::intValue).average()
+                .stream().map(media -> Math.round(media * 10) / 10.0).boxed().findFirst().orElse(null);
+        long danificadas = avaliacoes.stream().filter(a -> Boolean.FALSE.equals(a.malaEmBomEstado())).count();
+        return new PainelCompanhiaGestaoResponse.Satisfacao(avaliacoes.size(), nps, notaMedia, cordialidade, danificadas);
     }
 
     /** SLA por empresa de entrega e aeroporto; o pior tempo de entrega primeiro. */
