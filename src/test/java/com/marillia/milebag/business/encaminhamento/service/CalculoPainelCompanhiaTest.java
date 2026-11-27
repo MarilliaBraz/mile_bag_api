@@ -65,4 +65,30 @@ class CalculoPainelCompanhiaTest {
         PainelCompanhiaGestaoResponse.Parceiro df = painel.parceiros().stream().filter(p -> p.empresa().equals("Entregas DF")).findFirst().orElseThrow();
         assertThat(df).isEqualTo(new PainelCompanhiaGestaoResponse.Parceiro("Entregas DF", "BSB", 2, 60L, 360L, 50.0, 0, 0));
     }
+
+    @Test
+    void calculaCustosPorProcessoEOnps() {
+        CalculoPainelCompanhia.Encaminhamento rapida = entregue("RAPIDA", Duration.ofHours(2), Duration.ofHours(3), agora.minus(Duration.ofHours(1)));
+        CalculoPainelCompanhia.Encaminhamento lenta = entregue("LENTA", Duration.ofHours(30), Duration.ofHours(9), agora.minus(Duration.ofDays(2)));
+        List<CalculoPainelCompanhia.Custo> custos = List.of(
+                new CalculoPainelCompanhia.Custo(rapida.bagagemId(), com.marillia.milebag.business.encaminhamento.model.TipoCusto.FRETE,
+                        new java.math.BigDecimal("80.00")),
+                new CalculoPainelCompanhia.Custo(lenta.bagagemId(), com.marillia.milebag.business.encaminhamento.model.TipoCusto.FRETE,
+                        new java.math.BigDecimal("80.00")),
+                new CalculoPainelCompanhia.Custo(lenta.bagagemId(), com.marillia.milebag.business.encaminhamento.model.TipoCusto.REEMBOLSO_EMERGENCIAL,
+                        new java.math.BigDecimal("250.00")));
+        List<CalculoPainelCompanhia.Avaliacao> avaliacoes = List.of(
+                new CalculoPainelCompanhia.Avaliacao(10, 5, true), new CalculoPainelCompanhia.Avaliacao(9, 4, true),
+                new CalculoPainelCompanhia.Avaliacao(5, 2, false), new CalculoPainelCompanhia.Avaliacao(8, null, null));
+
+        PainelCompanhiaGestaoResponse painel = CalculoPainelCompanhia.calcular(List.of(rapida, lenta), List.of(), custos, avaliacoes, agora, inicioHoje);
+
+        // Total 410; 2 processos = 205 cada; a resolvida em 24 h custou 80 e a lenta 330.
+        assertThat(painel.financeiro().total()).isEqualByComparingTo("410.00");
+        assertThat(painel.financeiro().porProcesso()).isEqualByComparingTo("205.00");
+        assertThat(painel.financeiro().porProcessoAte24h()).isEqualByComparingTo("80.00");
+        assertThat(painel.financeiro().porProcessoAcima24h()).isEqualByComparingTo("330.00");
+        // NPS: 2 promotores e 1 detrator em 4 = 25.
+        assertThat(painel.satisfacao()).isEqualTo(new PainelCompanhiaGestaoResponse.Satisfacao(4, 25.0, 8.0, 3.7, 1));
+    }
 }

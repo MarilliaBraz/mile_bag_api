@@ -152,7 +152,8 @@ class ComprovanteEntregaServiceTest {
         verify(fotoEntregaService, times(2)).salvarDoComprovante(eq(entregaId), eq(comprovante.getId()), eq(TipoFotoEntrega.AVARIA_ENTREGA), any(), any());
         verify(viagemService).encerrarTrajeto(any(), any());
         verify(entregaService).marcarEncerradaComSucesso(entregaId);
-        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO);
+        // V65: o aviso leva o link do acompanhamento (a pesquisa de satisfacao); aqui nao ha link.
+        verify(mensagemService).notificarAutomatica(entregaId, TipoEventoNotificacao.COMPROVANTE_REGISTRADO, null);
     }
 
     /** Motorista tocou em "Encerrar viagem" antes de finalizar: a entrega nao pode ficar presa sem comprovante. */

@@ -85,7 +85,8 @@ public class AcompanhamentoService {
                 trajeto.getDataInicio(),
                 posicao,
                 destino,
-                janela == null ? null : new AcompanhamentoResponse.Janela(janela.inicio(), janela.fim()));
+                janela == null ? null : new AcompanhamentoResponse.Janela(janela.inicio(), janela.fim()),
+                null);
     }
 
     @Transactional(readOnly = true)

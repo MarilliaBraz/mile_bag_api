@@ -535,4 +535,9 @@ public class ViagemService {
             throw new IllegalStateException("Falha ao serializar dados do trajeto.", e);
         }
     }
+
+    /** V65: o link "Acompanhe sua bagagem" mais recente da entrega, para o convite da pesquisa de satisfacao. */
+    public Optional<String> linkAcompanhamento(UUID entregaId) {
+        return acompanhamentoViagem.urlMaisRecente(entregaId);
+    }
 }

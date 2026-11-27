@@ -159,7 +159,10 @@ public class MensagemService {
 
         String conteudo = textoDoEvento(tipoEvento, bdo, entrega);
         if (linkAcompanhamento != null) {
-            conteudo += "\n\nAcompanhe sua bagagem: " + linkAcompanhamento;
+            // V65: depois da entrega, o mesmo link mostra a pesquisa de satisfacao.
+            conteudo += tipoEvento == TipoEventoNotificacao.COMPROVANTE_REGISTRADO
+                    ? "\n\nConte como foi a entrega (leva 1 minuto): " + linkAcompanhamento
+                    : "\n\nAcompanhe sua bagagem: " + linkAcompanhamento;
         }
         Optional<VinculoTelegram> vinculo = vinculoTelegramRepository.findByEntregaId(entregaId);
         enviarPorEmail(entregaId, bdo, AutorMensagem.SISTEMA, TipoMensagem.AUTOMATICA, conteudo, tipoEvento, vinculo.isEmpty());

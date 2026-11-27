@@ -70,6 +70,8 @@ public class SecurityConfig {
                         // passageiro, que nao tem conta - o codigo aleatorio do
                         // link e a unica credencial (AcompanhamentoController).
                         .requestMatchers(HttpMethod.GET, "/api/v1/acompanhamento/**").permitAll()
+                        // V65: a pesquisa de satisfacao do passageiro, pelo link publico (uma por entrega).
+                        .requestMatchers(HttpMethod.POST, "/api/v1/acompanhamento/*/avaliacao").permitAll()
                         // HU38: o pedido de demonstracao vem de quem ainda nao e
                         // cliente - protegido por campo-isca, tempo minimo e
                         // limite por IP (DemonstracaoService), nao por JWT.

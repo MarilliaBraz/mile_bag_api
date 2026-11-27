@@ -63,6 +63,11 @@ public class AcompanhamentoViagem {
         return linkAcompanhamentoRepository.findById(codigo);
     }
 
+    /** V65: a URL do link mais recente da entrega (a pagina mostra a pesquisa depois da entrega). */
+    public Optional<String> urlMaisRecente(UUID entregaId) {
+        return linkAcompanhamentoRepository.findFirstByEntregaIdOrderByCriadoEmDesc(entregaId).map(link -> url(link.getCodigo()));
+    }
+
     public String url(UUID codigo) {
         return conviteProperties.urlBase() + "/acompanhar/" + codigo;
     }
